@@ -1,0 +1,91 @@
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+export interface ClassNote {
+  id: string;
+  classId: string;
+  note: string;
+  createdAt: string;
+  teacherName?: string;
+}
+
+type NotesData = Record<string, ClassNote[]>;
+
+const NOTES_FILE = join(process.cwd(), '.data', 'class-notes.json');
+const MAX_NOTES_PER_CLASS = 200;
+
+let mutexTail: Promise<unknown> = Promise.resolve();
+
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mutexTail.then(fn, fn);
+  mutexTail = run.catch(() => undefined);
+  return run;
+}
+
+async function readNotes(): Promise<NotesData> {
+  let raw: string;
+  try {
+    raw = await readFile(NOTES_FILE, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+      console.error('[classNotes] Không đọc được file ghi chú:', err);
+    }
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid shape');
+    return parsed as NotesData;
+  } catch (err) {
+    const backup = `${NOTES_FILE}.corrupt-${Date.now()}`;
+    console.error(`[classNotes] File hỏng JSON, sao lưu sang ${backup}:`, err);
+    try {
+      await rename(NOTES_FILE, backup);
+    } catch (renameErr) {
+      console.error('[classNotes] Không sao lưu được file hỏng:', renameErr);
+    }
+    return {};
+  }
+}
+
+async function writeNotes(data: NotesData): Promise<void> {
+  const tmp = `${NOTES_FILE}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await mkdir(dirname(NOTES_FILE), { recursive: true });
+    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
+    await rename(tmp, NOTES_FILE);
+  } catch (err) {
+    console.error('[classNotes] Không ghi được file ghi chú:', err);
+    try {
+      await unlink(tmp);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** Newest first. */
+export async function listClassNotes(classId: string): Promise<ClassNote[]> {
+  const data = await readNotes();
+  return Array.isArray(data[classId]) ? data[classId] : [];
+}
+
+export const addClassNote = (input: {
+  classId: string;
+  note: string;
+  teacherName?: string;
+}): Promise<ClassNote> =>
+  withLock(async () => {
+    const data = await readNotes();
+    const entry: ClassNote = {
+      id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      classId: input.classId,
+      note: input.note,
+      createdAt: new Date().toISOString(),
+      ...(input.teacherName ? { teacherName: input.teacherName } : {}),
+    };
+    const list = Array.isArray(data[input.classId]) ? data[input.classId] : [];
+    data[input.classId] = [entry, ...list].slice(0, MAX_NOTES_PER_CLASS);
+    await writeNotes(data);
+    return entry;
+  });

@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+dist/
+.data/
+*.corrupt-*
+.env*
+!.env.example
+*.log
+.DS_Store
+*.tsbuildinfo
