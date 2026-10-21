@@ -352,6 +352,18 @@ function PackagePanel({
   );
 }
 
+function formatBlockText(raw: string): string {
+  return raw
+    // Bỏ dòng phân cách bảng markdown dạng |---|---|
+    .replace(/\|\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)+\|/g, '\n')
+    // Xuống dòng giữa hai hàng bảng markdown viết liền nhau: "| |"
+    .replace(/\|\s+\|/g, '|\n|')
+    // Tách dòng nhẹ cho các bước "Bước 1:", "Bước 2:" nếu đang viết dính liền sau dấu chấm
+    .replace(/\.\s+(Bước\s+\d+\s*:)/g, '.\n$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function Block({
   label,
   text,
@@ -365,7 +377,7 @@ function Block({
   return (
     <div className={`cc-block${tone ? ` ${tone}` : ''}`}>
       <dt>{label}</dt>
-      <dd>{text}</dd>
+      <dd style={{ whiteSpace: 'pre-line' }}>{formatBlockText(text)}</dd>
     </div>
   );
 }

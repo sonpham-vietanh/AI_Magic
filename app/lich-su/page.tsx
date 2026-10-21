@@ -142,9 +142,12 @@ export default function LichSuPage() {
       subtitle="Các phiên bản cô/thầy đã duyệt và dùng, theo từng bài và từng loại sản phẩm."
     >
       <div className="ls">
-        <p className="ls-notice">
-          Lưu ý: hệ thống chưa có đăng nhập thật. Tên bên dưới chỉ là khai báo, ai nhập cùng tên sẽ thấy cùng lịch sử. Đăng nhập Google Workspace sẽ làm sau.
-        </p>
+        <div className="ag-alert info" role="note" style={{ marginTop: 0 }}>
+          <Icon name="clock" size={18} />
+          <span>
+            Nhập họ tên giáo viên để tra cứu các phiên bản bài soạn đã lưu, so sánh thay đổi giữa các lần chỉnh sửa và tải về file Word (.docx).
+          </span>
+        </div>
 
         {ready && !actor && (
           <form

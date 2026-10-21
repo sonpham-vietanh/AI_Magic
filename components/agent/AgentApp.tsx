@@ -37,15 +37,33 @@ import { Shell } from '../Shell';
 import { Canvas } from './Canvas';
 import { BloomChoices, ConfirmCard, FormatChoices, LessonPicker, ResourceChoices, RunCard, StyleChoices } from './Cards';
 import { TeacherName, useActor } from './TeacherName';
-import { subjectLabel, type AtomLite, type Msg, type ResultEntry, type RunState } from './types';
+import {
+  GRADE_OPTIONS,
+  SUBJECT_OPTIONS,
+  subjectLabel,
+  type AtomLite,
+  type Msg,
+  type ResultEntry,
+  type RunState,
+} from './types';
 
 type Standard = 'approved' | 'chua_duyet' | 'khong_co';
 
 const SUGGESTIONS: { format: FormatValue; icon: IconName; title: string; desc: string }[] = [
   { format: 'ke_hoach', icon: 'book', title: 'Soạn kế hoạch bài dạy', desc: 'Theo Công văn 5512, nâng cấp từ bản chuẩn của Kho' },
-  { format: 'quiz', icon: 'quiz', title: 'Quiz củng cố hoặc đề kiểm tra', desc: 'Quiz trong tiết; đề có ma trận nằm ở danh sách đầy đủ' },
-  { format: 'slide', icon: 'slides', title: 'Soạn slide bài giảng', desc: 'Bộ slide tải về PowerPoint (.pptx)' },
-  { format: 'worksheet', icon: 'file', title: 'Soạn phiếu học tập', desc: 'Phiếu cho học sinh, đáp án riêng cho giáo viên' },
+  { format: 'quiz', icon: 'quiz', title: 'Quiz củng cố trong tiết', desc: 'Bộ câu hỏi trắc nghiệm nhanh kèm giải thích chi tiết' },
+  { format: 'slide', icon: 'slides', title: 'Soạn slide bài giảng', desc: 'Bộ slide trình chiếu tải ngay về PowerPoint (.pptx)' },
+  { format: 'worksheet', icon: 'file', title: 'Soạn phiếu học tập', desc: 'Phiếu giao cho học sinh, đáp án riêng cho giáo viên' },
+];
+
+const EXTRA_FORMAT_CHIPS: { format: FormatValue; icon: IconName; label: string }[] = [
+  { format: 'de_kiem_tra', icon: 'exam', label: 'Đề kiểm tra & Ma trận TT22' },
+  { format: 'infographic', icon: 'layers', label: 'Infographic bài học' },
+  { format: 'mindmap', icon: 'graph', label: 'Sơ đồ tư duy (Mindmap)' },
+  { format: 'podcast', icon: 'podcast', label: 'Podcast đối thoại' },
+  { format: 'video', icon: 'video', label: 'Kịch bản Video tình huống' },
+  { format: 'tranh_luan', icon: 'users', label: 'Tranh luận 2 chuyên gia' },
+  { format: 'tai_nguyen_6_dang', icon: 'sparkles', label: 'Trọn bộ 6 tài nguyên' },
 ];
 
 const COMMAND_LINKS: Partial<Record<CommandId, { href: string; label: string; desc: string }>> = {
@@ -660,10 +678,34 @@ export function AgentApp() {
       <div className={`ag-agent${canvasEntry ? ' has-canvas' : ''}`}>
         <section className="ag-chat" aria-label="Trò chuyện với trợ lý">
           <div className="ag-chat-top">
-            <span className="ag-chat-top-title">
-              {subjectLabel(slots.subject)} · Lớp {slots.grade}
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="ag-chat-top-left" role="group" aria-label="Chọn nhanh môn và khối">
+              <select
+                className="ag-top-select"
+                aria-label="Môn học"
+                value={slots.subject}
+                onChange={(e) => apply({ subject: e.target.value, baiDayId: undefined, baiTitle: undefined })}
+              >
+                {SUBJECT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    Môn {o.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="ag-top-select"
+                aria-label="Khối lớp"
+                value={slots.grade}
+                onChange={(e) => apply({ grade: e.target.value, baiDayId: undefined, baiTitle: undefined })}
+              >
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>
+                    Khối {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="ag-chat-top-right">
+              <TeacherName value={actor} onSave={saveActor} ready={actorReady} inline />
               {hasResults && !canvasEntry && (
                 <button
                   type="button"
@@ -674,22 +716,24 @@ export function AgentApp() {
                   Mở bản soạn
                 </button>
               )}
-              <Link href="/soan-bai" className="ag-btn small ghost">
+              <Link href="/soan-bai" className="ag-btn small">
                 <Icon name="clipboard" size={16} />
                 Dùng biểu mẫu
               </Link>
             </div>
           </div>
 
-          <TeacherName value={actor} onSave={saveActor} ready={actorReady} />
-
           <div className="ag-thread" ref={threadRef}>
             {msgs.length === 0 ? (
               <div className="ag-hero">
+                <div className="ag-hero-badge">
+                  <Icon name="sparkles" size={15} />
+                  <span>Trợ lý Sư phạm AI · Chuẩn GDPT 2018 &amp; Công văn 5512</span>
+                </div>
                 <h1>Chào cô/thầy, hôm nay mình soạn gì?</h1>
                 <p>
-                  Mình lấy bản chuẩn đã duyệt trong Kho của trường, rồi chỉnh theo lớp, mức tư duy và phong cách dạy của cô/thầy.
-                  Mình hỏi bằng các lựa chọn cố định để kết quả luôn đúng chuẩn.
+                  Hệ thống tự động đối chiếu gói kiến thức chuẩn trong Kho của Trường Việt Anh, phân hóa theo năng lực lớp học,
+                  mức tư duy Bloom và phong cách giảng dạy của cô/thầy.
                 </p>
                 <div className="ag-suggest">
                   {SUGGESTIONS.map((s) => (
@@ -704,12 +748,27 @@ export function AgentApp() {
                     </button>
                   ))}
                 </div>
-                <p className="ag-hero-more">
-                  <button type="button" className="ag-btn" onClick={showAllFormats}>
-                    <Icon name="layers" size={18} />
-                    Xem đủ 11 sản phẩm (đề kiểm tra, infographic, mindmap, podcast, video…)
-                  </button>
-                </p>
+                <div className="ag-hero-more">
+                  <div className="ag-hero-more-head">
+                    <span>Hoặc chọn nhanh định dạng chuyên sâu ( đủ 11 sản phẩm ):</span>
+                    <button type="button" className="ag-link" onClick={showAllFormats}>
+                      Mở bảng mô tả chi tiết →
+                    </button>
+                  </div>
+                  <div className="ag-hero-chips">
+                    {EXTRA_FORMAT_CHIPS.map((item) => (
+                      <button
+                        key={item.format}
+                        type="button"
+                        className="ag-chip"
+                        onClick={() => startWithFormat(item.format)}
+                      >
+                        <Icon name={item.icon} size={16} />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="ag-thread-inner" role="log" aria-live="polite" aria-relevant="additions">

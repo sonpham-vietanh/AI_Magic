@@ -202,7 +202,7 @@ export default function DuyetPage() {
   const showSkeleton = loading && !loaded;
 
   return (
-    <Shell title="Dựng kho (Pha A)" subtitle="Phân rã, sinh 6 dạng tài nguyên, ghép, người duyệt, nhập kho, ngân hàng câu hỏi.">
+    <Shell title="Duyệt học liệu mẫu & Dựng Kho" subtitle="Kiểm định gói kiến thức, sinh 6 dạng tài nguyên chuẩn và phê duyệt đưa vào Kho của trường.">
       <div className="ag-alert info du-rule" role="note">
         <Icon name="shield" size={20} />
         <div>

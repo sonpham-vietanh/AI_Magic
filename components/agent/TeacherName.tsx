@@ -20,10 +20,68 @@ export function useActor(): [string, (v: string) => void, boolean] {
 }
 
 /** Ô nhỏ hỏi một lần "Tên cô/thầy"; đã có tên thì hiện gọn kèm nút Sửa. */
-export function TeacherName({ value, onSave, ready }: { value: string; onSave: (v: string) => void; ready: boolean }) {
+export function TeacherName({
+  value,
+  onSave,
+  ready,
+  inline = false,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  ready: boolean;
+  inline?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   if (!ready) return null;
+
+  if (inline) {
+    if (!editing) {
+      return (
+        <button
+          type="button"
+          className="ag-who-pill"
+          aria-label={value ? `Đổi tên giáo viên (${value})` : 'Nhập tên giáo viên'}
+          onClick={() => {
+            setDraft(value);
+            setEditing(true);
+          }}
+        >
+          <span className="ag-who-dot" aria-hidden="true" />
+          <span>{value ? `GV: ${value}` : 'Nhập tên cô/thầy'}</span>
+        </button>
+      );
+    }
+    return (
+      <form
+        className="ag-who-inline-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!draft.trim()) return;
+          onSave(draft);
+          setEditing(false);
+        }}
+      >
+        <input
+          id="ag-who-input"
+          className="ag-who-inline-input"
+          value={draft}
+          maxLength={100}
+          autoFocus
+          autoComplete="name"
+          placeholder="Tên cô/thầy (VD: Cô Lan)"
+          aria-label="Tên cô/thầy"
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <button type="submit" className="ag-btn small primary" disabled={!draft.trim()}>
+          Lưu
+        </button>
+        <button type="button" className="ag-btn small ghost" onClick={() => setEditing(false)}>
+          Đóng
+        </button>
+      </form>
+    );
+  }
 
   if (value && !editing) {
     return (

@@ -18,15 +18,17 @@ interface Row {
   chapter: string;
   lesson: string;
   status: KhoStatus;
+  hasPackage?: boolean;
   version?: number;
   kinds: ResourceKind[];
 }
 
-type Filter = 'all' | 'approved' | 'pending';
+type Filter = 'all' | 'ready' | 'approved' | 'pending';
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Tất cả' },
-  { id: 'approved', label: 'Đã duyệt' },
-  { id: 'pending', label: 'Chưa duyệt' },
+  { id: 'ready', label: 'Đã có gói gốc' },
+  { id: 'approved', label: 'Đã duyệt chuẩn' },
+  { id: 'pending', label: 'Chưa có gói' },
 ];
 
 const norm = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd').toLowerCase();
@@ -69,8 +71,9 @@ export default function KhoPage() {
   const counts = useMemo(
     () => ({
       all: rows.length,
+      ready: rows.filter((r) => r.status === 'approved' || r.status === 'chua_duyet').length,
       approved: rows.filter((r) => r.status === 'approved').length,
-      pending: rows.filter((r) => r.status !== 'approved').length,
+      pending: rows.filter((r) => r.status === 'khong_co').length,
     }),
     [rows],
   );
@@ -79,8 +82,9 @@ export default function KhoPage() {
     const nq = norm(q.trim());
     const map = new Map<string, Row[]>();
     for (const r of rows) {
+      if (filter === 'ready' && r.status !== 'approved' && r.status !== 'chua_duyet') continue;
       if (filter === 'approved' && r.status !== 'approved') continue;
-      if (filter === 'pending' && r.status === 'approved') continue;
+      if (filter === 'pending' && r.status !== 'khong_co') continue;
       if (nq && !norm(`${r.title} ${r.code} ${r.lesson}`).includes(nq)) continue;
       const k = r.chapter || 'Chưa rõ chương';
       map.set(k, [...(map.get(k) || []), r]);
@@ -169,45 +173,53 @@ export default function KhoPage() {
               {rows.length === 0 ? 'Thử đổi môn hoặc khối khác.' : 'Thử bỏ bớt từ khoá hoặc đổi trạng thái lọc.'}
             </div>
           )}
-          {chapters.map(([chapter, list], idx) => (
-            <details key={chapter} className="kh-chap" open={searching || idx < 2}>
-              <summary>
-                <span>{chapter}</span>
-                <small>
-                  {list.filter((r) => r.status === 'approved').length}/{list.length} đã duyệt
-                </small>
-              </summary>
-              <div className="kh-grid">
-                {list.map((r) => (
-                  <button
-                    key={r.atomId}
-                    type="button"
-                    className={`kh-lesson-card${r.status === 'approved' ? ' ok' : ''}`}
-                    onClick={() => setOpenId(r.atomId)}
-                  >
-                    <span className="t">{r.title}</span>
-                    {r.lesson && <span className="s">{r.lesson}</span>}
-                    <span className="kh-row">
-                      {r.status === 'approved' ? (
-                        <span className="ag-status ok">Đã duyệt{r.version ? `, v${r.version}` : ''}</span>
-                      ) : (
-                        <span className="ag-status draft">Chưa có bản chuẩn đã duyệt</span>
-                      )}
-                    </span>
-                    {r.kinds.length > 0 && (
-                      <span className="kh-row" aria-label="Các dạng tài nguyên đã có">
-                        {r.kinds.map((k) => (
-                          <span key={k} className="kh-pill">
-                            {ARTIFACT_LABELS[k].replace(/ \(.*\)$/, '')}
-                          </span>
-                        ))}
+          {chapters.map(([chapter, list], idx) => {
+            const readyCount = list.filter((r) => r.status === 'approved' || r.status === 'chua_duyet').length;
+            const approvedCount = list.filter((r) => r.status === 'approved').length;
+            return (
+              <details key={chapter} className="kh-chap" open={searching || idx < 2}>
+                <summary>
+                  <span>{chapter}</span>
+                  <small>
+                    {approvedCount > 0
+                      ? `${approvedCount}/${list.length} đã duyệt · ${readyCount} có gói gốc`
+                      : `${readyCount}/${list.length} bài có gói kiến thức`}
+                  </small>
+                </summary>
+                <div className="kh-grid">
+                  {list.map((r) => (
+                    <button
+                      key={r.atomId}
+                      type="button"
+                      className={`kh-lesson-card${r.status === 'approved' ? ' ok' : ''}`}
+                      onClick={() => setOpenId(r.atomId)}
+                    >
+                      <span className="t">{r.title}</span>
+                      {r.lesson && <span className="s">{r.lesson}</span>}
+                      <span className="kh-row">
+                        {r.status === 'approved' ? (
+                          <span className="ag-status ok">Đã duyệt chuẩn{r.version ? `, v${r.version}` : ''}</span>
+                        ) : r.status === 'chua_duyet' ? (
+                          <span className="ag-status draft">Có gói gốc · Chờ duyệt</span>
+                        ) : (
+                          <span className="ag-status none">Soạn bằng AI theo chương trình</span>
+                        )}
                       </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </details>
-          ))}
+                      {r.kinds.length > 0 && (
+                        <span className="kh-row" aria-label="Các dạng tài nguyên đã có">
+                          {r.kinds.map((k) => (
+                            <span key={k} className="kh-pill">
+                              {ARTIFACT_LABELS[k].replace(/ \(.*\)$/, '')}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            );
+          })}
         </>
       )}
 

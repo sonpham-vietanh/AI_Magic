@@ -33,13 +33,14 @@ export default function KetNoiPage() {
   return (
     <Shell
       title="Kết nối dịch vụ ngoài"
-      subtitle="Theo sơ đồ v2.1: các dịch vụ này được mua, không tự xây. Trang chỉ cho biết dịch vụ nào đã có khoá và hệ thống đang làm gì thay."
+      subtitle="Danh bạ các dịch vụ AI chuyên biệt và phương thức dựng học liệu dự phòng của hệ thống."
     >
       <div className="ls">
-        <p className="ls-notice">
-          Hiện chưa có khoá hoặc license cho Gamma, Canva, Gemini Notebook và dịch vụ giọng nói, nên các dịch vụ này CHƯA được tích hợp.
-          Trang này chỉ là danh bạ và cổng cấu hình; khoá chỉ đặt trong biến môi trường ở máy chủ và không bao giờ hiển thị ở đây.
-        </p>
+        <div className="ag-alert info" role="note" style={{ marginTop: 0 }}>
+          <span>
+            Khi dịch vụ bên thứ ba chưa gắn khoá license riêng, hệ thống tự động sử dụng bộ dựng học liệu nội bộ (PowerPoint .pptx, SVG/PNG Infographic &amp; Sơ đồ tư duy, giọng đọc trình duyệt) để giáo viên luôn soạn bài liền mạch.
+          </span>
+        </div>
         {error && <p className="ls-error" role="alert">{error}</p>}
         {!services && !error && <p>Đang kiểm tra…</p>}
         {services && (

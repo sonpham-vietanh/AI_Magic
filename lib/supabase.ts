@@ -89,36 +89,117 @@ export function cleanFactoryText(raw?: string | null): string {
   t = replaceInnermost(t, /\\sqrt\s*\{([^{}]*)\}/g, (_m, a) => `√(${a})`);
   t = replaceInnermost(
     t,
-    /\\(?:text|mathrm|mathbf)\s*\{([^{}]*)\}/g,
+    /\\(?:text|mathrm|mathbf|mathit|mathsf|operatorname)\s*\{([^{}]*)\}/g,
     (_m, a) => a,
+  );
+  t = replaceInnermost(
+    t,
+    /\\(?:overrightarrow|vec)\s*\{([^{}]*)\}/g,
+    (_m, a) => `${a.trim()}\u20d7`,
+  );
+  t = replaceInnermost(
+    t,
+    /\\(?:widehat|hat)\s*\{([^{}]*)\}/g,
+    (_m, a) => `∠${a.trim()}`,
+  );
+  t = replaceInnermost(
+    t,
+    /\\(?:overline|bar)\s*\{([^{}]*)\}/g,
+    (_m, a) => a.trim(),
   );
 
   return t
+    .replace(/\^\s*\{\s*\\circ\s*\}/g, '°')
+    .replace(/\^\s*\\circ\b/g, '°')
+    .replace(/\\circ\b/g, '°')
     .replace(/\\mathbb\{Q\}/g, 'ℚ')
     .replace(/\\mathbb\{R\}/g, 'ℝ')
     .replace(/\\mathbb\{Z\}/g, 'ℤ')
     .replace(/\\mathbb\{N\}/g, 'ℕ')
+    .replace(/\\mathbb\{C\}/g, 'ℂ')
     .replace(/\\in\b/g, '∈')
     .replace(/\\notin\b/g, '∉')
     .replace(/\\subseteq\b/g, '⊆')
     .replace(/\\subset\b/g, '⊂')
+    .replace(/\\supseteq\b/g, '⊇')
+    .replace(/\\supset\b/g, '⊃')
     .replace(/\\cup\b/g, '∪')
     .replace(/\\cap\b/g, '∩')
     .replace(/\\emptyset\b/g, '∅')
+    .replace(/\\varnothing\b/g, '∅')
+    .replace(/\\setminus\b/g, '\\')
+    .replace(/\\backslash\b/g, '\\')
     .replace(/\\leq?\b/g, '≤')
     .replace(/\\geq?\b/g, '≥')
     .replace(/\\neq?\b/g, '≠')
     .replace(/\\approx\b/g, '≈')
+    .replace(/\\equiv\b/g, '≡')
+    .replace(/\\sim\b/g, '∼')
+    .replace(/\\cong\b/g, '≅')
     .replace(/\\pm\b/g, '±')
+    .replace(/\\mp\b/g, '∓')
     .replace(/\\times\b/g, '×')
     .replace(/\\div\b/g, '÷')
     .replace(/\\cdot\b/g, '·')
+    .replace(/\\ast\b/g, '*')
+    .replace(/\\perp\b/g, '⊥')
+    .replace(/\\parallel\b/g, '∥')
+    .replace(/\\angle\b/g, '∠')
+    .replace(/\\triangle\b/g, '△')
+    .replace(/\\Leftrightarrow\b/g, '⇔')
+    .replace(/\\iff\b/g, '⇔')
+    .replace(/\\Rightarrow\b/g, '⇒')
+    .replace(/\\implies\b/g, '⇒')
+    .replace(/\\Leftarrow\b/g, '⇐')
+    .replace(/\\leftrightarrow\b/g, '↔')
+    .replace(/\\(?:rightarrow|to)\b/g, '→')
+    .replace(/\\leftarrow\b/g, '←')
+    .replace(/\\forall\b/g, '∀')
+    .replace(/\\exists\b/g, '∃')
+    .replace(/\\infty\b/g, '∞')
+    .replace(/\\partial\b/g, '∂')
+    .replace(/\\sum\b/g, '∑')
+    .replace(/\\prod\b/g, '∏')
+    .replace(/\\int\b/g, '∫')
     .replace(/\\alpha\b/g, 'α')
     .replace(/\\beta\b/g, 'β')
     .replace(/\\gamma\b/g, 'γ')
     .replace(/\\delta\b/g, 'δ')
+    .replace(/\\epsilon\b/g, 'ε')
+    .replace(/\\varepsilon\b/g, 'ε')
+    .replace(/\\theta\b/g, 'θ')
+    .replace(/\\lambda\b/g, 'λ')
+    .replace(/\\mu\b/g, 'μ')
+    .replace(/\\sigma\b/g, 'σ')
+    .replace(/\\omega\b/g, 'ω')
     .replace(/\\pi\b/g, 'π')
+    .replace(/\\varphi\b/g, 'φ')
+    .replace(/\\phi\b/g, 'φ')
     .replace(/\\Delta\b/g, 'Δ')
+    .replace(/\\Omega\b/g, 'Ω')
+    .replace(/\\(?:left|right)\s*([()[\]|.{])/g, '$1')
+    .replace(/\\(?:left|right)\\([{}])/g, '$1')
+    .replace(
+      /([0-9a-zA-Z)\]])\\(sin|cos|tan|cot|arcsin|arccos|arctan|log|ln|lim|max|min|gcd|lcm)\b/g,
+      '$1·$2',
+    )
+    .replace(
+      /\\(sin|cos|tan|cot|arcsin|arccos|arctan|log|ln|lim|max|min|gcd|lcm)\b/g,
+      '$1',
+    )
+    .replace(/\^\s*\{\s*2\s*\}/g, '²')
+    .replace(/\^\s*\{\s*3\s*\}/g, '³')
+    .replace(/\^2(?![0-9])/g, '²')
+    .replace(/\^3(?![0-9])/g, '³')
+    .replace(/\^\s*\{([^{}]+)\}/g, (_m, exp: string) =>
+      exp.trim().length <= 1 ? `^${exp.trim()}` : `^(${exp.trim()})`,
+    )
+    .replace(/_\s*\{([^{}]+)\}/g, (_m, sub: string) =>
+      sub.trim().length <= 2 ? `_${sub.trim()}` : `_(${sub.trim()})`,
+    )
+    .replace(/\\[,;:!]\s*/g, ' ')
+    .replace(/\\\s+/g, ' ')
+    .replace(/\\([{}])/g, '$1')
     .replace(/\*\*([^*\n]+)\*\*/g, '$1')
     .replace(/(^|[^\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])/g, '$1$2')
     .replace(/`([^`\n]+)`/g, '$1')
@@ -1031,7 +1112,7 @@ async function enrichEdgesWithAtoms(
     `/atoms?id=in.(${encodeURIComponent(inFilter)})&select=id,code,title,subject,grade,chapter,lesson,bloom,dok,yeu_cau,quan_niem_sai`,
   );
   const neighbors: SupabaseAtom[] = res.ok
-    ? ((await res.json()) as SupabaseAtom[])
+    ? ((await res.json()) as SupabaseAtom[]).map(sanitizeAtom)
     : [];
   const map = new Map(neighbors.map((n) => [n.id, n]));
 
@@ -1039,6 +1120,8 @@ async function enrichEdgesWithAtoms(
     const otherId = e.from_id === centerAtomId ? e.to_id : e.from_id;
     return {
       ...e,
+      quan_niem_sai: e.quan_niem_sai ? cleanFactoryText(e.quan_niem_sai) : null,
+      remediation_hint: e.remediation_hint ? cleanFactoryText(e.remediation_hint) : null,
       direction: e.from_id === centerAtomId ? 'outgoing' : 'incoming',
       linkedAtom: map.get(otherId),
     };
@@ -1074,7 +1157,11 @@ export async function fetchSupabaseTreeScaffold(params?: {
 
   const res = await sbFetch(`/tree_scaffold?${parts.join('&')}`);
   if (!res.ok) return [];
-  return (await res.json()) as SupabaseTreeNode[];
+  const nodes = (await res.json()) as SupabaseTreeNode[];
+  return nodes.map((n) => ({
+    ...n,
+    title: cleanFactoryText(n.title),
+  }));
 }
 
 export async function fetchSupabaseTainguyenList(params?: {
@@ -1419,31 +1506,31 @@ export async function fetchSupabaseLibraryResources(): Promise<
       const { grade, subject } = parseGradeSubjectFromPkgId(row.id);
       const sections = [
         f.objective
-          ? { heading: '1. Mục tiêu cần đạt (GDPT 2018)', body: f.objective }
+          ? { heading: '1. Mục tiêu cần đạt (GDPT 2018)', body: cleanFactoryText(f.objective) }
           : null,
         f.explanation
           ? {
               heading: '2. Kiến thức trọng tâm & Ghi nhớ',
-              body: f.explanation,
+              body: cleanFactoryText(f.explanation),
             }
           : null,
         f.strategy
-          ? { heading: '3. Chiến lược dẫn dắt Socratic', body: f.strategy }
+          ? { heading: '3. Chiến lược dẫn dắt Socratic', body: cleanFactoryText(f.strategy) }
           : null,
         f.example
-          ? { heading: '4. Ví dụ minh họa thực tế', body: f.example }
+          ? { heading: '4. Ví dụ minh họa thực tế', body: cleanFactoryText(f.example) }
           : null,
         f.commonMistake
           ? {
               heading: '5. Quan niệm sai phổ biến & Cách khắc phục',
-              body: f.commonMistake,
+              body: cleanFactoryText(f.commonMistake),
             }
           : null,
         f.counterExample
-          ? { heading: '6. Tình huống phản ví dụ', body: f.counterExample }
+          ? { heading: '6. Tình huống phản ví dụ', body: cleanFactoryText(f.counterExample) }
           : null,
         f.questions
-          ? { heading: '7. Câu hỏi luyện tập', body: f.questions }
+          ? { heading: '7. Câu hỏi luyện tập', body: cleanFactoryText(f.questions) }
           : null,
       ].filter((s): s is { heading: string; body: string } => s !== null);
 
@@ -1481,8 +1568,88 @@ export async function fetchSupabaseLibraryResources(): Promise<
       };
     });
 
+    const inferMetaFromTitle = (
+      title: string,
+      fallback: { label: string; category: ToolCategoryCode; toolId: string },
+      format: string,
+      pkgId: string,
+    ): { label: string; category: ToolCategoryCode; toolId: string; displayTitle: string } => {
+      const lower = title.toLowerCase();
+      let displayTitle = cleanFactoryText(title);
+      if (format === 'video' && /^cảnh\s+\d+/i.test(displayTitle)) {
+        displayTitle = `Kịch bản Video Tình huống (${pkgId}) — ${displayTitle}`;
+      }
+      if (
+        lower.includes('kế hoạch bài dạy') ||
+        lower.includes('giáo án') ||
+        lower.includes('mô hình 5e') ||
+        lower.includes('công văn 5512')
+      ) {
+        return {
+          label: 'Kế hoạch bài dạy (5512 / 5E)',
+          category: 'ke_hoach_bai_day',
+          toolId: 'khbd-5512',
+          displayTitle,
+        };
+      }
+      if (
+        lower.includes('nhận xét học bạ') ||
+        lower.includes('sổ liên lạc') ||
+        lower.includes('phụ huynh') ||
+        lower.includes('thư gửi') ||
+        lower.includes('nội quy') ||
+        lower.includes('kế hoạch chủ nhiệm')
+      ) {
+        return {
+          label: 'Giao tiếp PH & Quản lý lớp',
+          category: 'giao_tiep_quan_ly_lop',
+          toolId: 'qllh-nhan-xet-hoc-ba',
+          displayTitle,
+        };
+      }
+      if (lower.includes('phân hóa') || lower.includes('hồ sơ lớp')) {
+        return {
+          label: 'Phân hóa & Hỗ trợ học sinh',
+          category: 'phan_hoa_ho_tro',
+          toolId: 'phht-bai-tap-3-muc',
+          displayTitle,
+        };
+      }
+      if (
+        lower.includes('đề kiểm tra') ||
+        lower.includes('trắc nghiệm') ||
+        lower.includes('ma trận') ||
+        lower.includes('rubric') ||
+        lower.includes('kiểm tra 15') ||
+        lower.includes('đánh giá')
+      ) {
+        return {
+          label: 'Kiểm tra & Đánh giá',
+          category: 'kiem_tra_danh_gia',
+          toolId: 'ktdg-trac-nghiem-4-lua-chon',
+          displayTitle,
+        };
+      }
+      if (
+        format === 'video' ||
+        format === 'podcast' ||
+        format === 'mindmap' ||
+        lower.includes('sơ đồ tư duy') ||
+        lower.includes('podcast') ||
+        lower.includes('kịch bản video')
+      ) {
+        return {
+          label: fallback.label,
+          category: 'chuyen_doi_hoc_lieu',
+          toolId: fallback.toolId,
+          displayTitle,
+        };
+      }
+      return { ...fallback, displayTitle };
+    };
+
     const convertedResources: GeneratedResource[] = rawResources.map((r) => {
-      const fmtMeta = FORMAT_LABELS[r.format] || {
+      const baseMeta = FORMAT_LABELS[r.format] || {
         label: `Học liệu (${r.format})`,
         category: 'ke_hoach_bai_day' as ToolCategoryCode,
         toolId: 'khbd-5512',
@@ -1494,7 +1661,23 @@ export async function fetchSupabaseLibraryResources(): Promise<
           ? r.content.title
           : sections[0]?.heading && !sections[0].heading.startsWith('Phần ')
             ? sections[0].heading
-            : `${fmtMeta.label} — Mã gói ${r.package_id}`;
+            : `${baseMeta.label} — Mã gói ${r.package_id}`;
+
+      const savedCategory =
+        typeof r.content?.category === 'string'
+          ? (r.content.category as ToolCategoryCode)
+          : undefined;
+      const savedToolId =
+        typeof r.content?.toolId === 'string' ? r.content.toolId : undefined;
+      const savedToolName =
+        typeof r.content?.toolName === 'string' ? r.content.toolName : undefined;
+
+      const inferred = inferMetaFromTitle(
+        firstLineTitle,
+        baseMeta,
+        r.format,
+        r.package_id,
+      );
 
       const markdownContent = sections
         .map((s) => `## ${s.heading}\n\n${s.body}`)
@@ -1503,9 +1686,9 @@ export async function fetchSupabaseLibraryResources(): Promise<
       return {
         id: r.id,
         createdAt: r.created_at,
-        toolId: fmtMeta.toolId,
-        toolName: fmtMeta.label,
-        category: fmtMeta.category,
+        toolId: savedToolId || inferred.toolId,
+        toolName: savedToolName || inferred.label,
+        category: savedCategory || inferred.category,
         teacher: {
           name: r.created_by || 'Anh Hùng (Quản trị học thuật)',
           email: 'hung.nguyen@truongvietanh.com',
@@ -1515,7 +1698,7 @@ export async function fetchSupabaseLibraryResources(): Promise<
         className: r.folder || undefined,
         knowledgeNodeId: r.package_id,
         linkedNodeIds: [],
-        title: `[${r.id}] ${firstLineTitle}`,
+        title: `[${r.id}] ${inferred.displayTitle}`,
         markdownContent,
         structuredSections: sections,
         moetComplianceChecklist: [
@@ -1552,13 +1735,27 @@ export async function saveResourceToSupabase(
     const nodeId = isSafeId(resource.knowledgeNodeId)
       ? resource.knowledgeNodeId
       : '';
+    const formatByCategory: Partial<Record<ToolCategoryCode, string>> = {
+      ke_hoach_bai_day: 'text',
+      phieu_hoc_tap_hoat_dong: 'worksheet',
+      kiem_tra_danh_gia: 'quiz',
+      chuyen_doi_hoc_lieu: 'mindmap',
+      giao_tiep_quan_ly_lop: 'text',
+      phan_hoa_ho_tro: 'worksheet',
+      tich_hop_lien_mon: 'text',
+      tro_ly_su_pham: 'text',
+    };
+    const dbFormat = formatByCategory[resource.category] || 'worksheet';
     const payload = {
       id: resId,
       package_id: nodeId || `${resource.subject.toUpperCase()}-G${resource.grade}`,
-      format: 'worksheet',
+      format: dbFormat,
       status: 'ready',
       content: {
         title: resource.title,
+        category: resource.category,
+        toolId: resource.toolId,
+        toolName: resource.toolName,
         sections: resource.structuredSections,
       },
       created_at: resource.createdAt,

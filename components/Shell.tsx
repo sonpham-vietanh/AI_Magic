@@ -99,7 +99,7 @@ export function Shell({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [recent, setRecent] = useState<HistoryItem[]>([]);
-  const [extraOpen, setExtraOpen] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(true);
 
   const mode = variant ?? 'page';
   const menuBtnRef = useRef<HTMLButtonElement>(null);
@@ -133,7 +133,9 @@ export function Shell({
 
   useEffect(() => {
     try {
-      setExtraOpen(localStorage.getItem(EXTRA_KEY) === '1');
+      const saved = localStorage.getItem(EXTRA_KEY);
+      if (saved === '0') setExtraOpen(false);
+      else setExtraOpen(true);
     } catch {
       /* không có localStorage */
     }
@@ -228,12 +230,14 @@ export function Shell({
       <aside id="ag-rail" ref={railRef} className="ag-rail">
         <div className="ag-rail-head">
           <Link href="/" className="ag-brand">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-crest.webp" alt="Trường Việt Anh" />
+            <span className="ag-brand-crest">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-crest.webp" alt="Trường Việt Anh" />
+            </span>
             <span>
               <span className="ag-brand-name">Việt Anh MagicStudio</span>
               <span className="ag-brand-sub" style={{ display: 'block' }}>
-                Trợ lý soạn bài
+                Hệ thống Công cụ Sư phạm
               </span>
             </span>
           </Link>
@@ -247,23 +251,6 @@ export function Shell({
           <div className="ag-label">Soạn và dùng</div>
           {renderNav(WORK_NAV, 'Soạn và dùng')}
 
-          <div className="ag-label">Gần đây</div>
-          {recent.length === 0 ? (
-            <p className="ag-empty-note">Các bản soạn của cô/thầy sẽ hiện ở đây.</p>
-          ) : (
-            <div className="ag-recent">
-              {recent.map((h) => (
-                <button key={h.id} type="button" className="ag-recent-item" onClick={() => openHistory(h.id)}>
-                  <span className="ag-recent-title">{h.title}</span>
-                  <span className="ag-recent-meta">{formatWhen(h.at)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="ag-label">Duyệt và chất lượng</div>
-          {renderNav(BUILD_NAV, 'Duyệt và chất lượng')}
-
           <button
             type="button"
             className="ls-nav-toggle"
@@ -271,13 +258,30 @@ export function Shell({
             aria-controls="ls-nav-extra"
             onClick={toggleExtra}
           >
-            <span>Công cụ khác</span>
+            <span>Công cụ &amp; Học liệu</span>
             <Icon name="chevronDown" size={18} />
           </button>
-          {(extraOpen) && (
+          {extraOpen && (
             <div id="ls-nav-extra">
-              {renderNav(EXTRA_NAV, 'Công cụ khác')}
+              {renderNav(EXTRA_NAV, 'Công cụ và học liệu')}
             </div>
+          )}
+
+          <div className="ag-label">Duyệt và chất lượng</div>
+          {renderNav(BUILD_NAV, 'Duyệt và chất lượng')}
+
+          {recent.length > 0 && (
+            <>
+              <div className="ag-label">Gần đây</div>
+              <div className="ag-recent">
+                {recent.slice(0, 5).map((h) => (
+                  <button key={h.id} type="button" className="ag-recent-item" onClick={() => openHistory(h.id)}>
+                    <span className="ag-recent-title">{h.title}</span>
+                    <span className="ag-recent-meta">{formatWhen(h.at)}</span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
