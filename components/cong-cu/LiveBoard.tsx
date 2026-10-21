@@ -264,7 +264,7 @@ export function LiveBoard({
                 title={activeSim.name}
                 srcDoc={activeSim.content}
                 className="cc-sim"
-                sandbox="allow-scripts allow-same-origin"
+                sandbox="allow-scripts"
               />
             ) : (
               sims.length > 0 &&

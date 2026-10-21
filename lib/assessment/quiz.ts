@@ -1,6 +1,7 @@
 import { loadBank } from './bank';
 import { BLOOM_ORDER, normalizeBloom, type Bloom } from './tt22';
-import { now } from './store';
+import { now, readOrg } from './store';
+import { lockedQuestionIds } from './locks';
 import type { BankItem } from './types';
 
 export type Language = 'vi' | 'en' | 'song_ngu';
@@ -88,8 +89,13 @@ export async function generateQuiz(p: {
   const levels = p.bloomLevels.map(normalizeBloom).filter((b): b is Bloom => !!b);
   const effective: Bloom[] = levels.length ? [...new Set(levels)] : ['Nhớ', 'Hiểu', 'Vận dụng'];
 
-  const bank = await loadBank(p.orgId, p.atomId);
+  const [bank, org] = await Promise.all([loadBank(p.orgId, p.atomId), readOrg(p.orgId)]);
+  // Quiz hiện cả đáp án nên tuyệt đối không chọn câu đang khoá / thuộc đề chưa công bố.
+  const locked = lockedQuestionIds(org, now());
+  const usable = bank.items.filter((i) => !locked.has(i.id));
+  const lockedCount = bank.items.length - usable.length;
   const notes: string[] = [];
+  if (lockedCount) notes.push(`${lockedCount} câu đang bị khoá (đã dùng gần đây hoặc thuộc đề chưa công bố) nên không đưa vào quiz.`);
   if (!bank.found) notes.push(`Không tìm thấy nguyên tử "${p.atomId}" trong kho tri thức.`);
   if (bank.found && bank.items.length === 0) notes.push('Nguyên tử này chưa có câu hỏi trong ngân hàng.');
   if (p.bloomLevels.length > levels.length) {
@@ -100,7 +106,7 @@ export async function generateQuiz(p: {
 
   // Quiz không lưu: hạt giống theo phút để mỗi lần sinh lại có thể khác nhau.
   const seed = `${p.orgId}|${p.atomId}|${Math.floor(now().getTime() / 60000)}|${p.style}`;
-  const { picked, warnings } = pickByLevels(bank.items, effective, count, seed);
+  const { picked, warnings } = pickByLevels(usable, effective, count, seed);
   notes.push(...warnings);
 
   const questions = picked.map((q, i) => renderQuestion(i + 1, q.noiDung, q.options)).join('\n\n');

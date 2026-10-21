@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   EVENT_HISTORY,
   EVENT_NEW_CHAT,
@@ -43,13 +43,13 @@ const WORK_NAV: NavItem[] = [
 ];
 
 const BUILD_NAV: NavItem[] = [
-  { href: '/duyet', label: 'Dựng kho — Pha A', icon: 'shield' },
-  { href: '/chat-luong', label: 'Chất lượng & Tín hiệu', icon: 'chart' },
+  { href: '/duyet', label: 'Duyệt học liệu mẫu', icon: 'shield' },
+  { href: '/chat-luong', label: 'Chất lượng bài soạn', icon: 'chart' },
 ];
 
 const EXTRA_NAV: NavItem[] = [
   { href: '/cong-cu', label: 'Kho 82 công cụ', icon: 'grid' },
-  { href: '/thu-vien', label: 'Thư viện cũ', icon: 'folder' },
+  { href: '/thu-vien', label: 'Học liệu đã lưu', icon: 'folder' },
   { href: '/so-do-lien-mon', label: 'Sơ đồ liên môn', icon: 'graph' },
   { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', icon: 'users' },
   { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', icon: 'clipboard' },
@@ -102,6 +102,21 @@ export function Shell({
   const [extraOpen, setExtraOpen] = useState(false);
 
   const mode = variant ?? 'page';
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const railRef = useRef<HTMLElement>(null);
+  const wasNavOpen = useRef(false);
+
+  // Ngăn kéo mobile: chuyển focus vào khi mở, trả về nút Mở menu khi đóng.
+  useEffect(() => {
+    if (navOpen) {
+      railRef.current?.querySelector<HTMLElement>('a[href], button')?.focus();
+    } else if (wasNavOpen.current) {
+      const rail = railRef.current;
+      const active = document.activeElement;
+      if (!active || active === document.body || (rail && rail.contains(active))) menuBtnRef.current?.focus();
+    }
+    wasNavOpen.current = navOpen;
+  }, [navOpen]);
 
   useEffect(() => {
     setNavOpen(false);
@@ -197,6 +212,7 @@ export function Shell({
           <span className="ag-brand-name">Việt Anh MagicStudio</span>
         </Link>
         <button
+          ref={menuBtnRef}
           type="button"
           className="ag-iconbtn"
           aria-expanded={navOpen}
@@ -209,7 +225,7 @@ export function Shell({
       </div>
       {navOpen && <div className="ag-scrim" aria-hidden="true" onClick={() => setNavOpen(false)} />}
 
-      <aside id="ag-rail" className="ag-rail">
+      <aside id="ag-rail" ref={railRef} className="ag-rail">
         <div className="ag-rail-head">
           <Link href="/" className="ag-brand">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -245,8 +261,8 @@ export function Shell({
             </div>
           )}
 
-          <div className="ag-label">Dựng kho và chất lượng</div>
-          {renderNav(BUILD_NAV, 'Dựng kho và chất lượng')}
+          <div className="ag-label">Duyệt và chất lượng</div>
+          {renderNav(BUILD_NAV, 'Duyệt và chất lượng')}
 
           <button
             type="button"
@@ -255,13 +271,12 @@ export function Shell({
             aria-controls="ls-nav-extra"
             onClick={toggleExtra}
           >
-            <span>Công cụ phụ</span>
+            <span>Công cụ khác</span>
             <Icon name="chevronDown" size={18} />
           </button>
           {(extraOpen) && (
             <div id="ls-nav-extra">
-              <p className="ls-nav-note">Ngoài phạm vi sơ đồ v1</p>
-              {renderNav(EXTRA_NAV, 'Công cụ phụ')}
+              {renderNav(EXTRA_NAV, 'Công cụ khác')}
             </div>
           )}
         </div>

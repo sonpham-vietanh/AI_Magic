@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { loadBank } from './bank';
+import { allocatePoints } from './examDoc';
+import { DEDUP_YEARS, dedupCutoff, usedRecently, ymdVN } from './locks';
+import { normalizeActorName, sameActor } from '@/lib/server/roles';
 import { languageNote, renderQuestion, seededShuffle, type Language } from './quiz';
 import { mutateOrg, now, readOrg } from './store';
 import { TT22_LABEL, TT22_LEVELS, bloomToTt22, normalizeBloom, type Tt22Level } from './tt22';
@@ -12,7 +15,7 @@ import type {
   OrgData,
 } from './types';
 
-export const DEDUP_YEARS = 3;
+export { DEDUP_YEARS, dedupCutoff, usedRecently, lockedQuestionIds } from './locks';
 export const TOTAL_POINTS = 10;
 const PER_CELL_DEFAULT = 2;
 
@@ -33,13 +36,7 @@ export function isValidExamDate(s: string): boolean {
 
 /** Ngày hiện tại theo giờ Việt Nam (UTC+7), dạng YYYY-MM-DD. */
 export function todayVN(): string {
-  return new Date(now().getTime() + 7 * 3600_000).toISOString().slice(0, 10);
-}
-
-export function dedupCutoff(at: Date): string {
-  const d = new Date(at.getTime());
-  d.setUTCFullYear(d.getUTCFullYear() - DEDUP_YEARS);
-  return d.toISOString();
+  return ymdVN(now());
 }
 
 const zeroCell = (): MatrixCell => ({ target: 0, selected: 0, points: 0 });
@@ -50,15 +47,6 @@ const zeroCells = (): Record<Tt22Level, MatrixCell> => ({
   van_dung_cao: zeroCell(),
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-export function usedRecently(org: OrgData, at: Date): Set<string> {
-  const cutoff = dedupCutoff(at);
-  const s = new Set<string>();
-  for (const u of org.usage) if (u.usedAt > cutoff) s.add(u.questionId);
-  // Câu đang nằm trong đề chờ duyệt cũng không được rút lại.
-  for (const e of org.exams) if (e.status === 'cho_duyet') e.questionIds.forEach((id) => s.add(id));
-  return s;
-}
 
 function snapshot(q: BankItem): ExamItemSnapshot {
   return {
@@ -82,7 +70,7 @@ export function renderMatrixMarkdown(m: ExamMatrix): string {
     (r) =>
       `| ${r.atomCode} — ${r.title} | ${TT22_LEVELS.map((l) => cell(r.cells[l])).join(' | ')} | ${r.totalSelected} | ${r.points} |`,
   );
-  const tot = `| **Tổng** | ${TT22_LEVELS.map((l) => cell(m.totals[l])).join(' | ')} | ${m.totalSelected}/${m.totalTarget} | ${round2(m.totalSelected * m.pointsPerQuestion)} |`;
+  const tot = `| **Tổng** | ${TT22_LEVELS.map((l) => cell(m.totals[l])).join(' | ')} | ${m.totalSelected}/${m.totalTarget} | ${round2(m.totalSelected ? m.totalPoints : 0)} |`;
   return [head, sep, ...rows, tot].join('\n');
 }
 
@@ -108,13 +96,14 @@ export function renderExamContent(rec: ExamRecord): { sections: { heading: strin
       (ln ? `Lưu ý: ${ln}\n\n` : '') +
       (rec.items.map((q, i) => renderQuestion(i + 1, q.noiDung, q.options)).join('\n\n') || '(Chưa có câu hỏi.)'),
   });
+  const pts = allocatePoints(rec.items.length);
   sections.push({
     heading: 'Đáp án & hướng dẫn chấm',
     body:
       rec.items
         .map(
           (q, i) =>
-            `Câu ${i + 1} [${TT22_LABEL[q.tt22Level]} · ${rec.matrix.pointsPerQuestion}đ]: ${q.dapAn || '(chưa có đáp án)'}${q.loiGiai ? `\n   Giải thích: ${q.loiGiai}` : ''}`,
+            `Câu ${i + 1} [${TT22_LABEL[q.tt22Level]} · ${pts[i]}đ]: ${q.dapAn || '(chưa có đáp án)'}${q.loiGiai ? `\n   Giải thích: ${q.loiGiai}` : ''}`,
         )
         .join('\n\n') || '(Không có.)',
   });
@@ -161,6 +150,7 @@ export async function draftExam(p: {
   const shortfall: string[] = [];
   const rows: ExamMatrix['rows'] = [];
   const totals = zeroCells();
+  const owners: { row: number; lvl: Tt22Level }[] = [];
 
   for (const atomId of atomIds) {
     const bank = await loadBank(p.orgId, atomId);
@@ -181,6 +171,7 @@ export async function draftExam(p: {
       for (const q of ordered.slice(0, perCell)) {
         chosen.add(q.id);
         items.push(snapshot(q));
+        owners.push({ row: rows.length, lvl });
         cells[lvl].selected += 1;
       }
       if (cells[lvl].selected < perCell) {
@@ -203,12 +194,15 @@ export async function draftExam(p: {
 
   const totalSelected = items.length;
   const totalTarget = TT22_LEVELS.reduce((s, l) => s + totals[l].target, 0);
-  const ppq = totalSelected ? round2(TOTAL_POINTS / totalSelected) : 0;
-  for (const r of rows) {
-    for (const l of TT22_LEVELS) r.cells[l].points = round2(r.cells[l].selected * ppq);
-    r.points = round2(r.totalSelected * ppq);
-  }
-  for (const l of TT22_LEVELS) totals[l].points = round2(totals[l].selected * ppq);
+  // Một hàm duy nhất chia điểm (allocatePoints, bước 0,01, tổng luôn đúng 10) dùng cho cả máy chủ lẫn examDoc.
+  const pts = allocatePoints(totalSelected, TOTAL_POINTS);
+  const ppq = pts.length ? pts[0] : 0;
+  owners.forEach((o, i) => {
+    const r = rows[o.row];
+    r.cells[o.lvl].points = round2(r.cells[o.lvl].points + pts[i]);
+    r.points = round2(r.points + pts[i]);
+    totals[o.lvl].points = round2(totals[o.lvl].points + pts[i]);
+  });
   if (totalSelected === 0) shortfall.push('Không chọn được câu nào: đề rỗng.');
 
   const matrix: ExamMatrix = {
@@ -259,14 +253,22 @@ export async function submitExam(p: {
 }): Promise<{ examId: string; status: string }> {
   return mutateOrg(p.orgId, (org) => {
     const e = findExam(org, p.examId);
-    if (e.createdBy !== p.actor) throw new AssessmentError('Chỉ người soạn đề mới được gửi duyệt.', 403);
+    if (!sameActor(e.createdBy, p.actor)) throw new AssessmentError('Chỉ người soạn đề mới được gửi duyệt.', 403);
     if (e.status !== 'nhap' && e.status !== 'tu_choi') {
       throw new AssessmentError('Chỉ đề ở trạng thái nháp hoặc bị từ chối mới được gửi duyệt.', 409);
     }
     if (!e.questionIds.length) throw new AssessmentError('Đề rỗng, không thể gửi duyệt.', 409);
     e.status = 'cho_duyet';
-    if (p.reviewers?.length) e.assignedReviewers = [...new Set(p.reviewers)];
-    e.accessLog.push({ at: now().toISOString(), actor: p.actor, action: 'gui_duyet' });
+    if (p.reviewers?.length) {
+      const seen = new Set<string>();
+      e.assignedReviewers = p.reviewers.map((r) => r.trim()).filter((r) => {
+        const k = normalizeActorName(r);
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+    pushLog(e, { at: now().toISOString(), actor: p.actor, action: 'gui_duyet' });
     return { examId: e.examId, status: e.status };
   });
 }
@@ -283,19 +285,38 @@ export async function reviewExam(p: {
     if (e.status !== 'cho_duyet') {
       throw new AssessmentError('Đề chưa ở trạng thái chờ duyệt nên không thể duyệt/từ chối.', 409);
     }
-    if (p.reviewer === e.createdBy) {
+    if (sameActor(p.reviewer, e.createdBy)) {
       throw new AssessmentError('Người soạn đề không được tự duyệt đề của mình.', 403);
     }
-    if (e.assignedReviewers.length && !e.assignedReviewers.includes(p.reviewer)) {
+    if (e.assignedReviewers.length && !e.assignedReviewers.some((r) => sameActor(r, p.reviewer))) {
       throw new AssessmentError('Bạn không thuộc danh sách tổ chuyên môn được giao duyệt đề này.', 403);
     }
     if (p.decision === 'tu_choi' && !p.note.trim()) {
       throw new AssessmentError('Từ chối đề cần ghi rõ lý do.', 400);
     }
+    if (p.decision === 'duyet') {
+      // Hai bản nháp có thể chọn trùng câu: kiểm lại với các đề ĐÃ DUYỆT khác trước khi cho qua.
+      const cutoff = dedupCutoff(now());
+      const clash = new Set<string>();
+      for (const u of org.usage) {
+        if (u.examId !== e.examId && u.usedAt > cutoff && e.questionIds.includes(u.questionId)) clash.add(u.questionId);
+      }
+      for (const o of org.exams) {
+        if (o.examId !== e.examId && o.status === 'da_duyet') {
+          for (const id of o.questionIds) if (e.questionIds.includes(id)) clash.add(id);
+        }
+      }
+      if (clash.size) {
+        throw new AssessmentError(
+          `Đề này có ${clash.size} câu trùng với đề đã duyệt khác trong ${DEDUP_YEARS} năm. Người soạn cần soạn lại đề trước khi được duyệt.`,
+          409,
+        );
+      }
+    }
     const at = now().toISOString();
     e.approvals.push({ reviewer: p.reviewer, decision: p.decision, note: p.note, at });
     e.status = p.decision === 'duyet' ? 'da_duyet' : 'tu_choi';
-    e.accessLog.push({ at, actor: p.reviewer, action: p.decision === 'duyet' ? 'duyet_de' : 'tu_choi_de' });
+    pushLog(e, { at, actor: p.reviewer, action: p.decision === 'duyet' ? 'duyet_de' : 'tu_choi_de' });
     if (e.status === 'da_duyet') {
       // Chỉ khi đề được duyệt, câu hỏi mới được tính là "đã dùng".
       for (const qid of e.questionIds) org.usage.push({ questionId: qid, usedAt: at, examId: e.examId });
@@ -307,8 +328,17 @@ export async function reviewExam(p: {
 function envReviewers(): string[] {
   return (process.env.ASSESSMENT_REVIEWERS || '')
     .split(',')
-    .map((s) => s.trim())
+    .map((x) => x.trim())
     .filter(Boolean);
+}
+
+const MAX_ACCESS_LOG = 200;
+const LOG_DEDUP_MS = 10 * 60_000;
+
+/** Thêm nhật ký có giới hạn: giữ mục đầu (tạo đề) và MAX_ACCESS_LOG - 1 mục mới nhất. */
+function pushLog(e: ExamRecord, entry: { at: string; actor: string; action: string }): void {
+  e.accessLog.push(entry);
+  if (e.accessLog.length > MAX_ACCESS_LOG) e.accessLog.splice(1, e.accessLog.length - MAX_ACCESS_LOG);
 }
 
 /**
@@ -318,52 +348,64 @@ function envReviewers(): string[] {
 export function canViewContent(e: ExamRecord, actor: string): boolean {
   if (e.examDate && todayVN() >= e.examDate) return true;
   if (!actor) return false;
-  if (actor === e.createdBy) return true;
+  if (sameActor(actor, e.createdBy)) return true;
   return (
-    e.assignedReviewers.includes(actor) ||
-    e.approvals.some((a) => a.reviewer === actor) ||
-    envReviewers().includes(actor)
+    e.assignedReviewers.some((r) => sameActor(r, actor)) ||
+    e.approvals.some((a) => sameActor(a.reviewer, actor)) ||
+    envReviewers().some((r) => sameActor(r, actor))
   );
 }
 
-export function examMetadata(e: ExamRecord) {
+/** Metadata công khai. Tên người soạn và người duyệt chỉ hiện cho người có quyền (reviewer hoặc đã qua cổng xem đề). */
+export function examMetadata(e: ExamRecord, opts: { showPeople?: boolean } = {}) {
+  const show = !!opts.showPeople;
   return {
     examId: e.examId,
-    createdBy: e.createdBy,
+    ...(show ? { createdBy: e.createdBy } : {}),
     createdAt: e.createdAt,
     examDate: e.examDate,
     status: e.status,
     language: e.language,
     questionCount: e.questionIds.length,
     matrix: e.matrix,
-    approvals: e.approvals,
+    approvals: show ? e.approvals : e.approvals.map((a) => ({ decision: a.decision, at: a.at, note: '' })),
   };
 }
 
 export async function getExam(p: { orgId: string; examId: string; actor: string }) {
-  return mutateOrg(p.orgId, (org) => {
-    const e = findExam(org, p.examId);
-    const allowed = canViewContent(e, p.actor);
-    e.accessLog.push({
-      at: now().toISOString(),
-      actor: p.actor || 'ẩn danh',
-      action: allowed ? 'xem_noi_dung' : 'bi_chan_xem_noi_dung',
+  // GET không được ghi lại file mỗi lần: đọc trước, chỉ ghi nhật ký khi chưa có mục tương tự trong 10 phút gần nhất.
+  const org = await readOrg(p.orgId);
+  const e = findExam(org, p.examId);
+  const allowed = canViewContent(e, p.actor);
+  const entry = {
+    at: now().toISOString(),
+    actor: p.actor || 'ẩn danh',
+    action: allowed ? 'xem_noi_dung' : 'bi_chan_xem_noi_dung',
+  };
+  const t = now().getTime();
+  const recent = e.accessLog.some(
+    (l) => l.action === entry.action && sameActor(l.actor, entry.actor) && t - Date.parse(l.at) < LOG_DEDUP_MS,
+  );
+  if (!recent) {
+    pushLog(e, entry);
+    await mutateOrg(p.orgId, (o) => {
+      const real = o.exams.find((x) => x.examId === p.examId);
+      if (real) pushLog(real, entry);
     });
-    const meta = examMetadata(e);
-    const canSeeLog = !!p.actor && (p.actor === e.createdBy || canViewContent(e, p.actor));
-    return {
-      ...meta,
-      locked: !allowed,
-      lockedReason: allowed
-        ? null
-        : 'Nội dung đề được bảo mật đến ngày thi; chỉ người soạn và tổ chuyên môn duyệt đề được xem.',
-      ...(allowed ? { ...renderExamContent(e), items: e.items } : {}),
-      accessLog: canSeeLog ? e.accessLog : undefined,
-    };
-  });
+  }
+  const canSeeLog = !!p.actor && (sameActor(p.actor, e.createdBy) || allowed);
+  return {
+    ...examMetadata(e, { showPeople: allowed }),
+    locked: !allowed,
+    lockedReason: allowed
+      ? null
+      : 'Nội dung đề được bảo mật đến ngày thi; chỉ người soạn và tổ chuyên môn duyệt đề được xem.',
+    ...(allowed ? { ...renderExamContent(e), items: e.items } : {}),
+    accessLog: canSeeLog ? e.accessLog : undefined,
+  };
 }
 
-export async function listExams(orgId: string) {
+export async function listExams(orgId: string, opts: { showPeople?: boolean } = {}) {
   const org = await readOrg(orgId);
-  return org.exams.map(examMetadata);
+  return org.exams.map((e) => examMetadata(e, opts));
 }

@@ -97,7 +97,7 @@ export function LessonWorkbench({
           </label>
         </div>
 
-        <div className="ag-lessons cc-lessons" role="list" aria-busy={atomsLoading}>
+        <div className="ag-lessons cc-lessons" role="group" aria-label="Danh sách bài" aria-busy={atomsLoading}>
           {atomsLoading && atoms.length === 0 && (
             <p className="ag-empty-note cc-pad">Đang tải danh sách bài…</p>
           )}
@@ -110,7 +110,6 @@ export function LessonWorkbench({
             <button
               key={a.id}
               type="button"
-              role="listitem"
               className={`ag-lesson cc-lesson${a.id === atomId ? ' active' : ''}`}
               aria-current={a.id === atomId ? 'true' : undefined}
               onClick={() => {

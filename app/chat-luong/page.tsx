@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
 import { SUBJECTS } from '@/lib/catalog';
@@ -36,9 +37,7 @@ interface Baseline {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return (await r.json()) as T;
+  return fetchJson<T>(url);
 }
 
 const subjectName = (k: string) => SUBJECTS.find((s) => s.code === k)?.shortName ?? k;
@@ -94,7 +93,7 @@ export default function ChatLuongPage() {
         w: b.baseline.measuredWith ?? '',
       });
     } catch (e) {
-      setError(`Không tải được số liệu (${e instanceof Error ? e.message : 'lỗi'}).`);
+      setError(`Không tải được số liệu (${friendlyError(e, 'lỗi kết nối')}).`);
     } finally {
       setLoading(false);
     }
@@ -157,7 +156,7 @@ export default function ChatLuongPage() {
   const target = coverage?.target ?? 100;
 
   return (
-    <Shell title="Chất lượng & Tín hiệu" subtitle="Theo dõi bài soạn có dùng được ngay hay không.">
+    <Shell title="Chất lượng bài soạn" subtitle="Theo dõi bài soạn có dùng được ngay hay không.">
       <div className="cl-wrap">
         {loading && !summary && (
           <div aria-busy="true" aria-label="Đang tải số liệu" style={{ display: 'grid', gap: 12 }}>

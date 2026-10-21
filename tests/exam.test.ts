@@ -118,6 +118,12 @@ describe('phương án nằm trong nội dung câu', () => {
     expect(p.options).toEqual(['Điểm bất kỳ', 'Các ĐỈNH', 'Tâm', 'Gốc O(0; 0)']);
     expect(parseInlineChoices('Giải phương trình x = 2.')).toBeNull();
   });
+  it('"A." trong thân câu không làm tách sai', () => {
+    const t = 'Cho tập A. Khi đó tập A giao B có bao nhiêu phần tử? A. 1 B. 2 C. 3 D. 4';
+    const p = parseInlineChoices(t)!;
+    expect(p.options).toEqual(['1', '2', '3', '4']);
+    expect(p.stem).toBe('Cho tập A. Khi đó tập A giao B có bao nhiêu phần tử?');
+  });
   it('cột nhieu chỉ có chữ cái thì dùng phương án trong nội dung', () => {
     const q = { id: 'Q1', atom_id: 'A', noi_dung: txt, key: '', tier: '', dok: 1, do_kho: 'Nhận biết', dap_an: 'B', loi_giai: '', tham_so_hoa: '', nhieu: [{ noiDung: 'A' }, { noiDung: 'C' }] };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

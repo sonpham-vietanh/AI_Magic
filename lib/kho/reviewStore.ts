@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from '@/lib/server/safeJson';
 
 export interface KhoReview {
   reviewer: string;
@@ -28,46 +28,11 @@ export function withLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export async function readReviews(): Promise<ReviewData> {
-  const file = storeFile();
-  let raw: string;
-  try {
-    raw = await readFile(file, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-      console.error('[kho] Không đọc được file duyệt:', err);
-    }
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid shape');
-    return parsed as ReviewData;
-  } catch (err) {
-    const backup = `${file}.corrupt-${Date.now()}`;
-    console.error(`[kho] File duyệt hỏng JSON, sao lưu sang ${backup}:`, err);
-    try {
-      await rename(file, backup);
-    } catch (renameErr) {
-      console.error('[kho] Không sao lưu được file hỏng:', renameErr);
-    }
-    return {};
-  }
+  const parsed = await readJsonStrict<unknown>(storeFile(), () => ({}));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return parsed as ReviewData;
 }
 
 export async function writeReviews(data: ReviewData): Promise<void> {
-  const file = storeFile();
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, file);
-  } catch (err) {
-    try {
-      await unlink(tmp);
-    } catch {
-      // ignore
-    }
-    // Ghi kết quả duyệt thất bại phải báo lỗi, không được im lặng.
-    throw err;
-  }
+  await writeJsonAtomic(storeFile(), data);
 }

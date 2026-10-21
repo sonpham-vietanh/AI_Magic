@@ -247,9 +247,9 @@ function SlidesView({ data }: { data: Artifact<'slides'>['data'] }) {
         <b>Ghi chú cho giáo viên (không chiếu lên màn hình)</b>
         <p>{cur.notes || 'Slide này chưa có ghi chú.'}</p>
       </div>
-      <div className="rs-strip" ref={stripRef} role="list" aria-label="Danh sách slide">
+      <div className="rs-strip" ref={stripRef} role="group" aria-label="Danh sách slide">
         {slides.map((s, k) => (
-          <button key={k} type="button" role="listitem" className={`rs-thumb${k === i ? ' on' : ''}`} onClick={() => go(k)} aria-current={k === i ? 'true' : undefined} aria-label={`Slide ${k + 1}: ${s.title}`}>
+          <button key={k} type="button" className={`rs-thumb${k === i ? ' on' : ''}`} onClick={() => go(k)} aria-current={k === i ? 'true' : undefined} aria-label={`Slide ${k + 1}: ${s.title}`}>
             <span className="rs-thumb-n">{k + 1}</span>
             <span className="rs-thumb-t">{s.title}</span>
           </button>

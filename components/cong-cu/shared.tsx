@@ -32,7 +32,7 @@ export async function readApiJson<T>(res: Response): Promise<T> {
       throw new Error('Hệ thống đang quá tải, vui lòng thử lại sau ít phút.');
     }
     if (res.status === 401) {
-      throw new Error('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại.');
+      throw new Error('Phiên làm việc đã hết hạn, vui lòng tải lại trang rồi thử lại.');
     }
     throw new Error(
       body?.error || `Máy chủ trả về lỗi (${res.status}). Vui lòng thử lại sau.`,

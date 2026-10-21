@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from '@/lib/server/safeJson';
 import {
   MAX_ARTIFACTS_BYTES,
   MAX_TEXT_BYTES,
   MAX_VERSIONS_PER_ACTOR,
+  MAX_VERSIONS_PER_ORG,
   type VersionInput,
   type VersionRecord,
   type VersionSummary,
@@ -35,47 +36,13 @@ export function normalizeActor(actor: string): string {
 }
 
 async function writeStore(data: VersionStoreData): Promise<void> {
-  const file = storeFile();
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(tmp, JSON.stringify(data), 'utf8');
-    await rename(tmp, file);
-  } catch (err) {
-    console.error('[versions] Không ghi được file dữ liệu:', err);
-    try {
-      await unlink(tmp);
-    } catch {
-      // bỏ qua
-    }
-    throw new Error('Không ghi được dữ liệu phiên bản.');
-  }
+  await writeJsonAtomic(storeFile(), data);
 }
 
 async function readStore(): Promise<VersionStoreData> {
-  const file = storeFile();
-  let raw: string;
-  try {
-    raw = await readFile(file, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return { versions: [] };
-    console.error('[versions] Không đọc được file dữ liệu:', err);
-    return { versions: [] };
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<VersionStoreData>;
-    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.versions)) throw new Error('Sai cấu trúc');
-    return { versions: parsed.versions };
-  } catch (err) {
-    const backup = `${file}.corrupt-${Date.now()}`;
-    console.error(`[versions] File bị hỏng JSON, sao lưu sang ${backup}:`, err);
-    try {
-      await rename(file, backup);
-    } catch (renameErr) {
-      console.error('[versions] Không sao lưu được file hỏng:', renameErr);
-    }
-    return { versions: [] };
-  }
+  const parsed = await readJsonStrict<Partial<VersionStoreData> | null>(storeFile(), () => null);
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.versions)) return { versions: [] };
+  return { versions: parsed.versions };
 }
 
 export function summarize(v: VersionRecord): VersionSummary {
@@ -96,10 +63,15 @@ export function summarize(v: VersionRecord): VersionSummary {
   };
 }
 
+/** Đề kiểm tra được bảo mật đến ngày thi: không lưu toàn văn vào lịch sử phiên bản. */
+export const EXAM_PLACEHOLDER = '[Đề kiểm tra: nội dung được bảo mật, xem tại /kiem-tra]';
+
 export async function saveVersion(
   orgId: string,
-  input: VersionInput,
+  rawInput: VersionInput,
 ): Promise<{ id: string; number: number; createdAt: string }> {
+  const input: VersionInput =
+    rawInput.workflow === 'de_kiem_tra' ? { ...rawInput, text: EXAM_PLACEHOLDER, artifacts: undefined } : rawInput;
   if (Buffer.byteLength(input.text, 'utf8') > MAX_TEXT_BYTES) {
     throw new VersionLimitError('Văn bản quá dài (tối đa 100KB).');
   }
@@ -131,6 +103,18 @@ export async function saveVersion(
           .slice()
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
           .slice(0, over)
+          .map((v) => v.id),
+      );
+      store.versions = store.versions.filter((v) => !drop.has(v.id));
+    }
+    // Trần toàn tổ chức: bỏ các bản cũ nhất của org khi vượt.
+    const orgAll = store.versions.filter((v) => v.orgId === orgId);
+    if (orgAll.length > MAX_VERSIONS_PER_ORG) {
+      const drop = new Set(
+        orgAll
+          .slice()
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          .slice(0, orgAll.length - MAX_VERSIONS_PER_ORG)
           .map((v) => v.id),
       );
       store.versions = store.versions.filter((v) => !drop.has(v.id));

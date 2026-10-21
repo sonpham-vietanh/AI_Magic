@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from './safeJson';
 
 export interface ClassNote {
   id: string;
@@ -23,45 +23,13 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function readNotes(): Promise<NotesData> {
-  let raw: string;
-  try {
-    raw = await readFile(NOTES_FILE, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-      console.error('[classNotes] Không đọc được file ghi chú:', err);
-    }
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid shape');
-    return parsed as NotesData;
-  } catch (err) {
-    const backup = `${NOTES_FILE}.corrupt-${Date.now()}`;
-    console.error(`[classNotes] File hỏng JSON, sao lưu sang ${backup}:`, err);
-    try {
-      await rename(NOTES_FILE, backup);
-    } catch (renameErr) {
-      console.error('[classNotes] Không sao lưu được file hỏng:', renameErr);
-    }
-    return {};
-  }
+  const parsed = await readJsonStrict<unknown>(NOTES_FILE, () => ({}));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return parsed as NotesData;
 }
 
 async function writeNotes(data: NotesData): Promise<void> {
-  const tmp = `${NOTES_FILE}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await mkdir(dirname(NOTES_FILE), { recursive: true });
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, NOTES_FILE);
-  } catch (err) {
-    console.error('[classNotes] Không ghi được file ghi chú:', err);
-    try {
-      await unlink(tmp);
-    } catch {
-      // ignore
-    }
-  }
+  await writeJsonAtomic(NOTES_FILE, data);
 }
 
 /** Newest first. */

@@ -97,9 +97,12 @@ describe('phiên bản bản chuẩn', () => {
     await saveDraftAssets('o', 'a1', [{ artifact: art('text', 'nháp mới'), modelUsed: 'm' }]);
     const rej = await submitReview('o', { atomId: 'a1', reviewer: 'X', scores: all(2), decision: 'reject', note: 'sai' });
     expect(rej.version).toBeUndefined();
+    // Lần duyệt mới nhất là từ chối: không phục vụ "từ Kho" nữa, nhưng phiên bản đóng băng vẫn còn nguyên trong lịch sử.
     const std = await getStandardLesson('o', 'a1');
-    expect(std.version).toBe(1);
-    expect(std.artifacts?.[0].title).toBe('v1');
+    expect(std.status).toBe('chua_duyet');
+    expect(std.version).toBeUndefined();
+    expect(std.artifacts).toBeUndefined();
+    expect((await listVersions('o', 'a1'))[0].artifacts[0].title).toBe('v1');
     expect((await listAssets('o', 'a1'))[0].status).toBe('draft');
   });
 

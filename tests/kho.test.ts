@@ -18,14 +18,17 @@ import { RUBRIC_6 } from '@/lib/eval/rubric';
 
 const all = (n: number) => Object.fromEntries(RUBRIC_6.map((c) => [c.id, n]));
 const H = { 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json' };
+const HR = { ...H, 'x-reviewer-key': 'ma-duyet' };
 let dir = '';
 
 beforeEach(async () => {
+  process.env.REVIEWER_KEY = 'ma-duyet';
   dir = await mkdtemp(join(tmpdir(), 'kho-'));
   process.env.KHO_REVIEWS_FILE = join(dir, 'kho-reviews.json');
   process.env.KHO_ASSETS_FILE = join(dir, 'kho-assets.json');
   detailMock.mockReset();
   atomsMock.mockReset();
+  detailMock.mockResolvedValue(detail('draft_ai'));
 });
 
 describe('submitReview validation', () => {
@@ -94,9 +97,27 @@ describe('getStandardLesson status', () => {
     detailMock.mockResolvedValue(detail('draft_ai'));
     expect((await getStandardLesson('o', 'a1')).status).toBe('chua_duyet');
   });
-  it('approved khi Factory approved', async () => {
+  it('Factory approved KHÔNG đồng nghĩa đã duyệt bởi Việt Anh', async () => {
     detailMock.mockResolvedValue(detail('approved'));
-    expect((await getStandardLesson('o', 'a1')).status).toBe('approved');
+    const l = await getStandardLesson('o', 'a1');
+    expect(l.status).toBe('chua_duyet');
+    expect(l.factoryApproved).toBe(true);
+  });
+  it('lần duyệt mới nhất là reject thì không phục vụ từ Kho dù Factory approved', async () => {
+    detailMock.mockResolvedValue(detail('approved'));
+    await submitReview('o', { atomId: 'a1', reviewer: 'A', scores: all(5), decision: 'approve' });
+    await submitReview('o', { atomId: 'a1', reviewer: 'A', scores: all(2), decision: 'reject' });
+    const l = await getStandardLesson('o', 'a1');
+    expect(l.status).toBe('chua_duyet');
+    expect(l.artifacts).toBeUndefined();
+    expect(l.version).toBeUndefined();
+  });
+  it('ưu tiên gói đã đóng băng thay vì Factory đọc trực tiếp', async () => {
+    detailMock.mockResolvedValue(detail('draft_ai'));
+    await submitReview('o', { atomId: 'a1', reviewer: 'A', scores: all(5), decision: 'approve' });
+    detailMock.mockResolvedValue({ ...detail('draft_ai'), packages: [{ id: 'doi', status: 'draft_ai' }] });
+    const l = await getStandardLesson('o', 'a1');
+    expect((l.packages[0] as { id: string }).id).toBe('p1');
   });
   it('approved khi duyệt nội bộ approve; reject sau đó thì quay lại chua_duyet', async () => {
     detailMock.mockResolvedValue(detail('draft_ai'));
@@ -120,11 +141,10 @@ describe('listReviewQueue', () => {
         { id: 'a3', code: 'C3', title: 'Ba', hasFactoryPackage: false },
       ],
     });
-    detailMock.mockImplementation(async (id: string) => ({ ...detail(id === 'a1' ? 'approved' : 'draft_ai') }));
+    detailMock.mockImplementation(async (id: string) => ({ ...detail(id === 'a1' ? 'approved' : 'draft_ai'), atom: { ...atomFixture, id, code: `C-${id}` } }));
     const items = await listReviewQueue('o', { subject: 'toan', grade: '10' });
     const by = Object.fromEntries(items.map((i) => [i.atomId, i.status]));
-    expect(by).toEqual({ a1: 'approved', a2: 'chua_duyet', a3: 'khong_co' });
-    expect(items[0].atomId).toBe('a2');
+    expect(by).toEqual({ a1: 'chua_duyet', a2: 'chua_duyet', a3: 'khong_co' });
     expect(atomsMock).toHaveBeenCalledWith(expect.objectContaining({ subject: 'toan', grade: '10' }));
 
     await submitReview('o', { atomId: 'a2', reviewer: 'A', scores: all(4), decision: 'approve' });
@@ -135,7 +155,7 @@ describe('listReviewQueue', () => {
 
 describe('API routes', () => {
   const post = (body: string) =>
-    reviewPOST(new Request('http://x/api/kho/review', { method: 'POST', headers: H, body }));
+    reviewPOST(new Request('http://x/api/kho/review', { method: 'POST', headers: HR, body }));
   it('JSON hỏng => 400, thiếu trường => 400', async () => {
     expect((await post('{bad')).status).toBe(400);
     expect((await post(JSON.stringify({ atomId: 'a1' }))).status).toBe(400);
@@ -155,8 +175,33 @@ describe('API routes', () => {
     expect((await q.json()).items).toEqual([]);
     detailMock.mockResolvedValue(detail('approved'));
     const s = await standardGET(new Request('http://x/api/kho/standard?atomId=a1', { headers: H }));
-    expect((await s.json()).lesson.status).toBe('approved');
+    expect((await s.json()).lesson.status).toBe('chua_duyet');
     const bad = await standardGET(new Request('http://x/api/kho/standard', { headers: H }));
     expect(bad.status).toBe(400);
+  });
+});
+
+describe('cổng người duyệt và kiểm tra bài', () => {
+  const body = JSON.stringify({ atomId: 'a1', reviewer: 'A', scores: all(5), decision: 'approve' });
+  const raw = (headers: Record<string, string>) =>
+    reviewPOST(new Request('http://x/api/kho/review', { method: 'POST', headers, body }));
+  it('chưa đặt REVIEWER_KEY => 503; thiếu/sai mã => 403; đúng mã => 200', async () => {
+    delete process.env.REVIEWER_KEY;
+    expect((await raw(HR)).status).toBe(503);
+    process.env.REVIEWER_KEY = 'ma-duyet';
+    expect((await raw(H)).status).toBe(403);
+    expect((await raw({ ...H, 'x-reviewer-key': 'sai' })).status).toBe(403);
+    expect((await raw(HR)).status).toBe(200);
+  });
+  it('atom không tồn tại hoặc mã không khớp bị từ chối, không ghi gì', async () => {
+    detailMock.mockResolvedValue({ ...detail(), atom: null });
+    await expect(submitReview('o', { atomId: 'zzz', reviewer: 'A', scores: all(5), decision: 'reject' })).rejects.toThrow(/Không tìm thấy bài/);
+    detailMock.mockResolvedValue(detail('draft_ai'));
+    await expect(submitReview('o', { atomId: 'khac', reviewer: 'A', scores: all(5), decision: 'reject' })).rejects.toThrow(/không khớp/);
+  });
+  it('nhận mã code và lưu theo id chuẩn', async () => {
+    await submitReview('o', { atomId: 'T10-1', reviewer: 'A', scores: all(5), decision: 'approve' });
+    const data = JSON.parse(await readFile(process.env.KHO_REVIEWS_FILE!, 'utf8'));
+    expect(Object.keys(data)).toEqual(['o::a1']);
   });
 });

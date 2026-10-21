@@ -139,8 +139,12 @@ export function checkExamStructure(matrix: unknown, markdown: string): Structure
   const printed = /ma trận/i.test(markdown);
   const selected = Number(m.totalSelected ?? 0);
   const target = Number(m.totalTarget ?? 0);
-  const total = selected * Number(m.pointsPerQuestion ?? 0);
-  const sum10 = selected > 0 && Math.abs(total - 10) <= 0.1 && Number(m.totalPoints) === 10;
+  // Tổng điểm lấy từ các hàng của ma trận (đã chia bằng allocatePoints, chính xác tới 0,01), không dùng dung sai rộng.
+  const rowPts = Array.isArray(m.rows) ? (m.rows as { points?: unknown }[]).map((r) => Number(r?.points)) : [];
+  const total = rowPts.length && rowPts.every(Number.isFinite)
+    ? rowPts.reduce((a, b) => a + b, 0)
+    : selected * Number(m.pointsPerQuestion ?? 0);
+  const sum10 = selected > 0 && Math.abs(total - 10) < 0.005 && Number(m.totalPoints) === 10;
   const short = m.shortfall ?? [];
   const enough = selected > 0 && selected >= target && short.length === 0;
   return [

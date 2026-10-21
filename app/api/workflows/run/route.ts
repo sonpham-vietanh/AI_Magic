@@ -54,6 +54,8 @@ export async function POST(request: Request) {
   const orgId = getOrgId(request);
   const warnings: string[] = [];
   let requiresApproval = false;
+  const approvalReasons: string[] = [];
+  let examId: string | undefined;
   const teacherName = params.teacher?.name ?? 'Giáo viên';
 
   try {
@@ -62,6 +64,7 @@ export async function POST(request: Request) {
     if (std.status === 'chua_duyet') {
       warnings.push('Bản chuẩn chưa qua người duyệt: nội dung chỉ là bản nháp');
       requiresApproval = true;
+      approvalReasons.push('Bản chuẩn của bài này chưa qua người duyệt.');
     }
 
     // Bài liên kết (tích hợp liên môn): chỉ dùng cho các quy trình soạn bằng AI.
@@ -79,6 +82,7 @@ export async function POST(request: Request) {
           if (l.status === 'chua_duyet') {
             warnings.push('Bài liên kết chưa qua người duyệt: phần tích hợp chỉ là bản nháp.');
             requiresApproval = true;
+            approvalReasons.push('Bài liên kết chưa qua người duyệt.');
           }
         }
       }
@@ -90,13 +94,15 @@ export async function POST(request: Request) {
       guardrail = { ok: g.ok, reasons: g.reasons };
       if (!g.ok) return fail(422, 'Sự kiện thời sự không đạt kiểm tra an toàn.', { reasons: g.reasons });
       requiresApproval = true;
+      approvalReasons.push('Tiết có gắn sự kiện thời sự.');
       warnings.push('Tiết có gắn thời sự → bắt buộc người duyệt');
     }
 
     const workflow = routeWorkflow(params.formatDauRa);
     const bloomLevels = bloomLevelsFor(params.bloomThapNhat);
     const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const reviewedBy = (std.review as { reviewedBy?: string } | undefined)?.reviewedBy;
+    // Chỉ lần duyệt 'approve' của người duyệt Việt Anh mới tính; trạng thái 'approved' của Factory thì không.
+    const reviewedBy = std.review?.decision === 'approve' ? std.review.reviewer : undefined;
 
     let sections: Section[];
     let markdown: string;
@@ -129,6 +135,9 @@ export async function POST(request: Request) {
       markdown = d.markdown;
       structure = checkExamStructure(d.matrix, d.markdown);
       requiresApproval = true;
+      examId = d.examId;
+      approvalReasons.push('Đề kiểm tra phải được người duyệt phê duyệt trước khi dùng.');
+      warnings.push(`Đề đã lưu với mã ${d.examId}, đang ở trạng thái nháp: gửi duyệt và xem đề tại /kiem-tra. Chưa được dùng hay tải về trước khi được duyệt.`);
     } else {
       const profile = getClassById(params.classId);
       const classContext = profile ? buildClassPedagogicalContext(profile) : undefined;
@@ -266,8 +275,11 @@ export async function POST(request: Request) {
         regenerationOf: params.regenerationOf,
         requiresApproval,
         // Bản gốc để so sánh phải giống HỆT văn bản giao diện hiển thị/gửi lại (mục ghép từ tiêu đề + thân bài).
+        // Riêng đề kiểm tra: KHÔNG ghi toàn văn đề (bảo mật đến ngày thi), chỉ ghi mã đề.
         text:
-          sections.length > 0
+          workflow === 'de_kiem_tra'
+            ? `[Đề kiểm tra ${examId ?? ''}: nội dung được bảo mật, xem tại /kiem-tra]`
+            : sections.length > 0
             ? sections
                 .map((x) => (x.heading ? `${x.heading}\n${x.body}` : x.body))
                 .join('\n\n')
@@ -288,6 +300,15 @@ export async function POST(request: Request) {
       reflection,
       ...(guardrail ? { guardrail } : {}),
       requiresApproval,
+      ...(requiresApproval
+        ? {
+            approvalReasons,
+            // Giao diện KHÔNG được cho chấp nhận/tải về khi cờ này bật.
+            blockAcceptDownload: true,
+            approvalUrl: examId ? '/kiem-tra' : '/duyet',
+          }
+        : {}),
+      ...(examId ? { examId } : {}),
       artifacts,
       structure,
       ...(fromKho.length ? { fromKho } : {}),

@@ -15,6 +15,7 @@ import { callLiveLlm } from '@/lib/engine/llmClient';
 import { getStandardLesson } from '@/lib/kho';
 import { generateQuiz, draftExam } from '@/lib/assessment';
 import { checkNewsEvent } from '@/lib/guardrails/news';
+import { recordGeneration } from '@/lib/signals';
 import { bloomLevelsFor, WorkflowParamsSchema } from '@/lib/workflows/types';
 import { routeWorkflow } from '@/lib/workflows/router';
 import { parseReflection } from '@/lib/workflows/reflection';
@@ -108,6 +109,15 @@ describe('parseReflection', () => {
     expect(r.scores[1].score).toBe(1);
     expect(r.scores[2].score).toBe(3);
     expect(r.issues).toEqual(['i1']);
+  });
+
+  it('điểm rỗng/null/true không bị bịa thành điểm', () => {
+    const raw = JSON.stringify({
+      scores: [{ id: 'a', score: '' }, { id: 'b', score: null }, { id: 'c', score: true }, { id: 'd', score: '4' }],
+    });
+    const r = parseReflection(raw)!;
+    expect(r.scores.map((x) => x.id)).toEqual(['d']);
+    expect(parseReflection(JSON.stringify({ scores: [{ id: 'a', score: '' }] }))).toBeNull();
   });
 
   it('tiêu chí không được chấm thì không bị tính là điểm 1', () => {
@@ -218,5 +228,23 @@ describe('POST /api/workflows/run', () => {
     ).json();
     expect(vi.mocked(draftExam).mock.calls[0][0].createdBy).toBe('Cô Lan');
     expect(j.result.requiresApproval).toBe(true);
+    expect(j.result.examId).toBe('e1');
+    expect(j.result.blockAcceptDownload).toBe(true);
+    expect(j.result.approvalUrl).toBe('/kiem-tra');
+    expect(j.result.approvalReasons.length).toBeGreaterThan(0);
+    // Toàn văn đề không được ghi vào signals.
+    const rec = vi.mocked(recordGeneration).mock.calls.at(-1)![0] as { text?: string };
+    expect(rec.text).toBe('[Đề kiểm tra e1: nội dung được bảo mật, xem tại /kiem-tra]');
+  });
+
+  it('reviewedBy lấy từ review.reviewer chỉ khi người duyệt đã approve', async () => {
+    vi.mocked(callLiveLlm).mockResolvedValue({ ok: false, modelUsed: 'm' });
+    vi.mocked(generateQuiz).mockResolvedValue({ sections: [{ heading: 'Q', body: 'b' }], markdown: 'Q', questionIds: ['q1'], items: [], notes: [] });
+    vi.mocked(getStandardLesson).mockResolvedValue({
+      ...std('approved'),
+      review: { decision: 'approve', reviewer: 'Thầy A' },
+    } as never);
+    const j = await (await call({ ...baseParams, formatDauRa: 'quiz' })).json();
+    expect(j.result.standard.reviewedBy).toBe('Thầy A');
   });
 });

@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/ui/icons';
@@ -80,11 +81,10 @@ export function ClassesView() {
     const ctrl = new AbortController();
     setNotesLoading(true);
     setNotesError('');
-    fetch(`/api/classes?classId=${encodeURIComponent(activeClassId)}`, { signal: ctrl.signal })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as { notes?: { id: string; note: string; createdAt?: string }[] };
-      })
+    fetchJson<{ notes?: { id: string; note: string; createdAt?: string }[] }>(
+      `/api/classes?classId=${encodeURIComponent(activeClassId)}`,
+      { signal: ctrl.signal },
+    )
       .then((data) => {
         const server = (data.notes || []).map((n) => ({ id: n.id, note: n.note, createdAt: n.createdAt }));
         setCustomNotes((prev) => ({
@@ -98,7 +98,7 @@ export function ClassesView() {
       .catch((err: unknown) => {
         if (ctrl.signal.aborted) return;
         setNotesError(
-          `Chưa tải được ghi chú đã lưu (${err instanceof Error ? err.message : 'lỗi'}). Đang hiện ghi chú lưu tạm trên trình duyệt.`,
+          `Chưa tải được ghi chú đã lưu (${friendlyError(err, 'lỗi kết nối')}). Đang hiện ghi chú lưu tạm trên trình duyệt.`,
         );
         setCustomNotes((prev) => ({
           ...prev,

@@ -30,6 +30,8 @@ export interface StandardLesson {
   socratic: unknown[];
   edges: unknown[];
   review?: KhoReview;
+  /** Gói của Factory có trạng thái 'approved'. CHỈ để tham khảo: KHÔNG phải là đã được Việt Anh duyệt. */
+  factoryApproved?: boolean;
   atom?: unknown;
   /** CHỈ các tài nguyên đã duyệt của phiên bản mới nhất. */
   artifacts?: Artifact[];
@@ -73,11 +75,16 @@ export async function getStandardLesson(orgId: string, atomId: string): Promise<
     (await getLatestReview(orgId, canonicalId)) ??
     (canonicalId !== atomId ? await getLatestReview(orgId, atomId) : undefined);
   const latest = await getLatestVersion(orgId, canonicalId, atomId);
-  const packages = detail.packages || [];
+  const livePackages = detail.packages || [];
+  // CHỈ lần duyệt mới nhất của Việt Anh quyết định. Trạng thái 'approved' của Factory không thay thế cho việc này,
+  // và nếu lần duyệt mới nhất là từ chối thì không được phục vụ gì "từ Kho".
+  const vaApproved = review?.decision === 'approve';
   let status: KhoStatus;
-  if (hasFactoryApproved(packages) || review?.decision === 'approve') status = 'approved';
-  else if (packages.length > 0) status = 'chua_duyet';
+  if (vaApproved) status = 'approved';
+  else if (livePackages.length > 0) status = 'chua_duyet';
   else status = 'khong_co';
+  // Bản đã đóng băng ưu tiên hơn dữ liệu Factory đọc trực tiếp (Factory có thể đã đổi sau khi duyệt).
+  const packages = vaApproved && latest?.packages?.length ? latest.packages : livePackages;
   return {
     status,
     atomId: canonicalId,
@@ -91,9 +98,10 @@ export async function getStandardLesson(orgId: string, atomId: string): Promise<
     socratic: detail.socratic || [],
     edges: detail.edges || [],
     review,
+    factoryApproved: hasFactoryApproved(livePackages),
     atom: atom ?? undefined,
-    // Chỉ bản đã duyệt (đã đóng băng) mới lọt vào bản chuẩn; nháp không bao giờ.
-    ...(latest ? { artifacts: latest.artifacts, version: latest.version } : {}),
+    // Chỉ bản đã duyệt (đã đóng băng) mới lọt vào bản chuẩn; nháp và bản đã bị từ chối không bao giờ.
+    ...(vaApproved && latest ? { artifacts: latest.artifacts, version: latest.version } : {}),
   };
 }
 
@@ -207,6 +215,16 @@ export async function submitReview(
       );
     }
   }
+  // Bài phải tồn tại; id/code gửi lên phải khớp đúng một bài, và mọi thứ lưu theo id chuẩn.
+  const rawId = input.atomId.trim();
+  const detail = await fetchSupabaseAtomDetail(rawId);
+  const atom = detail?.atom;
+  if (!atom) throw new KhoValidationError('Không tìm thấy bài trong Kho tri thức nên chưa thể ghi quyết định duyệt.');
+  if (rawId !== atom.id && rawId !== atom.code) {
+    throw new KhoValidationError('Mã bài không khớp với bài tìm thấy trong Kho tri thức.');
+  }
+  const atomId = atom.id;
+  const packages: unknown[] = detail.packages ?? [];
   const note = input.note?.trim();
   const review: KhoReview = {
     reviewer,
@@ -218,21 +236,14 @@ export async function submitReview(
   };
   await withLock(async () => {
     const data = await readReviews();
-    const key = reviewKey(orgId, input.atomId);
+    const key = reviewKey(orgId, atomId);
     data[key] = [...(data[key] || []), review];
     await writeReviews(data);
   });
   let version: number | undefined;
   if (review.decision === 'approve') {
     // Duyệt = duyệt cả BỘ (gói kiến thức + tài nguyên hiện có) và đóng băng thành một phiên bản.
-    let packages: unknown[] = [];
-    try {
-      const d = await fetchSupabaseAtomDetail(input.atomId);
-      packages = d?.packages ?? [];
-    } catch (err) {
-      console.error('[kho] Không đọc được gói để đóng băng phiên bản:', err);
-    }
-    version = (await freezeVersion(orgId, input.atomId, review, packages)).version;
+    version = (await freezeVersion(orgId, atomId, review, packages)).version;
   }
   invalidateLibraryCache();
   return version ? { ...review, version } : review;
@@ -262,17 +273,9 @@ async function loadRows(orgId: string, opts: { subject?: string; grade?: string;
       const hasPackage = !!a.hasFactoryPackage || (a.factoryPackageCount ?? 0) > 0;
       const list = reviews[reviewKey(orgId, a.id)];
       const review = list && list.length ? list[list.length - 1] : undefined;
-      let factoryApproved = false;
-      if (hasPackage) {
-        try {
-          const d = await fetchSupabaseAtomDetail(a.id);
-          factoryApproved = hasFactoryApproved(d.packages || []);
-        } catch (err) {
-          console.error('[kho] Không đọc được gói của', a.id, err);
-        }
-      }
+      // Trạng thái chỉ do người duyệt của Việt Anh quyết định (lần duyệt mới nhất); 'approved' của Factory không tính.
       let status: KhoStatus = 'khong_co';
-      if (factoryApproved || review?.decision === 'approve') status = 'approved';
+      if (review?.decision === 'approve') status = 'approved';
       else if (hasPackage) status = 'chua_duyet';
       return {
         atomId: a.id,
@@ -334,14 +337,15 @@ export async function listLibrary(orgId: string, opts: { subject?: string; grade
     const latest = vs && vs.length ? vs[vs.length - 1] : undefined;
     const rl = reviews[reviewKey(orgId, r.atomId)];
     const review = rl && rl.length ? rl[rl.length - 1] : undefined;
-    const status: KhoStatus = review?.decision === 'approve' ? 'approved' : r.status;
+    const vaApproved = review?.decision === 'approve';
+    const status: KhoStatus = vaApproved ? 'approved' : r.hasPackage ? 'chua_duyet' : 'khong_co';
     const draftCount = RESOURCE_KINDS.filter((k) => data.assets[assetKey(orgId, r.atomId, k)]?.status === 'draft').length;
     return {
       ...r,
       status,
       ...(review ? { review } : {}),
-      ...(latest ? { version: latest.version } : {}),
-      kinds: latest
+      ...(vaApproved && latest ? { version: latest.version } : {}),
+      kinds: vaApproved && latest
         ? (latest.artifacts.map((a) => a.kind).filter((k) => (RESOURCE_KINDS as readonly string[]).includes(k)) as ResourceKind[])
         : [],
       draftCount,

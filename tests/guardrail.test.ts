@@ -51,4 +51,32 @@ describe('guardrail thời sự', () => {
     expect(mk({ noiDung: 'bàn về chính trị' }).ok).toBe(false);
     expect(mk({ tieuDe: 'Học sinh đạt giải Toán quốc tế' }).ok).toBe(true);
   });
+
+  it('ngày chỉ có YYYY-MM-DD tính đến cuối ngày, ngày không tồn tại bị từ chối', () => {
+    // 2026-10-19 tính đến 23:59 giờ VN -> chưa đủ 48 giờ so với 2026-10-21T12:00Z
+    expect(mk({ ngayDang: '2026-10-19' }).ok).toBe(false);
+    expect(mk({ ngayDang: '2026-10-18' }).ok).toBe(true);
+    expect(mk({ ngayDang: '2026-02-30' }).ok).toBe(false);
+    expect(mk({ ngayDang: '2026-13-01' }).ok).toBe(false);
+    expect(mk({ ngayDang: '2026-02-30T10:00:00Z' }).ok).toBe(false);
+    expect(mk({ ngayDang: '2025-02-29' }).ok).toBe(false);
+    expect(mk({ ngayDang: '2024-02-29' }).ok).toBe(true);
+    expect(mk({ ngayDang: '2026-10-18T25:00:00Z' }).ok).toBe(false);
+  });
+  it('chuẩn hoá Unicode: chữ tổ hợp rời, ký tự vô hình, không dấu', () => {
+    const decomposed = 'Chính trị'.normalize('NFD'); // Chính trị dạng tổ hợp
+    expect(mk({ tieuDe: decomposed }).ok).toBe(false);
+    expect(mk({ tieuDe: 'ch​inh tri' }).ok).toBe(false);
+    expect(mk({ tieuDe: 'TÔN GIÁO' }).ok).toBe(false);
+  });
+  it('bắt thêm chủ đề cấm', () => {
+    for (const t of ['Vụ khủng bố ở nước ngoài', 'Ma túy học đường', 'cá độ bóng đá', 'tham nhũng', 'ma tuy', 'Phật giáo Việt Nam']) {
+      expect(mk({ tieuDe: t }).ok, t).toBe(false);
+    }
+  });
+  it('không dương tính giả với "đang phải", vẫn chặn "đảng phái"', () => {
+    expect(mk({ tieuDe: 'Học sinh đang phải học bù' }).ok).toBe(true);
+    expect(mk({ tieuDe: 'Các đảng phái tranh cử' }).ok).toBe(false);
+    expect(mk({ tieuDe: 'cac dang phai' }).ok).toBe(false);
+  });
 });

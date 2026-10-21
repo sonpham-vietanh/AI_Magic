@@ -28,11 +28,21 @@ export interface NewsCheckResult {
   requiresApproval: true;
 }
 
-/** Bỏ dấu tiếng Việt, hạ chữ thường. */
+/** Ký tự vô hình hay dùng để lách bộ lọc (zero-width, soft hyphen, BOM). */
+const INVISIBLE_RE = /[\u00AD\u200B-\u200F\u2060\uFEFF]/g;
+
+/** Chuẩn hoá Unicode NFC, bỏ ký tự vô hình, hạ chữ thường (giữ dấu). */
+export function normalizeNfc(s: string): string {
+  return s.normalize('NFKC').replace(INVISIBLE_RE, '').toLowerCase();
+}
+
+/** Bỏ dấu tiếng Việt (kể cả chữ tổ hợp rời), đ -> d, hạ chữ thường. */
 export function normalizeVi(s: string): string {
   return s
+    .normalize('NFKC')
+    .replace(INVISIBLE_RE, '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[đĐ]/g, 'd')
     .toLowerCase();
 }
@@ -43,22 +53,33 @@ export function isWhitelistedHost(host: string): boolean {
 }
 
 const BLOCKED_TOPICS: { label: string; patterns: string[] }[] = [
-  { label: 'tình dục', patterns: ['tinh duc', 'quan he tinh duc', 'khieu dam', 'sex', 'porn'] },
-  { label: 'chính trị', patterns: ['chinh tri', 'bau cu', 'dang phai'] },
-  { label: 'tôn giáo', patterns: ['ton giao', 'tin nguong'] },
-  { label: 'dân tộc', patterns: ['dan toc', 'ky thi sac toc'] },
+  { label: 'tình dục', patterns: ['tinh duc', 'quan he tinh duc', 'khieu dam', 'sex', 'porn', 'ma dam'] },
+  { label: 'chính trị', patterns: ['chinh tri', 'bau cu', 'bieu tinh', 'phan dong', 'tham nhung'] },
+  { label: 'tôn giáo', patterns: ['ton giao', 'tin nguong', 'phat giao', 'thien chua giao', 'cong giao', 'hoi giao'] },
+  { label: 'dân tộc', patterns: ['dan toc', 'ky thi sac toc', 'phan biet chung toc', 'ky thi chung toc'] },
   {
     label: 'chủ quyền biển đảo',
-    patterns: ['chu quyen', 'bien dong', 'hoang sa', 'truong sa', 'bien dao'],
+    patterns: ['chu quyen', 'bien dong', 'hoang sa', 'truong sa', 'bien dao', 'duong luoi bo'],
   },
   {
     label: 'đánh giá nhân vật lịch sử',
     patterns: [
-      'danh gia[^.\\n]{0,40}nhan vat lich su',
-      'nhan vat lich su[^.\\n]{0,40}danh gia',
-      'cong toi cua[^.\\n]{0,40}(?:vua|tong thong|lanh tu)',
+      'danh gia[^.\n]{0,40}nhan vat lich su',
+      'nhan vat lich su[^.\n]{0,40}danh gia',
+      'cong toi cua[^.\n]{0,40}(?:vua|tong thong|lanh tu)',
     ],
   },
+  { label: 'bạo lực, khủng bố', patterns: ['khung bo', 'giet nguoi', 'bao luc hoc duong', 'tu tu', 'tu sat', 'danh bom'] },
+  { label: 'ma tuý, cờ bạc', patterns: ['ma tuy', 'heroin', 'co bac', 'ca do', 'danh bac'] },
+];
+
+/**
+ * Cụm chỉ khớp khi viết ĐÚNG dấu, vì khi bỏ dấu trùng với cụm vô hại
+ * ("đảng phái" và "đang phải" cùng thành "dang phai"). Nếu cả văn bản không có dấu
+ * (gõ không dấu) thì dạng không dấu vẫn được chặn, ưu tiên an toàn.
+ */
+const ACCENT_SENSITIVE: { label: string; accented: string; ascii: string }[] = [
+  { label: 'chính trị', accented: 'đảng phái', ascii: 'dang phai' },
 ];
 
 function hasPattern(norm: string, pattern: string): boolean {
@@ -68,7 +89,35 @@ function hasPattern(norm: string, pattern: string): boolean {
 
 export function findBlockedTopics(text: string): string[] {
   const norm = normalizeVi(text);
-  return BLOCKED_TOPICS.filter((t) => t.patterns.some((p) => hasPattern(norm, p))).map((t) => t.label);
+  const nfc = normalizeNfc(text);
+  const hasVietnameseMarks = /[^\x00-\x7f]/.test(nfc);
+  const out = new Set<string>();
+  for (const t of BLOCKED_TOPICS) {
+    if (t.patterns.some((p) => hasPattern(norm, p))) out.add(t.label);
+  }
+  for (const a of ACCENT_SENSITIVE) {
+    const hit = new RegExp(`(?<![\\p{L}\\p{N}])${a.accented}(?![\\p{L}\\p{N}])`, 'u').test(nfc)
+      || (!hasVietnameseMarks && hasPattern(norm, a.ascii));
+    if (hit) out.add(a.label);
+  }
+  return [...out];
+}
+
+/** Đọc ngày đăng; trả mốc thời gian (ms) hoặc NaN. Ngày không tồn tại bị từ chối. */
+export function parseNewsDate(raw: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.exec(raw);
+  if (!m) return NaN;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const chk = new Date(Date.UTC(y, mo - 1, d));
+  if (chk.getUTCFullYear() !== y || chk.getUTCMonth() !== mo - 1 || chk.getUTCDate() !== d) return NaN;
+  if (m[4] === undefined) {
+    // Chỉ có ngày: tính đến CUỐI ngày (giờ Việt Nam) để không đánh giá sự kiện cũ hơn thực tế.
+    return Date.parse(`${m[1]}-${m[2]}-${m[3]}T23:59:59.999+07:00`);
+  }
+  if (Number(m[4]) > 23 || Number(m[5]) > 59 || (m[6] !== undefined && Number(m[6]) > 59)) return NaN;
+  let tz = m[7] ?? '+07:00';
+  if (/^[+-]\d{4}$/.test(tz)) tz = `${tz.slice(0, 3)}:${tz.slice(3)}`;
+  return Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] ?? '00'}${m[0].includes('.') ? '.' + /\.(\d+)/.exec(m[0])![1] : ''}${tz}`);
 }
 
 export function checkNewsEvent(input: NewsEventInput, now: Date = new Date()): NewsCheckResult {
@@ -92,7 +141,7 @@ export function checkNewsEvent(input: NewsEventInput, now: Date = new Date()): N
   }
 
   const raw = String(input.ngayDang ?? '').trim();
-  const t = /^\d{4}-\d{2}-\d{2}/.test(raw) ? Date.parse(raw) : NaN;
+  const t = parseNewsDate(raw);
   if (Number.isNaN(t)) {
     reasons.push('Ngày đăng không hợp lệ (cần định dạng ISO).');
   } else {

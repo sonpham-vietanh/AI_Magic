@@ -1,5 +1,4 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from '@/lib/server/safeJson';
 
 /**
  * JSON file store nhỏ: mutex trong tiến trình + ghi nguyên tử (tmp + rename)
@@ -14,48 +13,15 @@ export function createJsonStore<T>(opts: { file: () => string; empty: () => T; t
     return run;
   }
 
+  // Lỗi ghi PHẢI ném lên; lỗi đọc khác ENOENT cũng ném (xem lib/server/safeJson.ts).
   async function write(data: T): Promise<void> {
-    const file = opts.file();
-    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(tmp, JSON.stringify(data), 'utf8');
-      await rename(tmp, file);
-    } catch (err) {
-      console.error(`[${opts.tag}] Không ghi được file dữ liệu:`, err);
-      try {
-        await unlink(tmp);
-      } catch {
-        // ignore
-      }
-    }
+    await writeJsonAtomic(opts.file(), data);
   }
 
   async function read(): Promise<T> {
-    const file = opts.file();
-    let raw: string;
-    try {
-      raw = await readFile(file, 'utf8');
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-        console.error(`[${opts.tag}] Không đọc được file dữ liệu:`, err);
-      }
-      return opts.empty();
-    }
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!parsed || typeof parsed !== 'object') throw new Error('Invalid shape');
-      return opts.normalize ? opts.normalize(parsed) : (parsed as T);
-    } catch (err) {
-      const backup = `${file}.corrupt-${Date.now()}`;
-      console.error(`[${opts.tag}] File dữ liệu hỏng JSON, sao lưu sang ${backup}:`, err);
-      try {
-        await rename(file, backup);
-      } catch (renameErr) {
-        console.error(`[${opts.tag}] Không sao lưu được file hỏng:`, renameErr);
-      }
-      return opts.empty();
-    }
+    const parsed = await readJsonStrict<unknown>(opts.file(), () => null);
+    if (!parsed || typeof parsed !== 'object') return opts.empty();
+    return opts.normalize ? opts.normalize(parsed) : (parsed as T);
   }
 
   /** Đọc-sửa-ghi tuần tự. */

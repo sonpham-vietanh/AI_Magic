@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from '@/lib/server/safeJson';
 import type { OrgData } from './types';
 
 interface StoreFile {
@@ -30,49 +30,13 @@ export function withLock<T>(fn: () => Promise<T>): Promise<T> {
 export const emptyOrg = (): OrgData => ({ usage: [], results: {}, exams: [] });
 
 async function readAll(): Promise<StoreFile> {
-  const file = storeFile();
-  let raw: string;
-  try {
-    raw = await readFile(file, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-      console.error('[assessment] Không đọc được file dữ liệu:', err);
-    }
-    return { orgs: {} };
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<StoreFile>;
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.orgs !== 'object' || !parsed.orgs) {
-      throw new Error('Invalid store shape');
-    }
-    return { orgs: parsed.orgs as Record<string, OrgData> };
-  } catch (err) {
-    const backup = `${file}.corrupt-${Date.now()}`;
-    console.error(`[assessment] File dữ liệu hỏng, sao lưu sang ${backup}:`, err);
-    try {
-      await rename(file, backup);
-    } catch (e) {
-      console.error('[assessment] Không sao lưu được file hỏng:', e);
-    }
-    return { orgs: {} };
-  }
+  const parsed = await readJsonStrict<Partial<StoreFile> | null>(storeFile(), () => null);
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.orgs !== 'object' || !parsed.orgs) return { orgs: {} };
+  return { orgs: parsed.orgs as Record<string, OrgData> };
 }
 
 async function writeAll(data: StoreFile): Promise<void> {
-  const file = storeFile();
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, file);
-  } catch (err) {
-    console.error('[assessment] Không ghi được file dữ liệu:', err);
-    try {
-      await unlink(tmp);
-    } catch {
-      // ignore
-    }
-  }
+  await writeJsonAtomic(storeFile(), data);
 }
 
 function normalizeOrg(o: Partial<OrgData> | undefined): OrgData {

@@ -34,7 +34,7 @@ Quy ước: **Đạt** = có mã chạy được cho đúng ý sơ đồ; **Mộ
 | Pha A bước 1 — phân rã Knowledge Graph | `lib/knowledge-graph/*`; quy trình phân rã nằm ở bộ kỹ năng ngoài kho mã | Một phần: đồ thị có sẵn để tra; công cụ phân rã tự động không nằm trong ứng dụng này. |
 | Pha A bước 2 — sinh 6 dạng tài nguyên | `lib/kho/generate.ts`, `app/api/kho/resources/generate` | Một phần (xem workflow 6). |
 | Pha A bước 3 — ghép theo phân phối chương trình | `lib/kho`, dữ liệu chương trình trong `lib/catalog` và `/ho-so-lop-hoc` | Một phần: chưa có công cụ ghép tự động có kiểm tra phủ 4 bậc Bloom. |
-| Pha A bước 4 — người duyệt, rubric 6 tiêu chí 1–5 | `lib/eval/rubric.ts` (`RUBRIC_6`), `lib/kho/reviewStore.ts`, `app/api/kho/review`, trang `/duyet` | Đạt về cổng và chấm điểm. Danh sách người duyệt cấu hình qua biến `ASSESSMENT_REVIEWERS`; **chưa có đăng nhập thật nên danh tính người duyệt chỉ là khai báo.** |
+| Pha A bước 4 — người duyệt, rubric 6 tiêu chí 1–5 | `lib/eval/rubric.ts` (`RUBRIC_6`), `lib/kho/reviewStore.ts`, `app/api/kho/review`, trang `/duyet` | Một phần: có cổng và chấm điểm, nhưng cổng duyệt chỉ là mã dùng chung `REVIEWER_KEY` (header `x-reviewer-key`), không phải danh tính từng người; danh sách tên người duyệt (`ASSESSMENT_REVIEWERS`) chỉ là khai báo. **Chưa có đăng nhập thật.** |
 | Pha A bước 5 — nhập kho, gắn org_id | `lib/server/org.ts` (`getOrgId`), các store trong `lib/kho` | Một phần: org_id luôn là `vietanh`; chưa lấy từ SSO. |
 | Pha A bước 6 — nạp Ngân hàng câu hỏi (5 nhãn) | `lib/assessment/bank.ts`, `app/api/assessment/bank` | Một phần: ngân hàng và nhập câu hỏi có; **chưa kiểm chứng đủ 5 nhãn theo đúng định nghĩa của sơ đồ** (cần anh Dương chốt danh sách nhãn). |
 | Guardrail thời sự | `lib/guardrails/news.ts` | Đạt: danh sách trắng nguồn, loại chủ đề nhạy cảm, không dùng sự kiện dưới 48 giờ. Chưa có bộ thu thập tin tự động. |
@@ -45,11 +45,11 @@ Quy ước: **Đạt** = có mã chạy được cho đúng ý sơ đồ; **Mộ
 | org_id (đa tổ chức) | `lib/server/org.ts`; `lib/versions/store.ts` tách theo org | Một phần: mọi bản ghi mới mang org_id nhưng chỉ có một tổ chức. |
 | Web App: biểu mẫu 7 tham số | `/` (trợ lý), `/soan-bai` | Đạt (hai đường vào). |
 | Web App: Thư viện tiết học | `/kho` | Một phần (xem Kho). |
-| Web App: Trang duyệt (Pha A) | `/duyet` | Đạt về chức năng. |
-| Web App: Lịch sử & phiên bản cá nhân | `/lich-su`, `app/api/versions`, `lib/versions/*` (lưu `.data/versions.json`) | Đạt về lưu, danh sách, so sánh, mở lại trong trợ lý. Nhóm theo tên khai báo, **không phải tài khoản**. |
+| Web App: Trang duyệt (Pha A) | `/duyet` | Một phần: chức năng có, nhưng truy cập duyệt dựa trên `REVIEWER_KEY` dùng chung, chưa phân quyền theo người. |
+| Web App: Lịch sử & phiên bản cá nhân | `/lich-su`, `app/api/versions`, `lib/versions/*` (lưu `.data/versions.json`) | Một phần: lưu, danh sách, so sánh, mở lại trong trợ lý đã chạy được. Nhóm theo tên khai báo, **không phải tài khoản**; ai biết id đều đọc được. |
 | Web App: SSO Google Workspace | — | **Chưa.** Hiện chỉ có rào chắn cùng nguồn (`lib/server/guard.ts`) và token tuỳ chọn; không phải xác thực người dùng. |
 | Dịch vụ ngoài | `lib/integrations/catalog.ts`, `/ket-noi`, `GET /api/integrations/status` | Danh bạ trung thực. Chỉ LLM và guardrail nguồn tin chạy thật. |
-| Hạ tầng | Xem mục 4 | Khác sơ đồ. |
+| Hạ tầng | Xem mục 4 | Khác sơ đồ; một số bảo đảm (khoá ghi, RLS Supabase) chưa đủ, xem mục 4. |
 
 ## 3. Điểm KHÔNG NHẤT QUÁN ngay trong sơ đồ (cần anh Dương xác nhận)
 
@@ -71,9 +71,15 @@ Quy ước: **Đạt** = có mã chạy được cho đúng ý sơ đồ; **Mộ
 | Máy chủ ứng dụng | FastAPI | Next.js 16 (App Router, route handler) |
 | Cơ sở dữ liệu | PostgreSQL + pgvector | Supabase (có migration `supabase/migrations`) cho phần đồ thị tri thức; **dữ liệu vận hành lưu file JSON cục bộ trong `.data/`** (store, kho, đánh giá, tín hiệu, phiên bản). Không có tìm kiếm vector. |
 | Đóng gói | Docker | Có `Dockerfile`; deploy bằng Coolify. Volume cho `.data/` phải được gắn cố định, nếu không dữ liệu mất khi dựng lại. |
-| Đăng nhập | SSO Google Workspace | Chưa có |
+| Đăng nhập | SSO Google Workspace | **Chưa có.** Không có tài khoản người dùng; rào chắn cùng nguồn (`guard.ts`) giả mạo được bằng client không phải trình duyệt. Cổng duyệt dùng `REVIEWER_KEY` chung. |
+| Khoá ghi file | (không nêu) | Mutex ghi file chỉ có hiệu lực **trong một tiến trình**. Vì vậy phải chạy **đúng 1 bản sao** và **tắt rolling deploy** (hai container cùng ghi một volume `.data/` sẽ ghi đè nhau). |
+| Supabase RLS | (không nêu) | **Chưa kiểm tra** chính sách RLS của các bảng trên Supabase; không nên coi dữ liệu ở đó là đã được cô lập. Ứng dụng đọc/ghi bằng khoá phía server. |
+| Địa chỉ | — | https://magic.truongvietanh.com (sau Cloudflare + Traefik/Coolify; giới hạn tốc độ theo IP dựa vào giả định này, xem `lib/server/rateLimit.ts`). |
+| Kiểm tra sống | — | `GET /api/health` (không qua guard) và `HEALTHCHECK` trong `Dockerfile`. |
 
 Hệ quả: file JSON chỉ phù hợp quy mô nhỏ, một tiến trình; chưa có sao lưu định kỳ và chưa có khoá chéo giữa nhiều tiến trình.
+
+Ghi chú phụ thuộc: cảnh báo về `image-size` đi kèm `pptxgenjs` không khai thác được trong ứng dụng này vì mã xuất PPTX không nhúng ảnh do người dùng cung cấp; vẫn nên cập nhật khi có bản vá.
 
 ## 5. Dịch vụ ngoài và biến môi trường dự kiến
 
@@ -86,6 +92,7 @@ Trạng thái "đã cấu hình" chỉ suy từ việc biến có giá trị kh�
 | Canva | Infographic, ảnh | `CANVA_API_KEY` (dự kiến) | Tự dựng SVG/PNG. **Chưa tích hợp.** |
 | Gemini Notebook API | Podcast, audio tranh luận | `GEMINI_NOTEBOOK_API_KEY` (dự kiến) | Chỉ kịch bản + giọng đọc của trình duyệt. Cần license Education Premium; **không dùng tích hợp phi chính thức.** **Chưa tích hợp.** |
 | TTS/STT | Giọng đọc, ghi chú giọng nói | `TTS_API_KEY`, `STT_API_KEY` (dự kiến) | Giọng đọc của trình duyệt; video chỉ có kịch bản phân cảnh. **Chưa tích hợp.** |
+| Cổng duyệt | Duyệt bản chuẩn, đề, ghi số liệu | `REVIEWER_KEY` (bắt buộc để duyệt; thiếu => 503), `ASSESSMENT_REVIEWERS` | Mã dùng chung, không phải danh tính cá nhân. |
 | Nguồn tin danh sách trắng | Sự kiện thời sự | không cần khoá | Giáo viên dán đường dẫn, guardrail kiểm tra. |
 
 ## 6. Phiên bản cá nhân (hợp đồng API)

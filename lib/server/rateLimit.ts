@@ -2,7 +2,7 @@
  * In-memory fixed-window rate limiter keyed by `${bucket}:${clientIp}`.
  * NOTE: state is per server instance/process (not shared across serverless
  * instances or restarts), so limits are best-effort only. The client IP comes
- * from proxy headers and can be spoofed if not behind a trusted proxy.
+ * from proxy headers (see clientIp); it is only trustworthy behind Cloudflare/Traefik.
  */
 type Entry = { count: number; resetAt: number };
 
@@ -10,9 +10,27 @@ const hits = new Map<string, Entry>();
 const MAX_ENTRIES = 10_000;
 let lastSweep = 0;
 
-function clientIp(request: Request): string {
-  const xff = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return xff || request.headers.get("x-real-ip")?.trim() || "unknown";
+/**
+ * Xác định IP client. GIẢ ĐỊNH triển khai: Cloudflare -> Traefik (Coolify) -> app.
+ *  1. `cf-connecting-ip`: do Cloudflare đặt (ghi đè giá trị client gửi). Chỉ đáng tin nếu origin
+ *     chỉ nhận traffic qua Cloudflare/Traefik.
+ *  2. `x-forwarded-for`: KHÔNG lấy phần tử đầu (client tự giả mạo được). Lấy phần tử thứ
+ *     TRUSTED_PROXY_HOPS tính từ cuối (mặc định 1 = địa chỉ do proxy tin cậy gần nhất thêm vào).
+ *  3. `x-real-ip`, rồi "unknown".
+ */
+export function clientIp(request: Request): string {
+  const h = request.headers;
+  const cf = h.get('cf-connecting-ip')?.trim();
+  if (cf) return cf;
+  const parts = (h.get('x-forwarded-for') ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (parts.length > 0) {
+    const hops = Math.max(1, Math.floor(Number(process.env.TRUSTED_PROXY_HOPS) || 1));
+    return parts[Math.max(0, parts.length - hops)];
+  }
+  return h.get('x-real-ip')?.trim() || 'unknown';
 }
 
 function sweep(now: number): void {

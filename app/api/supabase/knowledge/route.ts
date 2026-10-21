@@ -60,7 +60,17 @@ export async function GET(request: Request) {
   try {
     if (p.mode === 'overview') {
       const overview = await fetchSupabaseOverview();
-      return NextResponse.json({ ok: true, overview });
+      // Ẩn danh hoá người dùng: không trả email/tên thật, chỉ vai trò + môn.
+      const users = overview.users.map((u, i) => ({
+        id: `u${i + 1}`,
+        name: `Giáo viên ${i + 1}`,
+        role: u.role,
+        subject: u.subject,
+      }));
+      const settings = overview.settings
+        ? { ...overview.settings, tutorEmail: undefined }
+        : overview.settings;
+      return NextResponse.json({ ok: true, overview: { ...overview, users, settings } });
     }
 
     if (p.mode === 'tree') {

@@ -1,0 +1,91 @@
+// Đọc/ghi tệp JSON AN TOÀN cho mọi kho dữ liệu cục bộ (`.data/*.json`).
+// Quy tắc cứng rút ra từ đợt rà soát:
+//  1. CHỈ "tệp chưa tồn tại" (ENOENT) mới được coi là rỗng. Mọi lỗi đọc khác (EBUSY, EMFILE, EACCES, EIO...) là lỗi
+//     thoáng qua: PHẢI ném lỗi, tuyệt đối không trả rỗng, vì lần ghi kế tiếp sẽ xoá sạch dữ liệu thật.
+//  2. JSON hỏng thật: đổi tên tệp sang `.corrupt-<ts>` để người vận hành khôi phục rồi mới bắt đầu lại; nếu không sao
+//     lưu được thì ném lỗi chứ không ghi đè.
+//  3. Lỗi ghi PHẢI ném lên (API trả 500), không được nuốt rồi báo thành công.
+//  4. Tên tệp tạm duy nhất (pid + uuid), thử lại khi Windows báo EPERM/EBUSY/EACCES do chương trình khác đang giữ tệp.
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { dirname } from 'node:path';
+
+export class StoreReadError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'StoreReadError';
+  }
+}
+
+export class StoreWriteError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'StoreWriteError';
+  }
+}
+
+const codeOf = (err: unknown): string => String((err as NodeJS.ErrnoException | undefined)?.code ?? 'UNKNOWN');
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Đọc tệp JSON. `fallback` chỉ được dùng khi tệp chưa có hoặc JSON hỏng đã được sao lưu. */
+export async function readJsonStrict<T>(file: string, fallback: () => T): Promise<T> {
+  let raw: string;
+  try {
+    raw = await readFile(file, 'utf8');
+  } catch (err) {
+    if (codeOf(err) === 'ENOENT') return fallback();
+    throw new StoreReadError(`Không đọc được kho dữ liệu (${codeOf(err)}); đã dừng để không ghi đè dữ liệu thật.`, {
+      cause: err,
+    });
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const backup = `${file}.corrupt-${Date.now()}`;
+    try {
+      await rename(file, backup);
+    } catch (err) {
+      throw new StoreReadError(`Kho dữ liệu hỏng và không sao lưu được (${codeOf(err)}); đã dừng để không ghi đè.`, {
+        cause: err,
+      });
+    }
+    console.error(`[store] JSON hỏng, đã sao lưu sang ${backup}`);
+    return fallback();
+  }
+}
+
+/** Ghi nguyên tử (tệp tạm rồi đổi tên). Ném StoreWriteError khi thất bại. */
+export async function writeJsonAtomic(file: string, data: unknown): Promise<void> {
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    const text = JSON.stringify(data);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(tmp, text, 'utf8');
+    for (let i = 0; ; i++) {
+      try {
+        await rename(tmp, file);
+        return;
+      } catch (err) {
+        const c = codeOf(err);
+        if (i < 4 && (c === 'EPERM' || c === 'EBUSY' || c === 'EACCES')) {
+          await sleep(40 * (i + 1));
+          continue;
+        }
+        throw err;
+      }
+    }
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => undefined);
+    throw new StoreWriteError(`Không ghi được kho dữ liệu (${codeOf(err)}).`, { cause: err });
+  }
+}
+
+/** Khoá tuần tự trong một tiến trình. Lỗi của một tác vụ không làm hỏng hàng đợi. */
+export function createMutex(): <T>(fn: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = tail.then(fn);
+    tail = run.catch(() => undefined);
+    return run;
+  };
+}

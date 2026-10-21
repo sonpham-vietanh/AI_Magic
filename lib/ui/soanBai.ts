@@ -104,13 +104,13 @@ export function formatApiError(status: number, error?: string): string {
     case 400:
       return `Thông tin chưa hợp lệ${detail ? `: ${detail}` : '.'} Vui lòng kiểm tra lại biểu mẫu.`;
     case 403:
-      return 'Bạn chưa có quyền thực hiện thao tác này.';
+      return 'Cô/thầy chưa có quyền thực hiện thao tác này.';
     case 404:
       return 'Không tìm thấy bài dạy hoặc bản chuẩn trong Kho. Hãy chọn bài khác.';
     case 422:
       return formatGuardrail(detail ? detail.split(/\s*[;\n]\s*/) : []).join('\n');
     case 429:
-      return 'Hệ thống đang bận hoặc bạn gửi quá nhiều yêu cầu. Vui lòng đợi ít phút rồi thử lại.';
+      return 'Hệ thống đang bận hoặc cô/thầy gửi quá nhiều yêu cầu. Vui lòng đợi ít phút rồi thử lại.';
     case 502:
       return 'Dịch vụ AI tạm thời không phản hồi. Vui lòng thử lại sau ít phút.';
     default:

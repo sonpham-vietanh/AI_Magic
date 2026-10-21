@@ -89,7 +89,10 @@ export function ResultPanel(p: ResultPanelProps) {
     [edited, p.text, headings, sectionsSrc],
   );
 
+  const blocked = r.blockAcceptDownload === true;
+
   const download = async () => {
+    if (blocked) return;
     setExportError('');
     try {
       const { buildDocxBlob, downloadBlob } = await import('@/lib/export/docx');
@@ -163,7 +166,16 @@ export function ResultPanel(p: ResultPanelProps) {
             {r.requiresApproval && (
               <div className="ag-alert warn" role="status">
                 <Icon name="alert" size={18} />
-                <span>Cần người duyệt trước khi dùng. Đây mới là bản nháp.</span>
+                <span>
+                  Cần người duyệt trước khi dùng. Đây mới là bản nháp.
+                  {(r.approvalReasons ?? []).length > 0 && ` ${(r.approvalReasons ?? []).join('; ')}.`}
+                  {r.approvalUrl && (
+                    <>
+                      {' '}
+                      <a href={r.approvalUrl}>Mở trang duyệt</a>
+                    </>
+                  )}
+                </span>
               </div>
             )}
             {(r.warnings ?? []).length > 0 && (
@@ -386,7 +398,13 @@ export function ResultPanel(p: ResultPanelProps) {
       )}
 
       <div className="ag-canvas-foot">
-        <button type="button" className="ag-btn primary" onClick={accept} disabled={accepting || p.busy || p.accepted}>
+        <button
+          type="button"
+          className="ag-btn primary"
+          onClick={accept}
+          disabled={accepting || p.busy || p.accepted || blocked}
+          title={blocked ? 'Cần người duyệt trước khi dùng' : undefined}
+        >
           <Icon name="check" />
           {p.accepted ? 'Đã duyệt & dùng' : 'Duyệt & dùng'}
         </button>
@@ -396,7 +414,7 @@ export function ResultPanel(p: ResultPanelProps) {
         </button>
         {!cur && (
           <>
-            <button type="button" className="ag-btn" onClick={download}>
+            <button type="button" className="ag-btn" onClick={download} disabled={blocked}>
               <Icon name="download" />
               Tải .docx
             </button>

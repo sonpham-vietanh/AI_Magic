@@ -36,6 +36,7 @@ const requiredFiles = [
   'app/api/generate/route.ts',
   'app/api/assistant/route.ts',
   'app/api/resources/route.ts',
+  'app/api/health/route.ts',
   'app/api/major-os/usage/route.ts',
   'components/Shell.tsx',
   'components/DashboardClient.tsx',
@@ -131,6 +132,54 @@ for (const file of ['app', 'components'].flatMap((d) => walk(path.join(root, d))
       failed = true;
     }
   });
+}
+
+// --- Kiểm tra tại chỗ trên bản đang chạy (tuỳ chọn): SMOKE_BASE_URL=http://localhost:3080 ---
+const base = (process.env.SMOKE_BASE_URL || '').replace(/\/+$/, '');
+if (base) {
+  const check = async (label, fn) => {
+    try {
+      const msg = await fn();
+      if (msg) {
+        console.error(`[FAIL] ${label}: ${msg}`);
+        failed = true;
+      } else console.log(`[INFO] ${label}: đạt`);
+    } catch (err) {
+      console.error(`[FAIL] ${label}: ${err instanceof Error ? err.message : err}`);
+      failed = true;
+    }
+  };
+  await check('GET /api/health', async () => {
+    const r = await fetch(`${base}/api/health`);
+    if (r.status !== 200) return `HTTP ${r.status}`;
+    const j = await r.json();
+    if (j.ok !== true) return 'ok khác true';
+    const extra = Object.keys(j).filter((k) => k !== 'ok' && k !== 'time');
+    return extra.length ? `lộ thêm trường: ${extra.join(', ')}` : null;
+  });
+  for (const p of ['/api/usage', '/api/resources', '/api/integrations/status', '/api/supabase/knowledge?mode=overview', '/api/versions']) {
+    await check(`ẩn danh GET ${p} => 401`, async () => {
+      const r = await fetch(`${base}${p}`);
+      return r.status === 401 ? null : `HTTP ${r.status} (mong đợi 401)`;
+    });
+  }
+  await check('ẩn danh POST /api/resources => 401', async () => {
+    const r = await fetch(`${base}/api/resources`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    return r.status === 401 ? null : `HTTP ${r.status} (mong đợi 401)`;
+  });
+  await check('header bảo mật', async () => {
+    const r = await fetch(`${base}/api/health`);
+    for (const h of ['x-content-type-options', 'x-frame-options', 'referrer-policy', 'permissions-policy']) {
+      if (!r.headers.get(h)) return `thiếu ${h}`;
+    }
+    return null;
+  });
+} else {
+  console.log('[INFO] Bỏ qua kiểm tra bản đang chạy (đặt SMOKE_BASE_URL để bật).');
 }
 
 if (failed) {

@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from '@/lib/server/safeJson';
 import type { Artifact, ResourceKind } from '@/lib/resources/types';
 
 /** Bản tài nguyên đang làm việc (nháp hoặc đã duyệt) của một dạng cho một bài. */
@@ -50,45 +50,11 @@ export function withAssetLock<T>(fn: () => Promise<T>): Promise<T> {
 const empty = (): AssetData => ({ assets: {}, versions: {} });
 
 export async function readAssets(): Promise<AssetData> {
-  const file = storeFile();
-  let raw: string;
-  try {
-    raw = await readFile(file, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
-      console.error('[kho] Không đọc được file tài nguyên:', err);
-    }
-    return empty();
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<AssetData> | null;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid shape');
-    return { assets: parsed.assets ?? {}, versions: parsed.versions ?? {} };
-  } catch (err) {
-    const backup = `${file}.corrupt-${Date.now()}`;
-    console.error(`[kho] File tài nguyên hỏng JSON, sao lưu sang ${backup}:`, err);
-    try {
-      await rename(file, backup);
-    } catch (renameErr) {
-      console.error('[kho] Không sao lưu được file hỏng:', renameErr);
-    }
-    return empty();
-  }
+  const parsed = await readJsonStrict<Partial<AssetData> | null>(storeFile(), () => null);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return empty();
+  return { assets: parsed.assets ?? {}, versions: parsed.versions ?? {} };
 }
 
 export async function writeAssets(data: AssetData): Promise<void> {
-  const file = storeFile();
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, file);
-  } catch (err) {
-    try {
-      await unlink(tmp);
-    } catch {
-      // ignore
-    }
-    throw err;
-  }
+  await writeJsonAtomic(storeFile(), data);
 }

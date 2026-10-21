@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
 import { LibraryDetail } from '@/components/kho/LibraryDetail';
@@ -46,14 +47,12 @@ export default function KhoPage() {
       setError('');
       try {
         const qs = new URLSearchParams({ subject, grade });
-        const res = await fetch(`/api/kho/library?${qs.toString()}`, { signal });
-        const data = (await res.json()) as { ok?: boolean; items?: Row[]; error?: string };
-        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const data = await fetchJson<{ ok?: boolean; items?: Row[] }>(`/api/kho/library?${qs.toString()}`, { signal });
         setRows(data.items || []);
       } catch (e) {
         if (signal?.aborted) return;
         setRows([]);
-        setError(e instanceof Error ? e.message : 'Không tải được thư viện tiết học.');
+        setError(friendlyError(e, 'Không tải được thư viện tiết học.'));
       } finally {
         if (!signal?.aborted) setLoading(false);
       }

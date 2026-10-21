@@ -36,6 +36,13 @@ describe('signals', () => {
     expect(l2.flagged).toBe(false);
   });
 
+  it('workflow de_kiem_tra không giữ toàn văn đề', async () => {
+    await recordGeneration({ orgId: 'a', lessonKey: 'L', runId: 'ex', teacher: 't', workflow: 'de_kiem_tra', text: 'CÂU 1 bí mật' });
+    await recordFinalVersion({ orgId: 'a', runId: 'ex', finalText: 'CÂU 1 bí mật', accepted: true });
+    const { readFileSync } = await import('node:fs');
+    expect(readFileSync(process.env.SIGNALS_FILE!, 'utf8')).not.toContain('bí mật');
+  });
+
   it('diff và chỉ số Bắc Đẩu', async () => {
     await recordGeneration({ orgId: 'a', lessonKey: 'L', runId: 'u', text: 'a\nb\nc', ...base });
     await recordGeneration({ orgId: 'a', lessonKey: 'L', runId: 'v', text: 'a\nb\nc\nd', ...base });

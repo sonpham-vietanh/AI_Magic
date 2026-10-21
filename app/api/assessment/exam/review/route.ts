@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { getOrgId } from '@/lib/server/org';
 import { reviewExam } from '@/lib/assessment';
 import { handlePost } from '@/lib/assessment/http';
+import { requireAccess } from '@/lib/server/guard';
+import { requireReviewer } from '@/lib/server/roles';
 
 const schema = z.object({
   examId: z.string().regex(/^DT-[A-Za-z0-9-]{3,40}$/),
@@ -11,6 +13,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const denied = requireAccess(request);
+  if (denied) return denied;
+  const notReviewer = requireReviewer(request);
+  if (notReviewer) return notReviewer;
   return handlePost(request, 'assessment-review', 20, schema, async (b) => ({
     exam: await reviewExam({ orgId: getOrgId(request), ...b }),
   }));

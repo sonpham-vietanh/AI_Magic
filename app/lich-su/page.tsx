@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { ArtifactView } from '@/components/resources/ArtifactView';
 import { Icon } from '@/components/ui/icons';
-import { buildDocxBlob, downloadBlob } from '@/lib/export/docx';
 import { diffLines } from '@/lib/versions/diff';
 import type { VersionRecord, VersionSummary } from '@/lib/versions/types';
 import { FORMAT_DAU_RA } from '@/lib/workflows/types';
@@ -128,6 +127,7 @@ export default function LichSuPage() {
 
   const downloadDocx = async () => {
     if (!selected) return;
+    const { buildDocxBlob, downloadBlob } = await import('@/lib/export/docx');
     const blob = await buildDocxBlob({
       title: selected.title,
       subtitle: [`${formatLabel(selected.format)} · Phiên bản ${selected.number}`],

@@ -78,7 +78,7 @@ export async function recordGeneration(e: {
       at: new Date().toISOString(),
       regenerationOf: e.regenerationOf,
       requiresApproval: !!e.requiresApproval,
-      text: capText(e.text),
+      text: e.workflow === 'de_kiem_tra' ? '' : capText(e.text), // không giữ toàn văn đề kiểm tra
     });
     if (data.runs.length > MAX_RUNS) data.runs = data.runs.slice(-MAX_RUNS);
   });
@@ -124,8 +124,8 @@ export async function recordFinalVersion(e: {
   return store.update((data) => {
     const run = data.runs.find((r) => r.orgId === e.orgId && r.runId === e.runId);
     if (!run) throw new UnknownRunError(e.runId);
-    const finalText = capText(e.finalText);
-    const diffRatio = lineDiffRatio(run.text, finalText);
+    const finalText = run.workflow === 'de_kiem_tra' ? '' : capText(e.finalText);
+    const diffRatio = run.workflow === 'de_kiem_tra' ? 0 : lineDiffRatio(run.text, finalText);
     run.finalText = finalText;
     run.accepted = e.accepted;
     run.diffRatio = diffRatio;

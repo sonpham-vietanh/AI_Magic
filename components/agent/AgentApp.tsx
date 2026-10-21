@@ -50,7 +50,7 @@ const SUGGESTIONS: { format: FormatValue; icon: IconName; title: string; desc: s
 
 const COMMAND_LINKS: Partial<Record<CommandId, { href: string; label: string; desc: string }>> = {
   duyet: { href: '/duyet', label: 'Duyệt bản chuẩn', desc: 'Chấm 6 tiêu chí để đưa bài vào Kho' },
-  chat_luong: { href: '/chat-luong', label: 'Chất lượng & Tín hiệu', desc: 'Tỷ lệ sinh lại, mức chỉnh sửa, chấm mù' },
+  chat_luong: { href: '/chat-luong', label: 'Chất lượng bài soạn', desc: 'Tỷ lệ sinh lại, mức chỉnh sửa, chấm mù' },
   cong_cu: { href: '/cong-cu', label: 'Kho 82 công cụ', desc: 'Các công cụ soạn học liệu riêng lẻ' },
   thu_vien: { href: '/thu-vien', label: 'Thư viện học liệu', desc: 'Học liệu đã lưu và nhật ký hoạt động' },
   lop: { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', desc: 'Hồ sơ lớp và ghi chú chủ nhiệm' },
@@ -401,7 +401,8 @@ export function AgentApp() {
     try {
       const res = await fetch(`/api/supabase/knowledge?subject=${subject}&grade=${grade}&limit=200`);
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; atoms?: AtomLite[] };
-      const list = res.ok && j.ok ? (j.atoms ?? []) : [];
+      if (!res.ok || !j.ok) return [];
+      const list = j.atoms ?? [];
       lessonCache.current[key] = list;
       return list;
     } catch {
@@ -711,7 +712,7 @@ export function AgentApp() {
                 </p>
               </div>
             ) : (
-              <div className="ag-thread-inner" aria-live="polite">
+              <div className="ag-thread-inner" role="log" aria-live="polite" aria-relevant="additions">
                 {msgs.map((m) =>
                   m.role === 'user' ? (
                     <div className="ag-msg user" key={m.id}>
@@ -747,7 +748,8 @@ export function AgentApp() {
                 ref={taRef}
                 rows={1}
                 value={text}
-                disabled={busy}
+                readOnly={busy}
+                aria-disabled={busy}
                 placeholder={busy ? 'Mình đang soạn, cô/thầy đợi một chút nhé…' : 'Nhắn cho trợ lý…'}
                 onChange={(e) => {
                   setText(e.target.value);

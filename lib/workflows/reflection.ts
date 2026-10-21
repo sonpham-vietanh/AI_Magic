@@ -27,8 +27,16 @@ export function parseReflection(
   // Chỉ giữ tiêu chí mà mô hình thật sự chấm: không tự điền điểm 1 cho tiêu chí thiếu.
   const scores = rubric.flatMap((r) => {
     const found = list.find((s) => s && (s.id === r.id || s.name === r.name));
-    const num = Number(found?.score);
-    if (found === undefined || found === null || !Number.isFinite(num)) return [];
+    if (found === undefined || found === null) return [];
+    // Chỉ nhận số thật hoặc chuỗi số: "", null, true không được bịa thành điểm.
+    const rawScore = found.score;
+    const num =
+      typeof rawScore === 'number'
+        ? rawScore
+        : typeof rawScore === 'string' && rawScore.trim() !== ''
+          ? Number(rawScore)
+          : NaN;
+    if (!Number.isFinite(num)) return [];
     return [
       {
         id: r.id,

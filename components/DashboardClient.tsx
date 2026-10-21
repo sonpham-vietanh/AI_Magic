@@ -19,7 +19,6 @@ import type {
   SupabaseTainguyenMeta,
 } from '@/lib/supabase';
 import type { GradeLevel, KnowledgeNode, PedagogicalTool } from '@/lib/types';
-import { buildFactoryAssetDocx, buildLessonPackDocx, downloadBlob } from '@/lib/export/docx';
 import { Icon } from '@/components/ui/icons';
 import { AssistantDrawer } from './AssistantDrawer';
 import { Shell } from './Shell';
@@ -435,6 +434,7 @@ export function DashboardClient({
 
   const handleDownloadFactoryAssetWord = async (asset: SupabaseFactoryAsset) => {
     try {
+      const { buildFactoryAssetDocx, downloadBlob } = await import('@/lib/export/docx');
       const blob = await buildFactoryAssetDocx(asset);
       downloadBlob(blob, `Factory-${asset.format}-${asset.packageId}.docx`);
     } catch (err) {
@@ -446,6 +446,7 @@ export function DashboardClient({
   const handleDownloadPackWord = async () => {
     if (!lessonPack) return;
     try {
+      const { buildLessonPackDocx, downloadBlob } = await import('@/lib/export/docx');
       const blob = await buildLessonPackDocx(lessonPack);
       downloadBlob(blob, `Tron-bo-tiet-day-${lessonPack.atomCode}.docx`);
       setPackNotice('Đã tải file Word (.docx), đã ngắt trang sẵn để in phát cho học sinh.');

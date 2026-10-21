@@ -38,5 +38,7 @@ export interface VersionSummary {
 }
 
 export const MAX_VERSIONS_PER_ACTOR = 200;
+/** Trần toàn tổ chức: chặn việc bịa nhiều tên người dùng để làm phình file. */
+export const MAX_VERSIONS_PER_ORG = 3000;
 export const MAX_TEXT_BYTES = 100 * 1024;
 export const MAX_ARTIFACTS_BYTES = 1024 * 1024;

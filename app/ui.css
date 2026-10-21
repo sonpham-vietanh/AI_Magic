@@ -1116,11 +1116,14 @@ textarea.ag-field {
     z-index: 60;
     width: min(86vw, 320px);
     transform: translateX(-102%);
-    transition: transform 220ms var(--ag-ease);
+    visibility: hidden;
+    transition: transform 220ms var(--ag-ease), visibility 0s linear 220ms;
     box-shadow: var(--shadow-md);
   }
   .ag-shell.nav-open .ag-rail {
     transform: none;
+    visibility: visible;
+    transition: transform 220ms var(--ag-ease), visibility 0s;
   }
   .ag-scrim {
     position: fixed;

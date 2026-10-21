@@ -442,10 +442,10 @@ export function ToolStudioModal({
         applyDone(data);
       } else if (response.status === 429) {
         setSaveNotice(
-          'Hệ thống đang quá tải, thầy/cô vui lòng thử lại sau ít phút.',
+          'Hệ thống đang quá tải, cô/thầy vui lòng thử lại sau ít phút.',
         );
       } else if (response.status === 401) {
-        setSaveNotice('Phiên làm việc đã hết hạn, vui lòng đăng nhập lại.');
+        setSaveNotice('Phiên làm việc đã hết hạn, vui lòng tải lại trang rồi thử lại.');
       } else {
         setSaveNotice(data.error || 'Không thể tạo học liệu.');
       }
@@ -621,7 +621,7 @@ export function ToolStudioModal({
       await navigator.clipboard.writeText(resource.markdownContent);
       setSaveNotice('Đã sao chép nội dung.');
     } catch {
-      setSaveNotice('Không sao chép được, thầy/cô thử lại giúp.');
+      setSaveNotice('Không sao chép được, cô/thầy thử lại giúp.');
     }
   };
 

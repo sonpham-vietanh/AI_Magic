@@ -1,5 +1,6 @@
 'use client';
 
+import { loadReviewerKey, reviewerErrorText, reviewerHeaders, saveReviewerKey } from '@/components/kho/reviewerKey';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Shell } from '@/components/Shell';
@@ -67,6 +68,7 @@ export default function DuyetPage() {
   const [lessonLoading, setLessonLoading] = useState(false);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [reviewer, setReviewer] = useState('');
+  const [reviewerKey, setReviewerKey] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [assets, setAssets] = useState<AssetView[]>([]);
@@ -79,6 +81,7 @@ export default function DuyetPage() {
     } catch {
       /* bỏ qua */
     }
+    setReviewerKey(loadReviewerKey());
   }, []);
 
   const loadQueue = useCallback(
@@ -159,7 +162,7 @@ export default function DuyetPage() {
   }, [lesson, assets, items]);
 
   const ev = useMemo(() => evaluateReview(scores), [scores]);
-  const nameOk = reviewer.trim().length > 0;
+  const nameOk = reviewer.trim().length > 0 && reviewerKey.trim().length > 0;
   const canApprove = ev.canApprove && nameOk && !submitting;
   const canReject = ev.complete && nameOk && note.trim().length > 0 && !submitting;
 
@@ -173,14 +176,15 @@ export default function DuyetPage() {
       } catch {
         /* bỏ qua */
       }
+      saveReviewerKey(reviewerKey.trim());
       const res = await fetch('/api/kho/review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...reviewerHeaders(reviewerKey) },
         body: JSON.stringify({ atomId: selectedId, reviewer, scores, decision, note: note.trim() || undefined }),
       });
       const data = (await res.json()) as { ok?: boolean; review?: Review & { version?: number }; error?: string };
       if (!res.ok || !data.ok) {
-        setMessage({ kind: 'bad', text: data.error || `Lỗi HTTP ${res.status}` });
+        setMessage({ kind: 'bad', text: reviewerErrorText(res.status, data.error) });
         return;
       }
       const text =
@@ -489,6 +493,20 @@ export default function DuyetPage() {
                             onChange={(e) => setReviewer(e.target.value)}
                             maxLength={200}
                             autoComplete="name"
+                          />
+                        </div>
+                        <div>
+                          <label className="ag-field-label" htmlFor="du-key">
+                            Mã người duyệt
+                          </label>
+                          <input
+                            id="du-key"
+                            className="ag-field"
+                            type="password"
+                            value={reviewerKey}
+                            onChange={(e) => setReviewerKey(e.target.value)}
+                            maxLength={200}
+                            autoComplete="off"
                           />
                         </div>
                         <div>

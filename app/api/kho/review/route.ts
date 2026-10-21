@@ -4,6 +4,7 @@ import { KhoValidationError, submitReview } from '@/lib/kho';
 import { getOrgId } from '@/lib/server/org';
 import { requireAccess } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { requireReviewer } from '@/lib/server/roles';
 
 const bodySchema = z.object({
   atomId: z.string().min(1).max(100),
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const limited = rateLimit(request, 'kho-review', 30, 60_000);
   if (limited) return limited;
+  const notReviewer = requireReviewer(request);
+  if (notReviewer) return notReviewer;
 
   let raw: unknown;
   try {

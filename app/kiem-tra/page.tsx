@@ -1,5 +1,6 @@
 'use client';
 
+import { loadReviewerKey, reviewerErrorText, reviewerHeaders, saveReviewerKey } from '@/components/kho/reviewerKey';
 import { useCallback, useEffect, useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
@@ -42,24 +43,24 @@ interface Exam {
   examId: string;
   status: string;
   examDate: string | null;
-  createdBy: string;
+  createdBy?: string;
   matrix: Matrix;
   locked?: boolean;
   lockedReason?: string | null;
   sections?: Section[];
   items?: ExamItemSnapshot[];
   accessLog?: { at: string; actor: string; action: string }[];
-  approvals?: { reviewer: string; decision: string; note: string; at: string }[];
+  approvals?: { reviewer?: string; decision: string; note: string; at: string }[];
 }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.ok === false) throw new Error(data.error || `Lỗi HTTP ${res.status}`);
+  if (!res.ok || data.ok === false) throw new Error(reviewerErrorText(res.status, data.error));
   return data as T;
 }
-const post = (url: string, body: unknown, actor?: string) =>
-  ({ method: 'POST', headers: { 'content-type': 'application/json', ...(actor ? { 'x-actor': actor } : {}) }, body: JSON.stringify(body) }) as RequestInit;
+const post = (url: string, body: unknown, actor?: string, reviewerKey?: string) =>
+  ({ method: 'POST', headers: { 'content-type': 'application/json', ...(actor ? { 'x-actor': actor } : {}), ...reviewerHeaders(reviewerKey ?? '') }, body: JSON.stringify(body) }) as RequestInit;
 
 function BloomChips({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   return (
@@ -228,6 +229,7 @@ function ExamTab() {
   const [perCell, setPerCell] = useState(2);
   const [reviewers, setReviewers] = useState('');
   const [reviewer, setReviewer] = useState('');
+  const [reviewerKey, setReviewerKey] = useState('');
   const [note, setNote] = useState('');
   const [exam, setExam] = useState<Exam | null>(null);
   const [list, setList] = useState<Exam[]>([]);
@@ -245,10 +247,14 @@ function ExamTab() {
     setExam(r.exam);
   }, []);
 
-  const fetchList = useCallback(async () => {
-    const r = await api<{ exams: Exam[] }>('/api/assessment/exams');
-    setList(r.exams);
+  useEffect(() => {
+    setReviewerKey(loadReviewerKey());
   }, []);
+
+  const fetchList = useCallback(async () => {
+    const r = await api<{ exams: Exam[] }>('/api/assessment/exams', { headers: reviewerHeaders(reviewerKey) });
+    setList(r.exams);
+  }, [reviewerKey]);
   const refreshList = () => guard(fetchList);
 
   useEffect(() => {
@@ -275,7 +281,7 @@ function ExamTab() {
 
   const review = (decision: 'duyet' | 'tu_choi') => guard(async () => {
     if (!exam) return;
-    await api('/api/assessment/exam/review', post('/api/assessment/exam/review', { examId: exam.examId, reviewer: reviewer.trim(), decision, note }, reviewer.trim()));
+    await api('/api/assessment/exam/review', (saveReviewerKey(reviewerKey.trim()), post('/api/assessment/exam/review', { examId: exam.examId, reviewer: reviewer.trim(), decision, note }, reviewer.trim(), reviewerKey)));
     await load(exam.examId, reviewer.trim());
     setMsg(decision === 'duyet' ? 'Đã duyệt đề.' : 'Đã từ chối đề.');
     fetchList().catch(() => {});
@@ -334,7 +340,7 @@ function ExamTab() {
                   <button type="button" className={`kt-exam${exam?.examId === e.examId ? ' on' : ''}`} onClick={() => void guard(() => load(e.examId, actor.trim()))}>
                     <span className="kt-exam-main">
                       <b>{e.examId}</b>
-                      <small>{e.createdBy}{e.examDate ? ` · thi ${e.examDate}` : ''}</small>
+                      <small>{e.createdBy ?? ''}{e.examDate ? ` · thi ${e.examDate}` : ''}</small>
                     </span>
                     <span className={`ag-status ${STATUS_CLASS[e.status] ?? 'none'}`}>{STATUS_LABEL[e.status] ?? e.status}</span>
                   </button>
@@ -364,7 +370,7 @@ function ExamTab() {
             <div className="ag-card kt-exam-head">
               <div>
                 <h2>{exam.examId}</h2>
-                <p className="ag-note">{exam.createdBy}{exam.examDate ? ` · Thi ngày ${exam.examDate}` : ''}</p>
+                <p className="ag-note">{exam.createdBy ?? ''}{exam.examDate ? ` · Thi ngày ${exam.examDate}` : ''}</p>
               </div>
               <span className={`ag-status ${STATUS_CLASS[exam.status] ?? 'none'}`}>{STATUS_LABEL[exam.status] ?? exam.status}</span>
             </div>
@@ -387,11 +393,13 @@ function ExamTab() {
                 <p className="ag-note">Người soạn không tự duyệt đề của mình.</p>
                 <label htmlFor="e-reviewer" className="ag-field-label">Người duyệt</label>
                 <input id="e-reviewer" className="ag-field" value={reviewer} onChange={(e) => setReviewer(e.target.value)} />
+                <label htmlFor="e-key" className="ag-field-label">Mã người duyệt</label>
+                <input id="e-key" type="password" className="ag-field" value={reviewerKey} onChange={(e) => setReviewerKey(e.target.value)} autoComplete="off" />
                 <label htmlFor="e-note" className="ag-field-label">Ý kiến (bắt buộc khi từ chối)</label>
                 <textarea id="e-note" rows={3} className="ag-field" value={note} onChange={(e) => setNote(e.target.value)} />
                 <div className="ag-actions">
-                  <button type="button" className="ag-btn dark" onClick={() => void review('duyet')} disabled={busy || !reviewer.trim()}>Duyệt đề</button>
-                  <button type="button" className="ag-btn" onClick={() => void review('tu_choi')} disabled={busy || !reviewer.trim()}>Từ chối</button>
+                  <button type="button" className="ag-btn dark" onClick={() => void review('duyet')} disabled={busy || !reviewer.trim() || !reviewerKey.trim()}>Duyệt đề</button>
+                  <button type="button" className="ag-btn" onClick={() => void review('tu_choi')} disabled={busy || !reviewer.trim() || !reviewerKey.trim()}>Từ chối</button>
                 </div>
               </div>
             )}

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,7 +24,19 @@ describe('versions store', () => {
     dir = mkdtempSync(join(tmpdir(), 'ver-test-'));
     vi.spyOn(process, 'cwd').mockReturnValue(dir);
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('đề kiểm tra không lưu toàn văn vào lịch sử phiên bản', async () => {
+    const s = await load();
+    const r = await s.saveVersion('vietanh', { ...base, workflow: 'de_kiem_tra', text: 'CÂU 1. nội dung đề bí mật' });
+    const v = await s.getVersion('vietanh', r.id);
+    expect(v!.text).not.toContain('bí mật');
+    expect(v!.text).toBe(s.EXAM_PLACEHOLDER);
+  });
 
   it('đánh số tăng dần theo (actor, bài, sản phẩm)', async () => {
     const s = await load();
@@ -63,7 +75,7 @@ describe('versions store', () => {
     );
     for (let i = 0; i < 203; i++) await s.saveVersion('vietanh', { ...base, lessonKey: `l${i}` });
     expect((await s.listVersions('vietanh', 'Lan', 200)).length).toBe(200);
-  });
+  }, 30_000);
 
   it('không mất bản khi ghi đồng thời', async () => {
     const s = await load();

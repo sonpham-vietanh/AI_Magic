@@ -122,6 +122,14 @@ export interface WorkflowResult {
   reflection: Reflection;
   guardrail?: { ok: boolean; reasons: string[] };
   requiresApproval: boolean;
+  /** Lý do cần người duyệt (khi requiresApproval). */
+  approvalReasons?: string[];
+  /** Khi true: nơi hiển thị phải chặn 'chấp nhận' và 'tải về' cho tới khi người duyệt phê duyệt. */
+  blockAcceptDownload?: boolean;
+  /** Trang xử lý duyệt: '/kiem-tra' cho đề kiểm tra, '/duyet' cho bản chuẩn Kho. */
+  approvalUrl?: string;
+  /** Mã đề kiểm tra đã lưu (chỉ workflow de_kiem_tra). */
+  examId?: string;
   /** Sản phẩm có cấu trúc (slide, worksheet, tài nguyên); rỗng khi chỉ là văn bản. */
   artifacts: Artifact[];
   /** Kiểm tra cấu trúc xác định (không do AI tự chấm). */

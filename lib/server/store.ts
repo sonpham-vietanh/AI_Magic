@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { readJsonStrict, writeJsonAtomic } from './safeJson';
 import type { GeneratedResource, MajorOsUsageEvent } from '../types';
 
 interface StoreData {
@@ -250,53 +250,17 @@ function seedStore(): StoreData {
 }
 
 async function readStore(): Promise<StoreData> {
-  let raw: string;
-  try {
-    raw = await readFile(STORE_FILE, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      const initial = seedStore();
-      await writeStore(initial);
-      return initial;
-    }
-    console.error('[store] Không đọc được file dữ liệu:', err);
-    return seedStore();
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<StoreData>;
-    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid store shape');
-    return {
-      resources: Array.isArray(parsed.resources) ? parsed.resources : [...SEED_RESOURCES],
-      usageEvents: Array.isArray(parsed.usageEvents) ? parsed.usageEvents : [...SEED_USAGE_EVENTS],
-    };
-  } catch (err) {
-    const backup = `${STORE_FILE}.corrupt-${Date.now()}`;
-    console.error(`[store] File dữ liệu bị hỏng JSON, sao lưu sang ${backup}:`, err);
-    try {
-      await rename(STORE_FILE, backup);
-    } catch (renameErr) {
-      console.error('[store] Không sao lưu được file hỏng:', renameErr);
-    }
-    return seedStore();
-  }
+  // Chỉ "chưa có file" mới gieo dữ liệu mẫu; lỗi đọc khác ném lên (không ghi đè dữ liệu thật).
+  const parsed = await readJsonStrict<Partial<StoreData> | null>(STORE_FILE, () => null);
+  if (!parsed || typeof parsed !== 'object') return seedStore();
+  return {
+    resources: Array.isArray(parsed.resources) ? parsed.resources : [...SEED_RESOURCES],
+    usageEvents: Array.isArray(parsed.usageEvents) ? parsed.usageEvents : [...SEED_USAGE_EVENTS],
+  };
 }
 
 async function writeStore(data: StoreData): Promise<void> {
-  const tmp = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    await mkdir(dirname(STORE_FILE), { recursive: true });
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, STORE_FILE);
-  } catch (err) {
-    // Read-only FS (serverless) is non-fatal, but never silent.
-    console.error('[store] Không ghi được file dữ liệu:', err);
-    try {
-      await unlink(tmp);
-    } catch {
-      // ignore
-    }
-  }
+  await writeJsonAtomic(STORE_FILE, data);
 }
 
 export const listSavedResources = async (filter?: {

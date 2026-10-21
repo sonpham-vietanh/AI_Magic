@@ -208,7 +208,7 @@ export function LessonPicker({ subject, grade, onSubject, onGrade, suggestions, 
           <p className="ag-field-label" style={{ marginTop: 12 }}>
             Gợi ý theo câu cô/thầy vừa gõ
           </p>
-          <div className="ag-lessons" role="list">
+          <div className="ag-lessons" role="group" aria-label="Danh sách bài">
             {suggestions.map((a) => (
               <LessonRow key={`s-${a.id}`} atom={a} onPick={onPick} />
             ))}
@@ -216,7 +216,7 @@ export function LessonPicker({ subject, grade, onSubject, onGrade, suggestions, 
         </>
       )}
 
-      <div className="ag-lessons" role="list" aria-busy={loading} style={{ marginTop: showSuggest ? 12 : 10 }}>
+      <div className="ag-lessons" role="group" aria-label="Danh sách bài" aria-busy={loading} style={{ marginTop: showSuggest ? 12 : 10 }}>
         {loading && <p className="ag-empty-note" style={{ padding: 14 }}>Đang tải danh sách bài…</p>}
         {!loading && error && (
           <p className="ag-empty-note" style={{ padding: 14, color: 'var(--danger)' }}>
@@ -237,7 +237,7 @@ export function LessonPicker({ subject, grade, onSubject, onGrade, suggestions, 
 
 function LessonRow({ atom, onPick }: { atom: AtomLite; onPick: (a: AtomLite) => void }) {
   return (
-    <button type="button" role="listitem" className="ag-lesson" onClick={() => onPick(atom)}>
+    <button type="button" className="ag-lesson" onClick={() => onPick(atom)}>
       <span>
         <span className="ag-lesson-title">{atom.title}</span>
         <span className="ag-lesson-code">{atom.code}</span>

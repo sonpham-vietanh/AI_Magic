@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAccess } from '@/lib/server/guard';
+import { readJsonLimited } from '@/lib/server/body';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { requireReviewer } from '@/lib/server/roles';
 import {
   fetchSupabaseLibraryResources,
   saveResourceToSupabase,
@@ -105,18 +107,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const denied = requireAccess(request);
   if (denied) return denied;
+  // Bảng `resources` trên Supabase dùng chung và nội dung được đưa vào prompt (chống đầu độc prompt):
+  // chỉ người duyệt mới được ghi. Giao diện hiện tại không gọi POST này.
+  const notReviewer = requireReviewer(request);
+  if (notReviewer) return notReviewer;
   const limited = rateLimit(request, 'resources-post', 20, 60_000);
   if (limited) return limited;
 
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: 'Dữ liệu gửi lên không phải JSON hợp lệ.' },
-      { status: 400 },
-    );
-  }
+  const read = await readJsonLimited(request, 1024 * 1024);
+  if (!read.ok) return read.response;
+  const raw = read.data;
 
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import '@/app/ui.css';
 import '@/app/ui-tv.css';
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import { Shell } from '@/components/Shell';
 import { classifyLine } from '@/components/agent/Canvas';
 import { Icon, type IconName } from '@/components/ui/icons';
@@ -192,11 +193,7 @@ export default function ResourceLibraryPage() {
     const errors: string[] = [];
     const report = () => setLoadError(errors.join(' '));
 
-    fetch('/api/resources', { signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    fetchJson<{ resources?: GeneratedResource[] }>('/api/resources', { signal })
       .then((data: { resources?: GeneratedResource[] }) => {
         const list = data.resources || [];
         setResources(list);
@@ -204,24 +201,20 @@ export default function ResourceLibraryPage() {
       })
       .catch((err: unknown) => {
         if (signal.aborted) return;
-        errors.push(`Không tải được danh sách học liệu (${err instanceof Error ? err.message : 'lỗi'}).`);
+        errors.push(`Không tải được danh sách học liệu (${friendlyError(err, 'lỗi kết nối')}).`);
         report();
       })
       .finally(() => {
         if (!signal.aborted) setLoading(false);
       });
 
-    fetch('/api/usage', { signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    fetchJson<{ du_lieu?: MajorOsUsageEvent[] }>('/api/usage', { signal })
       .then((data: { du_lieu?: MajorOsUsageEvent[] }) => {
         setEvents(data.du_lieu || []);
       })
       .catch((err: unknown) => {
         if (signal.aborted) return;
-        errors.push(`Không tải được nhật ký hoạt động (${err instanceof Error ? err.message : 'lỗi'}).`);
+        errors.push(`Không tải được nhật ký hoạt động (${friendlyError(err, 'lỗi kết nối')}).`);
         report();
       });
 

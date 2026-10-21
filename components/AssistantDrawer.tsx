@@ -16,7 +16,7 @@ type Msg = {
 
 const WELCOME: Msg = {
   role: 'assistant',
-  text: 'Chào thầy/cô. Thầy/cô cần hỏi về quy chế (Công văn 5512, Thông tư 22), hoạt động khởi động hay cách phân hóa bài tập cho lớp đang dạy?',
+  text: 'Chào cô/thầy. Cô/thầy cần hỏi về quy chế (Công văn 5512, Thông tư 22), hoạt động khởi động hay cách phân hóa bài tập cho lớp đang dạy?',
 };
 
 const DEFAULT_SUGGESTIONS = [
@@ -105,9 +105,9 @@ export function AssistantDrawer({
       if (!res.ok || data.ok === false) {
         const msg =
           res.status === 429
-            ? 'Trợ lý đang quá tải, thầy/cô vui lòng thử lại sau ít phút.'
+            ? 'Trợ lý đang quá tải, cô/thầy vui lòng thử lại sau ít phút.'
             : res.status === 401
-              ? 'Phiên làm việc đã hết hạn, vui lòng đăng nhập lại.'
+              ? 'Phiên làm việc đã hết hạn, vui lòng tải lại trang rồi thử lại.'
               : data.error || `Trợ lý gặp lỗi (${res.status}), vui lòng thử lại sau.`;
         setHistory((prev) => [...prev, { role: 'assistant', text: msg, error: true }]);
         return;
@@ -116,7 +116,7 @@ export function AssistantDrawer({
         ...prev,
         {
           role: 'assistant',
-          text: data.reply || 'Đã tiếp nhận câu hỏi chuyên môn của thầy/cô.',
+          text: data.reply || 'Đã tiếp nhận câu hỏi chuyên môn của cô/thầy.',
           mode: data.mode,
         },
       ]);
@@ -243,7 +243,7 @@ export function AssistantDrawer({
         >
           <div className="ag-composer">
             <label htmlFor="md-assist-q" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-              Câu hỏi của thầy/cô
+              Câu hỏi của cô/thầy
             </label>
             <textarea
               id="md-assist-q"
