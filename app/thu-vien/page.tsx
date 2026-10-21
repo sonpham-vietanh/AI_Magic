@@ -1,24 +1,190 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import '@/app/ui.css';
+import '@/app/ui-tv.css';
 import { Shell } from '@/components/Shell';
-import { GRADES, SUBJECTS } from '@/lib/catalog';
+import { classifyLine } from '@/components/agent/Canvas';
+import { Icon, type IconName } from '@/components/ui/icons';
+import { GRADES, SUBJECTS, TOOL_CATEGORIES } from '@/lib/catalog';
 import { cleanPedagogicalText } from '@/lib/text/clean';
 import { keepSelection } from '@/lib/ui/notes';
 import type { GeneratedResource, MajorOsUsageEvent } from '@/lib/types';
 
+type View = 'library' | 'log';
+
+const FEATURE_LABELS: Record<MajorOsUsageEvent['tinh_nang'], { verb: string; icon: IconName }> = {
+  sinh_hoc_lieu: { verb: 'soạn học liệu', icon: 'sparkles' },
+  tinh_chinh_hau_ky: { verb: 'chỉnh sửa học liệu', icon: 'edit' },
+  ket_noi_lien_mon: { verb: 'tạo kết nối liên môn', icon: 'graph' },
+  phan_hoa_lop_hoc: { verb: 'phân hóa theo nhóm học sinh', icon: 'users' },
+  xuat_hoc_lieu: { verb: 'tải học liệu về máy', icon: 'download' },
+  luu_thu_vien: { verb: 'lưu vào thư viện', icon: 'folder' },
+  hoi_tro_ly_su_pham: { verb: 'hỏi trợ lý chuyên môn', icon: 'book' },
+};
+
+const subjectName = (code: string) => SUBJECTS.find((s) => s.code === code)?.shortName ?? '';
+const categoryName = (code: string) => TOOL_CATEGORIES.find((c) => c.code === code)?.shortName ?? '';
+
+/** Tên tài liệu trong dữ liệu có thể mang tiền tố mã "[R-...]": bỏ đi cho gọn. */
+const cleanTitle = (t: string) => t.replace(/^\s*\[R-[^\]]*\]\s*/, '').trim() || t;
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+const norm = (s: string) => s.toLowerCase();
+
+function Detail({
+  res,
+  onClose,
+}: {
+  res: GeneratedResource;
+  onClose: () => void;
+}) {
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const title = cleanTitle(res.title);
+  const sections =
+    res.structuredSections && res.structuredSections.length > 0
+      ? res.structuredSections
+      : [{ heading: '', body: res.markdownContent }];
+
+  const safeName = (title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || res.id);
+
+  const downloadDocx = async () => {
+    setError('');
+    setNotice('');
+    try {
+      const { buildDocxBlob, downloadBlob } = await import('@/lib/export/docx');
+      const blob = await buildDocxBlob({
+        title: title.toUpperCase(),
+        subtitle: [
+          `${res.className || `Khối ${res.grade}`} · Giáo viên: ${res.teacher.name}`,
+          'Trường Tiểu học, THCS & THPT Việt Anh',
+        ],
+        sections: sections.map((s) => ({
+          heading: cleanPedagogicalText(s.heading),
+          body: cleanPedagogicalText(s.body),
+        })),
+      });
+      downloadBlob(blob, `${safeName}.docx`);
+      setNotice('Đã tải file Word.');
+    } catch {
+      setError('Không tạo được file Word. Cô/thầy thử lại hoặc dùng nút In.');
+    }
+  };
+
+  const downloadMd = () => {
+    const blob = new Blob([res.markdownContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setError('');
+    setNotice('Đã tải file Markdown.');
+  };
+
+  const meta = [categoryName(res.category) || res.toolName, subjectName(res.subject), `Khối ${res.grade}`]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <aside className="ag-canvas tv-detail" aria-label="Chi tiết học liệu">
+      <div className="ag-canvas-head">
+        <div className="ag-canvas-title">
+          <h2>{title}</h2>
+          <p>{meta}</p>
+          <p>
+            {res.teacher.name} · {formatDate(res.createdAt)}
+            {res.className ? ` · Lớp ${res.className}` : ''}
+          </p>
+        </div>
+        <button type="button" className="ag-iconbtn" onClick={onClose} aria-label="Đóng chi tiết">
+          <Icon name="x" />
+        </button>
+      </div>
+
+      <div className="ag-canvas-body">
+        {sections.map((s, i) => {
+          const heading = cleanPedagogicalText(s.heading || '');
+          const body = cleanPedagogicalText(s.body || '');
+          return (
+            <section className="ag-doc-sec" key={`${heading}-${i}`}>
+              {heading && !/^Nội dung( học liệu biên soạn)?$/i.test(heading.trim()) && <h3>{heading}</h3>}
+              {body
+                .replace(/\r\n?/g, '\n')
+                .split('\n')
+                .map((line, j) =>
+                  line.trim() === '' ? null : (
+                    <p key={j} className={`ag-line ${classifyLine(line)}`}>
+                      {line.trim()}
+                    </p>
+                  ),
+                )}
+            </section>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div className="ag-alert bad" role="alert" style={{ margin: '0 16px 12px' }}>
+          <Icon name="alert" size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+      {notice && (
+        <div className="ag-alert ok" role="status" style={{ margin: '0 16px 12px' }}>
+          <Icon name="check" size={18} />
+          <span>{notice}</span>
+        </div>
+      )}
+
+      <div className="ag-canvas-foot">
+        <button type="button" className="ag-btn primary" onClick={downloadDocx}>
+          <Icon name="download" />
+          Tải .docx
+        </button>
+        <button type="button" className="ag-btn" onClick={downloadMd}>
+          <Icon name="file" />
+          Tải .md
+        </button>
+        <button type="button" className="ag-btn" onClick={() => window.print()}>
+          <Icon name="print" />
+          In
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 export default function ResourceLibraryPage() {
-  const [activeView, setActiveView] = useState<'library' | 'major-os'>('library');
+  const [view, setView] = useState<View>('library');
   const [resources, setResources] = useState<GeneratedResource[]>([]);
   const [events, setEvents] = useState<MajorOsUsageEvent[]>([]);
-  const [selectedRaw, setSelectedResource] = useState<GeneratedResource | null>(null);
-  const [subjectFilter, setSubjectFilter] = useState<string>('all');
-  const [gradeFilter, setGradeFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [notice, setNotice] = useState<string>('');
-
-  const [loadError, setLoadError] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [selectedRaw, setSelectedRaw] = useState<GeneratedResource | null>(null);
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const [gradeFilter, setGradeFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [featureFilter, setFeatureFilter] = useState('all');
+  const [personQuery, setPersonQuery] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const detailWrapRef = useRef<HTMLDivElement>(null);
+  const lastOpener = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,12 +200,15 @@ export default function ResourceLibraryPage() {
       .then((data: { resources?: GeneratedResource[] }) => {
         const list = data.resources || [];
         setResources(list);
-        if (list[0]) setSelectedResource(list[0]);
+        if (list[0] && window.matchMedia('(min-width: 901px)').matches) setSelectedRaw(list[0]);
       })
       .catch((err: unknown) => {
         if (signal.aborted) return;
         errors.push(`Không tải được danh sách học liệu (${err instanceof Error ? err.message : 'lỗi'}).`);
         report();
+      })
+      .finally(() => {
+        if (!signal.aborted) setLoading(false);
       });
 
     fetch('/api/usage', { signal })
@@ -52,384 +221,357 @@ export default function ResourceLibraryPage() {
       })
       .catch((err: unknown) => {
         if (signal.aborted) return;
-        errors.push(`Không tải được nhật ký đồng bộ (${err instanceof Error ? err.message : 'lỗi'}).`);
+        errors.push(`Không tải được nhật ký hoạt động (${err instanceof Error ? err.message : 'lỗi'}).`);
         report();
       });
 
     return () => controller.abort();
   }, []);
 
-  const filtered = resources.filter((r) => {
-    if (subjectFilter !== 'all' && r.subject !== subjectFilter) return false;
-    if (gradeFilter !== 'all' && r.grade !== gradeFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        r.title.toLowerCase().includes(q) ||
-        r.toolName.toLowerCase().includes(q) ||
-        (r.className || '').toLowerCase().includes(q)
-      );
+  const filtered = useMemo(() => {
+    const q = norm(searchQuery.trim());
+    return resources.filter((r) => {
+      if (subjectFilter !== 'all' && r.subject !== subjectFilter) return false;
+      if (gradeFilter !== 'all' && r.grade !== gradeFilter) return false;
+      if (categoryFilter !== 'all' && r.category !== categoryFilter) return false;
+      if (q) {
+        return (
+          norm(r.title).includes(q) ||
+          norm(r.toolName).includes(q) ||
+          norm(r.className || '').includes(q) ||
+          norm(r.teacher.name).includes(q)
+        );
+      }
+      return true;
+    });
+  }, [resources, subjectFilter, gradeFilter, categoryFilter, searchQuery]);
+
+  const selected = keepSelection(filtered, selectedRaw?.id) ? selectedRaw : null;
+
+  const categoriesInUse = useMemo(() => {
+    const used = new Set(resources.map((r) => r.category));
+    return TOOL_CATEGORIES.filter((c) => used.has(c.code));
+  }, [resources]);
+
+  const closeDetail = () => {
+    setSelectedRaw(null);
+    lastOpener.current?.focus();
+  };
+
+  // ESC đóng tấm chi tiết
+  useEffect(() => {
+    if (!selected || view !== 'library') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedRaw(null);
+        lastOpener.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selected, view]);
+
+  const filteredEvents = useMemo(() => {
+    const q = norm(personQuery.trim());
+    return events
+      .filter((e) => {
+        if (featureFilter !== 'all' && e.tinh_nang !== featureFilter) return false;
+        if (q && !norm(e.nguoi?.ten || '').includes(q)) return false;
+        return true;
+      })
+      .slice()
+      .sort((a, b) => (a.luc < b.luc ? 1 : -1));
+  }, [events, featureFilter, personQuery]);
+
+  const eventsByDay = useMemo(() => {
+    const groups: { day: string; items: MajorOsUsageEvent[] }[] = [];
+    for (const e of filteredEvents) {
+      const day = formatDate(e.luc) || 'Không rõ ngày';
+      const last = groups[groups.length - 1];
+      if (last && last.day === day) last.items.push(e);
+      else groups.push({ day, items: [e] });
     }
-    return true;
-  });
+    return groups;
+  }, [filteredEvents]);
 
-  const selectedResource = keepSelection(filtered, selectedRaw?.id) ? selectedRaw : null;
-
-  const totalMinutesSaved = events.reduce((acc, e) => acc + (e.so_phut || 15), 0);
-
-  const handleDownloadWord = (res: GeneratedResource) => {
-    const htmlDoc = `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="vi">
-<head><meta charset="utf-8"><title>${res.title}</title>
-<style>
-  body { font-family: 'Times New Roman', Arial, sans-serif; font-size: 13pt; line-height: 1.5; color: #000000; }
-  h1 { font-size: 15pt; text-transform: uppercase; margin-bottom: 8px; }
-  h2 { font-size: 13pt; margin-top: 14px; margin-bottom: 6px; }
-  .meta { border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 14px; }
-  pre { white-space: pre-wrap; font-family: inherit; margin: 0; }
-</style>
-</head>
-<body>
-  <div class="meta">
-    <b>TRƯỜNG TIỂU HỌC, THCS & THPT VIỆT ANH</b><br/>
-    <b>Tài liệu:</b> ${res.title}<br/>
-    <b>Giáo viên:</b> ${res.teacher.name} · <b>Lớp:</b> ${res.className || `Khối ${res.grade}`}
-  </div>
-  ${res.structuredSections
-    .map(
-      (s) =>
-        `<h2>${s.heading}</h2><pre>${s.body.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`,
-    )
-    .join('\n')}
-</body></html>`;
-    const blob = new Blob(['\ufeff', htmlDoc], { type: 'application/msword;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${res.id}.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setNotice('Đã tải về file Word (.doc).');
+  const hasFilter =
+    subjectFilter !== 'all' || gradeFilter !== 'all' || categoryFilter !== 'all' || searchQuery.trim() !== '';
+  const resetFilters = () => {
+    setSubjectFilter('all');
+    setGradeFilter('all');
+    setCategoryFilter('all');
+    setSearchQuery('');
   };
 
-  const handleDownloadMarkdown = (res: GeneratedResource) => {
-    const blob = new Blob([res.markdownContent], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${res.id}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setNotice('Đã tải về file Markdown (.md).');
-  };
+  const showDetail = view === 'library' && !!selected;
 
   return (
     <Shell
-      title="Thư viện Học liệu & Đồng bộ Major OS v2"
-      subtitle="Lưu trữ giáo án, đề kiểm tra đã biên soạn và theo dõi nhật ký đồng bộ sự kiện về hệ thống quản trị Major OS v2."
+      title="Thư viện học liệu"
+      subtitle="Học liệu cô/thầy đã lưu và nhật ký hoạt động."
       rightActions={
-        <>
-          <a
-            href="/api/usage"
-            target="_blank"
-            rel="noreferrer"
-            className="btn"
-          >
-            API Major OS (JSON)
-          </a>
-          <Link href="/" className="btn btn-cta">
-            + Soạn học liệu mới
-          </Link>
-        </>
+        <Link href="/" className="ag-btn primary">
+          <Icon name="plus" />
+          Soạn học liệu mới
+        </Link>
       }
     >
-      <div className="stack" style={{ gap: '20px' }}>
-        {loadError && (
-          <div role="alert" className="va-badge va-badge-gold" style={{ whiteSpace: 'normal' }}>
-            {loadError}
-          </div>
-        )}
-        {/* THANH CHUYỂN TAB & BỘ LỌC */}
-        <section className="va-card-accent">
-          <div className="row-between">
-            <div className="row-wrap">
-              <button
-                type="button"
-                className={`va-tab ${activeView === 'library' ? 'active' : ''}`}
-                onClick={() => setActiveView('library')}
-              >
-                <span>Học liệu Đã lưu</span>
-                <span className="va-tab-count">{resources.length}</span>
-              </button>
-              <button
-                type="button"
-                className={`va-tab ${activeView === 'major-os' ? 'active' : ''}`}
-                onClick={() => setActiveView('major-os')}
-              >
-                <span>Nhật ký Đồng bộ Major OS v2</span>
-                <span className="va-tab-count">{events.length} sự kiện</span>
-              </button>
-            </div>
+      {loadError && (
+        <div className="ag-alert bad" role="alert" style={{ marginTop: 0, marginBottom: 12 }}>
+          <Icon name="alert" size={18} />
+          <span>{loadError}</span>
+        </div>
+      )}
 
-            <div className="row-wrap">
-              <span className="va-badge va-badge-gold">
-                Tổng thời gian tiết kiệm: ~{totalMinutesSaved} phút
-              </span>
-              <span className="va-badge va-badge-green">
-                Major OS v2 Webhook: ONLINE
-              </span>
-            </div>
-          </div>
+      <div className="tv-tabs" role="tablist" aria-label="Thư viện">
+        <button
+          type="button"
+          role="tab"
+          id="tv-tab-library"
+          aria-selected={view === 'library'}
+          aria-controls="tv-panel"
+          className="ag-tab"
+          onClick={() => setView('library')}
+        >
+          Học liệu đã lưu
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tv-tab-log"
+          aria-selected={view === 'log'}
+          aria-controls="tv-panel"
+          className="ag-tab"
+          onClick={() => setView('log')}
+        >
+          Nhật ký hoạt động
+        </button>
+      </div>
 
-          {activeView === 'library' && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '14px',
-                marginTop: '14px',
-                paddingTop: '14px',
-                borderTop: '1px solid var(--line)',
-              }}
-            >
-              <div className="field">
-                <label htmlFor="lib-search">Tìm kiếm tên tài liệu / lớp</label>
-                <input
-                  id="lib-search"
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Nhập tên bài dạy, công cụ hoặc tên lớp..."
-                />
+      <div className={`tv-wrap${showDetail ? ' has-detail' : ''}`} ref={detailWrapRef}>
+        <div className="tv-main" id="tv-panel" role="tabpanel" aria-labelledby={view === 'library' ? 'tv-tab-library' : 'tv-tab-log'}>
+          {view === 'library' ? (
+            <>
+              <div className="tv-toolbar">
+                <div>
+                  <label className="ag-field-label" htmlFor="tv-search">
+                    Tìm học liệu
+                  </label>
+                  <div className="tv-search">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+                      <path d="M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4" />
+                    </svg>
+                    <input
+                      id="tv-search"
+                      type="search"
+                      className="ag-field"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Tên bài, lớp hoặc giáo viên"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="tv-category">
+                    Loại
+                  </label>
+                  <select id="tv-category" className="ag-field" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                    <option value="all">Tất cả loại</option>
+                    {categoriesInUse.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.shortName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="tv-subject">
+                    Môn
+                  </label>
+                  <select id="tv-subject" className="ag-field" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+                    <option value="all">Tất cả môn</option>
+                    {SUBJECTS.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="tv-grade">
+                    Khối
+                  </label>
+                  <select id="tv-grade" className="ag-field" value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
+                    <option value="all">Tất cả khối</option>
+                    {GRADES.map((g) => (
+                      <option key={g.grade} value={g.grade}>
+                        {g.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="field">
-                <label htmlFor="lib-subject">Môn học</label>
-                <select id="lib-subject" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-                  <option value="all">Tất cả môn học</option>
-                  {SUBJECTS.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="tv-count" aria-live="polite">
+                <span>{loading ? 'Đang tải...' : `${filtered.length} học liệu`}</span>
+                {hasFilter && (
+                  <button type="button" className="ag-link" onClick={resetFilters}>
+                    Xóa bộ lọc
+                  </button>
+                )}
               </div>
 
-              <div className="field">
-                <label htmlFor="lib-grade">Khối lớp</label>
-                <select id="lib-grade" value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
-                  <option value="all">Tất cả khối</option>
-                  {GRADES.map((g) => (
-                    <option key={g.grade} value={g.grade}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {activeView === 'library' ? (
-          <div
-            className="grid-2"
-            style={{ gridTemplateColumns: '380px minmax(0, 1fr)', alignItems: 'start', gap: '22px' }}
-          >
-            {/* DANH SÁCH TÀI LIỆU ĐÃ LƯU */}
-            <aside className="card stack" style={{ padding: '18px', maxHeight: '78vh', overflowY: 'auto' }}>
-              <h2 style={{ fontSize: '17px', fontWeight: 800 }}>
-                Danh sách Học liệu ({filtered.length})
-              </h2>
-
-              <div className="stack" style={{ gap: '8px' }}>
-                {filtered.map((res) => {
-                  const isSelected = selectedResource?.id === res.id;
-                  return (
+              {loading ? (
+                <div className="tv-empty" role="status">
+                  <span className="ag-spin" />
+                  <span>Đang tải thư viện...</span>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="tv-empty">
+                  <Icon name="folder" size={32} />
+                  {resources.length === 0 ? (
+                    <>
+                      <strong>Thư viện còn trống</strong>
+                      <span>Học liệu cô/thầy duyệt và lưu sẽ hiện ở đây.</span>
+                      <Link href="/" className="ag-btn primary">
+                        Soạn học liệu đầu tiên
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Không có học liệu nào khớp</strong>
+                      <span>Cô/thầy thử đổi từ khóa hoặc bỏ bớt bộ lọc.</span>
+                      <button type="button" className="ag-btn" onClick={resetFilters}>
+                        Xóa bộ lọc
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="tv-grid">
+                  {filtered.map((res) => (
                     <button
                       key={res.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedResource(res);
-                        setNotice('');
+                      className="tv-card"
+                      aria-pressed={selected?.id === res.id}
+                      onClick={(e) => {
+                        lastOpener.current = e.currentTarget;
+                        setSelectedRaw(res);
                       }}
-                      className={`va-list-item ${isSelected ? 'active' : ''}`}
                     >
-                      <div className="row-between" style={{ marginBottom: '4px' }}>
-                        <span className="va-badge va-badge-navy">
-                          Khối {res.grade} {res.className ? `· Lớp ${res.className}` : ''}
-                        </span>
-                        <span className="va-badge va-badge-gold">
-                          ~{res.estimatedMinutesSaved} phút
-                        </span>
-                      </div>
-                      <div style={{ fontWeight: 800, color: 'var(--navy)', fontSize: '15.5px' }}>
-                        {res.title}
-                      </div>
-                      <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px' }}>
-                        {res.toolName} · GV: {res.teacher.name}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </aside>
-
-            {/* CHI TIẾT TÀI LIỆU TRÊN TRANG GIẤY A4 */}
-            <div className="stack" style={{ gap: '16px' }}>
-              {selectedResource ? (
-                <>
-                  <div className="card row-between no-print" style={{ padding: '14px 20px' }}>
-                    <div>
-                      <div className="va-crumb">{selectedResource.toolName}</div>
-                      <div style={{ fontSize: '14px', color: 'var(--muted)' }}>
-                        Giáo viên: <b>{selectedResource.teacher.name}</b> ({selectedResource.teacher.email})
-                      </div>
-                    </div>
-
-                    <div className="row-wrap">
-                      {notice && <span className="va-badge va-badge-green">{notice}</span>}
-                      <button
-                        type="button"
-                        className="btn btn-cta"
-                        onClick={() => handleDownloadWord(selectedResource)}
-                      >
-                        Tải file Word (.doc)
-                      </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => handleDownloadMarkdown(selectedResource)}
-                      >
-                        Tải .md
-                      </button>
-                      <button type="button" className="btn" onClick={() => window.print()}>
-                        In / PDF
-                      </button>
-                      <Link
-                        href={`/?tool=${selectedResource.toolId}`}
-                        className="btn btn-navy"
-                      >
-                        Mở trong Studio →
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div id="library-a4-preview" className="doc-paper">
-                    <div className="doc-header">
-                      <div>
-                        <div style={{ fontWeight: 800, color: 'var(--navy)', fontSize: '15px' }}>
-                          TRƯỜNG TIỂU HỌC, THCS & THPT VIỆT ANH
-                        </div>
-                        <div style={{ fontSize: '13.5px', color: 'var(--muted)', marginTop: '3px' }}>
-                          Lớp áp dụng: <b>{selectedResource.className || `Khối ${selectedResource.grade}`}</b> · Giáo viên: <b>{selectedResource.teacher.name}</b>
-                        </div>
-                      </div>
-                      <span className="va-badge va-badge-gold">
-                        Đã lưu trữ
+                      <span className="tv-tag">{categoryName(res.category) || res.toolName}</span>
+                      <span className="tv-card-title">{cleanTitle(res.title)}</span>
+                      <span className="tv-card-sub">
+                        {[subjectName(res.subject), `Khối ${res.grade}`, res.className ? `Lớp ${res.className}` : '']
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
-                    </div>
-
-                    <h2 style={{ fontSize: '21px', fontWeight: 800, marginBottom: '16px' }}>
-                      {selectedResource.title}
-                    </h2>
-
-                    {selectedResource.structuredSections && selectedResource.structuredSections.length > 0 ? (
-                      selectedResource.structuredSections.map((sec, idx) => (
-                        <div key={idx} className="section-block">
-                          <h3>{cleanPedagogicalText(sec.heading)}</h3>
-                          <div className="whitespace-pre">{cleanPedagogicalText(sec.body)}</div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="whitespace-pre">{cleanPedagogicalText(selectedResource.markdownContent)}</div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
-                  {filtered.length === 0 ? "Không có tài liệu nào khớp bộ lọc hiện tại." : "Chọn một tài liệu bên trái để xem chi tiết và tải về file Word."}
+                      <span className="tv-card-foot">
+                        <span>{res.teacher.name}</span>
+                        <span>{formatDate(res.createdAt)}</span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>
-          </div>
-        ) : (
-          /* TAB 2: NHẬT KÝ ĐỒNG BỘ MAJOR OS V2 */
-          <section className="card stack" style={{ padding: '24px 28px', gap: '16px' }}>
-            <div className="row-between">
-              <div>
-                <div className="va-crumb">CHUẨN DỮ LIỆU MAJOR OS V2 (VIETNAMESE SNAKE_CASE)</div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>
-                  Nhật ký sự kiện đồng bộ về Hệ thống Quản trị Trường Việt Anh ({events.length} bản ghi)
-                </h2>
+            </>
+          ) : (
+            <>
+              <div className="tv-toolbar two">
+                <div>
+                  <label className="ag-field-label" htmlFor="tv-person">
+                    Tìm theo tên giáo viên
+                  </label>
+                  <input
+                    id="tv-person"
+                    type="search"
+                    className="ag-field"
+                    value={personQuery}
+                    onChange={(e) => setPersonQuery(e.target.value)}
+                    placeholder="Ví dụ: Lan"
+                  />
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="tv-feature">
+                    Hoạt động
+                  </label>
+                  <select id="tv-feature" className="ag-field" value={featureFilter} onChange={(e) => setFeatureFilter(e.target.value)}>
+                    <option value="all">Tất cả hoạt động</option>
+                    {Object.entries(FEATURE_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v.verb.charAt(0).toUpperCase() + v.verb.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <a
-                href="/api/usage"
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-navy"
-              >
-                Xem JSON gốc →
-              </a>
-            </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14.5px' }}>
-                <thead>
-                  <tr
-                    style={{
-                      background: 'var(--navy)',
-                      color: '#ffffff',
-                      textAlign: 'left',
+              <div className="tv-count" aria-live="polite">
+                <span>{filteredEvents.length} hoạt động</span>
+                {(featureFilter !== 'all' || personQuery.trim() !== '') && (
+                  <button
+                    type="button"
+                    className="ag-link"
+                    onClick={() => {
+                      setFeatureFilter('all');
+                      setPersonQuery('');
                     }}
                   >
-                    <th style={{ padding: '12px 14px' }}>Mã sự kiện</th>
-                    <th style={{ padding: '12px 14px' }}>Thời điểm (+07:00)</th>
-                    <th style={{ padding: '12px 14px' }}>Giáo viên / Định danh HS</th>
-                    <th style={{ padding: '12px 14px' }}>Tính năng</th>
-                    <th style={{ padding: '12px 14px' }}>Lớp / Môn học</th>
-                    <th style={{ padding: '12px 14px' }}>Thời gian tiết kiệm</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events
-                    .slice()
-                    .reverse()
-                    .map((evt) => (
-                      <tr
-                        key={evt.id}
-                        style={{
-                          borderBottom: '1px solid var(--line)',
-                          background: '#ffffff',
-                        }}
-                      >
-                        <td style={{ padding: '11px 14px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--navy)' }}>
-                          {evt.id}
-                        </td>
-                        <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{evt.luc}</td>
-                        <td style={{ padding: '11px 14px' }}>
-                          {evt.nguoi ? <b>{evt.nguoi.ten}</b> : null}
-                          {evt.hoc_sinh ? (
-                            <span className="va-badge va-badge-gold" style={{ marginLeft: '6px' }}>
-                              {evt.hoc_sinh.ma}
+                    Xóa bộ lọc
+                  </button>
+                )}
+              </div>
+
+              {eventsByDay.length === 0 ? (
+                <div className="tv-empty">
+                  <Icon name="clock" size={32} />
+                  <strong>Chưa có hoạt động nào</strong>
+                  <span>Khi cô/thầy soạn hoặc lưu học liệu, hoạt động sẽ hiện ở đây.</span>
+                </div>
+              ) : (
+                eventsByDay.map((g) => (
+                  <section key={g.day} aria-label={`Ngày ${g.day}`}>
+                    <h2 className="tv-day">{g.day}</h2>
+                    <ul className="tv-timeline">
+                      {g.items.map((e) => {
+                        const f = FEATURE_LABELS[e.tinh_nang] ?? { verb: 'thao tác', icon: 'file' as IconName };
+                        const where = [
+                          e.lop_hoc ? `Lớp ${e.lop_hoc}` : e.khoi_lop ? `Khối ${e.khoi_lop}` : '',
+                          e.mon_hoc ? subjectName(e.mon_hoc) : '',
+                          e.so_phut ? `tiết kiệm ${e.so_phut} phút` : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ');
+                        return (
+                          <li className="tv-event" key={e.id}>
+                            <span className="tv-event-ico">
+                              <Icon name={f.icon} size={18} />
                             </span>
-                          ) : null}
-                        </td>
-                        <td style={{ padding: '11px 14px' }}>
-                          <span className="va-badge va-badge-navy">{evt.tinh_nang}</span>
-                        </td>
-                        <td style={{ padding: '11px 14px' }}>
-                          {evt.lop_hoc || `Khối ${evt.khoi_lop || '-'}`} · {evt.mon_hoc || '-'}
-                        </td>
-                        <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--success)' }}>
-                          {evt.so_phut ? `${evt.so_phut} phút` : '15 phút'}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+                            <div className="tv-event-text">
+                              <b>{e.nguoi?.ten || 'Một giáo viên'}</b> {f.verb}
+                              {e.hoc_sinh ? ' cho một học sinh' : ''}
+                              {where && <span className="tv-event-meta">{where}</span>}
+                            </div>
+                            <time className="tv-event-time" dateTime={e.luc}>
+                              {formatTime(e.luc)}
+                            </time>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))
+              )}
+            </>
+          )}
+
+          <p className="tv-foot">
+            Quản trị: <a href="/api/usage" target="_blank" rel="noreferrer">dữ liệu nhật ký dạng JSON</a>
+          </p>
+        </div>
+
+        {showDetail && selected && <Detail key={selected.id} res={selected} onClose={closeDetail} />}
       </div>
     </Shell>
   );

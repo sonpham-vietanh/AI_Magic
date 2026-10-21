@@ -1,8 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Shell } from '@/components/Shell';
+import { Icon } from '@/components/ui/icons';
+import { SUBJECTS } from '@/lib/catalog';
 import { RUBRIC_6 } from '@/lib/eval/rubric';
+import '../ui-cl.css';
 
 interface Summary {
   totalRuns: number;
@@ -12,7 +15,7 @@ interface Summary {
   avgDiffRatio: number | null;
   flaggedLessons: number;
 }
-interface Lesson {
+interface LessonStat {
   lessonKey: string;
   generations: number;
   regenerations: number;
@@ -32,60 +35,41 @@ interface Baseline {
   measuredWith?: string;
 }
 
-const NAVY = '#26275D';
-const YELLOW = '#F9DD0E';
-const BG = '#F5F6FA';
-
-const card: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 14,
-  padding: 16,
-  border: '1px solid #E3E5F0',
-  fontSize: 16,
-};
-const input: React.CSSProperties = {
-  fontSize: 16,
-  padding: '10px 12px',
-  border: '1px solid #C9CCE0',
-  borderRadius: 10,
-  width: '100%',
-  boxSizing: 'border-box',
-};
-const button: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 700,
-  background: NAVY,
-  color: '#fff',
-  border: 0,
-  borderRadius: 10,
-  padding: '10px 18px',
-  cursor: 'pointer',
-  minHeight: 44,
-};
-
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as T;
 }
 
-function Tile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+const subjectName = (k: string) => SUBJECTS.find((s) => s.code === k)?.shortName ?? k;
+const vnPct = (n: number, d = 0) => `${n.toFixed(d).replace('.', ',')}%`;
+
+function BarRows({ data, label }: { data: Record<string, number>; label: (k: string) => string }) {
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...entries.map(([, v]) => v));
   return (
-    <div style={{ ...card, borderTop: `4px solid ${accent ? YELLOW : NAVY}` }}>
-      <div style={{ color: '#5A5C80' }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: NAVY }}>{value}</div>
+    <div className="cl-rows">
+      {entries.map(([k, v]) => (
+        <div key={k} className="cl-row">
+          <span className="cl-row-name">{label(k)}</span>
+          <span className="cl-bar" aria-hidden="true">
+            <i style={{ width: `${(v / max) * 100}%` }} />
+          </span>
+          <span className="cl-pct">{v}</span>
+        </div>
+      ))}
     </div>
   );
 }
 
 export default function ChatLuongPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessons, setLessons] = useState<LessonStat[]>([]);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
-  const [baseline, setBaseline] = useState<{ b: string; t: string; w: string }>({ b: '', t: '', w: '' });
+  const [baseline, setBaseline] = useState({ b: '', t: '', w: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [msg, setMsg] = useState('');
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
 
   const [label, setLabel] = useState('');
   const [rater, setRater] = useState('');
@@ -97,7 +81,7 @@ export default function ChatLuongPage() {
     setError('');
     try {
       const [s, c, b] = await Promise.all([
-        getJson<{ summary: Summary; lessons: Lesson[] }>('/api/signals/summary'),
+        getJson<{ summary: Summary; lessons: LessonStat[] }>('/api/signals/summary'),
         getJson<{ coverage: Coverage }>('/api/eval/cases'),
         getJson<{ baseline: Baseline }>('/api/eval/baseline'),
       ]);
@@ -110,7 +94,7 @@ export default function ChatLuongPage() {
         w: b.baseline.measuredWith ?? '',
       });
     } catch (e) {
-      setError(`Không tải được dữ liệu chất lượng (${e instanceof Error ? e.message : 'lỗi'}).`);
+      setError(`Không tải được số liệu (${e instanceof Error ? e.message : 'lỗi'}).`);
     } finally {
       setLoading(false);
     }
@@ -120,174 +104,309 @@ export default function ChatLuongPage() {
     void load();
   }, [load]);
 
-  const toNum = (s: string) => (s.trim() === '' ? null : Number(s));
+  const toNum = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
 
   async function saveBaseline() {
-    setMsg('');
+    setMsg(null);
     const b = toNum(baseline.b);
     const t = toNum(baseline.t);
     if ((b !== null && !Number.isFinite(b)) || (t !== null && !Number.isFinite(t))) {
-      setMsg('Số phút không hợp lệ.');
+      setMsg({ kind: 'bad', text: 'Số phút không hợp lệ.' });
       return;
     }
-    const r = await fetch('/api/eval/baseline', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baselineMinutes: b, targetMinutes: t, measuredWith: baseline.w || undefined }),
-    });
-    setMsg(r.ok ? 'Đã lưu mốc thời gian.' : 'Không lưu được mốc thời gian.');
+    try {
+      const r = await fetch('/api/eval/baseline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baselineMinutes: b, targetMinutes: t, measuredWith: baseline.w || undefined }),
+      });
+      setMsg(r.ok ? { kind: 'ok', text: 'Đã lưu mốc thời gian.' } : { kind: 'bad', text: 'Không lưu được mốc thời gian.' });
+    } catch {
+      setMsg({ kind: 'bad', text: 'Không lưu được mốc thời gian.' });
+    }
   }
 
   async function submitScore() {
-    setMsg('');
+    setMsg(null);
     if (!label.trim() || !rater.trim() || RUBRIC_6.some((c) => !points[c.id])) {
-      setMsg('Nhập nhãn mờ, tên người chấm và đủ 6 điểm (1-5).');
+      setMsg({ kind: 'bad', text: 'Cần nhập nhãn mờ, tên người chấm và đủ 6 điểm (1 đến 5).' });
       return;
     }
-    const r = await fetch('/api/eval/score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blindLabel: label.trim(), caseId: caseId.trim() || label.trim(), rater: rater.trim(), scores: points }),
-    });
-    if (r.ok) {
-      setMsg('Đã ghi điểm.');
-      setPoints({});
-      setLabel('');
-    } else {
-      setMsg(r.status === 404 ? 'Nhãn mờ không tồn tại.' : 'Không ghi được điểm.');
+    try {
+      const r = await fetch('/api/eval/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blindLabel: label.trim(), caseId: caseId.trim() || label.trim(), rater: rater.trim(), scores: points }),
+      });
+      if (r.ok) {
+        setMsg({ kind: 'ok', text: 'Đã ghi điểm.' });
+        setPoints({});
+        setLabel('');
+      } else {
+        setMsg({ kind: 'bad', text: r.status === 404 ? 'Nhãn mờ không tồn tại.' : 'Không ghi được điểm.' });
+      }
+    } catch {
+      setMsg({ kind: 'bad', text: 'Không ghi được điểm.' });
     }
   }
 
+  const regenTotal = useMemo(() => lessons.reduce((a, l) => a + l.regenerations, 0), [lessons]);
   const pct = summary?.unchangedPct;
-  const grid: React.CSSProperties = { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' };
+  const empty = !!summary && summary.totalRuns === 0;
+  const total = coverage?.total ?? 0;
+  const target = coverage?.target ?? 100;
 
   return (
-    <Shell title="Chất lượng & Tín hiệu" subtitle="Cái phanh của cả hệ thống">
-      <div style={{ background: BG, padding: 16, display: 'grid', gap: 16, fontSize: 16, color: '#1B1C3A' }}>
-        {loading && <div style={card}>Đang tải...</div>}
+    <Shell title="Chất lượng & Tín hiệu" subtitle="Theo dõi bài soạn có dùng được ngay hay không.">
+      <div className="cl-wrap">
+        {loading && !summary && (
+          <div aria-busy="true" aria-label="Đang tải số liệu" style={{ display: 'grid', gap: 12 }}>
+            <div className="cl-skel" />
+            <div className="cl-skel" />
+          </div>
+        )}
         {error && (
-          <div role="alert" style={{ ...card, borderColor: '#D33', color: '#A11' }}>
-            {error} <button style={button} onClick={() => void load()}>Thử lại</button>
+          <div className="ag-alert bad" role="alert">
+            <Icon name="alert" size={18} />
+            <div>
+              {error}{' '}
+              <button type="button" className="ag-link" onClick={() => void load()}>
+                Thử lại
+              </button>
+            </div>
           </div>
         )}
 
-        <section style={{ ...card, borderLeft: `6px solid ${YELLOW}` }}>
-          <h2 style={{ margin: 0, color: NAVY, fontSize: 20 }}>Chỉ số Bắc Đẩu: % sản phẩm được duyệt mà không sửa gì</h2>
-          <div style={{ fontSize: 40, fontWeight: 800, color: NAVY }}>
-            {typeof pct === 'number' ? `${pct.toFixed(1)}%` : 'Chưa có dữ liệu'}
-          </div>
-          {summary && (
-            <div>
-              {summary.acceptedUnchanged}/{summary.accepted} bài được duyệt giữ nguyên.
+        {summary && (
+          <>
+            <div className="cl-tiles">
+              <div className="cl-tile star">
+                <div className="cl-tile-label">Duyệt mà không sửa gì</div>
+                <div className="cl-tile-num">{typeof pct === 'number' ? vnPct(pct, 1) : '--'}</div>
+                <div className="cl-tile-sub">
+                  {summary.accepted > 0
+                    ? `${summary.acceptedUnchanged}/${summary.accepted} bài giữ nguyên`
+                    : 'Chưa có bài nào được duyệt'}
+                </div>
+              </div>
+              <div className="cl-tile">
+                <div className="cl-tile-label">Tổng lượt soạn</div>
+                <div className="cl-tile-num">{summary.totalRuns}</div>
+              </div>
+              <div className="cl-tile">
+                <div className="cl-tile-label">Lượt sinh lại</div>
+                <div className="cl-tile-num">{regenTotal}</div>
+              </div>
+              <div className="cl-tile warnt">
+                <div className="cl-tile-label">Tiết cần xem lại</div>
+                <div className="cl-tile-num">{summary.flaggedLessons}</div>
+                <div className="cl-tile-sub">Sinh lại quá 40%</div>
+              </div>
             </div>
-          )}
-          <h3 style={{ color: NAVY, fontSize: 17, marginBottom: 6 }}>Thời gian soạn bài (đo trước khi code)</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <input aria-label="Baseline phút/bài" placeholder="___" inputMode="decimal" style={{ ...input, width: 90 }} value={baseline.b} onChange={(e) => setBaseline({ ...baseline, b: e.target.value })} />
-            <span>phút/bài →</span>
-            <input aria-label="Mục tiêu phút" placeholder="___" inputMode="decimal" style={{ ...input, width: 90 }} value={baseline.t} onChange={(e) => setBaseline({ ...baseline, t: e.target.value })} />
-            <span>phút</span>
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <input aria-label="Cách đo" placeholder="Đo bằng cách nào (tuỳ chọn)" style={input} value={baseline.w} onChange={(e) => setBaseline({ ...baseline, w: e.target.value })} />
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <button style={button} onClick={() => void saveBaseline()}>Lưu mốc thời gian</button>
-          </div>
-        </section>
+
+            {empty && (
+              <div className="ag-alert info">
+                <Icon name="info" size={18} />
+                <div>
+                  Chưa có số liệu. Số liệu sẽ xuất hiện sau khi cô/thầy bấm &quot;Duyệt &amp; dùng&quot; ở Trợ lý soạn bài.
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {summary && (
-          <section style={grid}>
-            <Tile label="Tổng lượt sinh" value={String(summary.totalRuns)} />
-            <Tile label="Được duyệt" value={String(summary.accepted)} />
-            <Tile
-              label="Mức sửa trung bình (diff)"
-              value={summary.avgDiffRatio === null ? '—' : `${(summary.avgDiffRatio * 100).toFixed(0)}%`}
-            />
-            <Tile label="Tiết bị cờ (sinh lại > 40%)" value={String(summary.flaggedLessons)} accent />
+          <section className="cl-sec" aria-labelledby="cl-time">
+            <h2 id="cl-time">Thời gian soạn bài</h2>
+            <p className="cl-sec-sub">Nhập số phút một bài soạn tay hiện nay và mục tiêu. Để trống nếu chưa đo.</p>
+            <div className="cl-minutes">
+              <div>
+                <label className="ag-field-label" htmlFor="cl-b">
+                  Hiện tại (phút)
+                </label>
+                <input
+                  id="cl-b"
+                  className="ag-field cl-num"
+                  inputMode="decimal"
+                  value={baseline.b}
+                  onChange={(e) => setBaseline({ ...baseline, b: e.target.value })}
+                />
+              </div>
+              <span className="cl-arrow" aria-hidden="true">
+                <Icon name="send" size={20} />
+              </span>
+              <div>
+                <label className="ag-field-label" htmlFor="cl-t">
+                  Mục tiêu (phút)
+                </label>
+                <input
+                  id="cl-t"
+                  className="ag-field cl-num"
+                  inputMode="decimal"
+                  value={baseline.t}
+                  onChange={(e) => setBaseline({ ...baseline, t: e.target.value })}
+                />
+              </div>
+              <div className="cl-wide">
+                <label className="ag-field-label" htmlFor="cl-w">
+                  Đo bằng cách nào (không bắt buộc)
+                </label>
+                <input
+                  id="cl-w"
+                  className="ag-field"
+                  value={baseline.w}
+                  onChange={(e) => setBaseline({ ...baseline, w: e.target.value })}
+                />
+              </div>
+              <button type="button" className="ag-btn dark" onClick={() => void saveBaseline()}>
+                Lưu
+              </button>
+            </div>
           </section>
         )}
 
-        <section style={card}>
-          <h2 style={{ margin: 0, color: NAVY, fontSize: 20 }}>Tỷ lệ sinh lại theo tiết</h2>
-          {lessons.length === 0 ? (
-            <p>Chưa có dữ liệu sinh lại.</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', color: NAVY }}>
-                    <th>Tiết</th><th>Lượt sinh</th><th>Sinh lại</th><th>Tỷ lệ</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lessons.map((l) => (
-                    <tr key={l.lessonKey} style={{ background: l.flagged ? '#FFF8C2' : undefined }}>
-                      <td>{l.lessonKey}</td>
-                      <td>{l.generations}</td>
-                      <td>{l.regenerations}</td>
-                      <td>{(l.regenRate * 100).toFixed(0)}%</td>
-                      <td>{l.flagged ? 'Cần người vào sửa' : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section style={card}>
-          <h2 style={{ margin: 0, color: NAVY, fontSize: 20 }}>
-            Bộ đề đánh giá: {coverage?.total ?? 0}/{coverage?.target ?? 100}
-          </h2>
-          <p style={{ fontWeight: 700 }}>Chỉ nhập đề thật của giáo viên, không tự soạn.</p>
-          {coverage && coverage.total > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
-              <div>
-                <strong>Theo môn</strong>
-                <ul>{Object.entries(coverage.bySubject).map(([k, v]) => <li key={k}>{k}: {v}</li>)}</ul>
-              </div>
-              <div>
-                <strong>Theo khối</strong>
-                <ul>{Object.entries(coverage.byGrade).map(([k, v]) => <li key={k}>Khối {k}: {v}</li>)}</ul>
-              </div>
-              {coverage.thin.length > 0 && <div>Môn còn thiếu đề: {coverage.thin.join(', ')}</div>}
-            </div>
-          ) : (
-            <p>Chưa có đề nào.</p>
-          )}
-        </section>
-
-        <section style={card}>
-          <h2 style={{ margin: 0, color: NAVY, fontSize: 20 }}>Chấm mù (thang 1-5)</h2>
-          <p>Bạn không biết bản nào của phiên bản prompt nào. Chỉ nhập nhãn mờ được giao.</p>
-          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-            <input aria-label="Nhãn mờ" placeholder="Nhãn mờ (vd B-0a3f1)" style={input} value={label} onChange={(e) => setLabel(e.target.value)} />
-            <input aria-label="Mã đề" placeholder="Mã đề (tuỳ chọn)" style={input} value={caseId} onChange={(e) => setCaseId(e.target.value)} />
-            <input aria-label="Người chấm" placeholder="Người chấm" style={input} value={rater} onChange={(e) => setRater(e.target.value)} />
-          </div>
-          {RUBRIC_6.map((c) => (
-            <div key={c.id} style={{ margin: '10px 0' }}>
-              <div><strong>{c.name}</strong></div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    aria-pressed={points[c.id] === n}
-                    onClick={() => setPoints({ ...points, [c.id]: n })}
-                    style={{ ...button, minWidth: 44, background: points[c.id] === n ? NAVY : '#fff', color: points[c.id] === n ? '#fff' : NAVY, border: `1px solid ${NAVY}` }}
-                  >
-                    {n}
-                  </button>
+        {summary && (
+          <section className="cl-sec" aria-labelledby="cl-regen">
+            <h2 id="cl-regen">Tỷ lệ sinh lại theo tiết</h2>
+            <p className="cl-sec-sub">Tiết nào cô/thầy phải bấm sinh lại nhiều thì cần người vào sửa mẫu.</p>
+            {lessons.length === 0 ? (
+              <p className="ag-note" style={{ marginTop: 0 }}>
+                Chưa có tiết nào được sinh lại.
+              </p>
+            ) : (
+              <div className="cl-rows">
+                {lessons.map((l) => (
+                  <div key={l.lessonKey} className={`cl-row${l.flagged ? ' flag' : ''}`}>
+                    <span className="cl-row-name">
+                      {l.lessonKey}
+                      <small>
+                        {l.generations} lượt sinh, {l.regenerations} lần sinh lại
+                      </small>
+                    </span>
+                    <span className="cl-bar" aria-hidden="true">
+                      <i style={{ width: `${Math.min(100, l.regenRate * 100)}%` }} />
+                    </span>
+                    <span className="cl-pct">{vnPct(l.regenRate * 100)}</span>
+                    {l.flagged ? <span className="ag-status draft">Cần người vào sửa</span> : <span />}
+                  </div>
                 ))}
               </div>
-            </div>
-          ))}
-          <button style={button} onClick={() => void submitScore()}>Ghi điểm</button>
-        </section>
+            )}
+          </section>
+        )}
 
-        {msg && <div role="status" style={{ ...card, background: YELLOW, color: NAVY, fontWeight: 700 }}>{msg}</div>}
+        {coverage && (
+          <section className="cl-sec" aria-labelledby="cl-cases">
+            <h2 id="cl-cases">Bộ đề thật để đánh giá</h2>
+            <p className="cl-sec-sub">
+              <strong>Chỉ nhập đề thật của giáo viên</strong>, không tự soạn.
+            </p>
+            <div className="cl-progress-head">
+              <span className="cl-progress-num">
+                {total}/{target}
+              </span>
+              <span className="ag-note" style={{ margin: 0 }}>
+                đề đã có
+              </span>
+            </div>
+            <div
+              className="cl-bar"
+              role="progressbar"
+              aria-label="Tiến độ bộ đề"
+              aria-valuemin={0}
+              aria-valuemax={target}
+              aria-valuenow={total}
+            >
+              <i style={{ width: `${Math.min(100, (total / Math.max(1, target)) * 100)}%` }} />
+            </div>
+            {total > 0 ? (
+              <>
+                <div className="cl-cover">
+                  <div>
+                    <h3>Theo môn</h3>
+                    <BarRows data={coverage.bySubject} label={subjectName} />
+                  </div>
+                  <div>
+                    <h3>Theo khối</h3>
+                    <BarRows data={coverage.byGrade} label={(k) => `Khối ${k}`} />
+                  </div>
+                </div>
+                {coverage.thin.length > 0 && (
+                  <div className="ag-alert warn">
+                    <Icon name="alert" size={18} />
+                    <div>Môn còn ít đề: {coverage.thin.map(subjectName).join(', ')}.</div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="ag-note">Chưa có đề nào. Đề thật do giáo viên cung cấp sẽ hiện ở đây.</p>
+            )}
+          </section>
+        )}
+
+        {summary && (
+          <section className="cl-sec">
+            <details className="cl-blind">
+              <summary>
+                Chấm mù
+                <Icon name="chevronDown" size={20} />
+              </summary>
+              <p className="cl-sec-sub">
+                Người chấm không biết bản nào của phiên bản nào. Chỉ nhập nhãn mờ được giao, chấm 1 đến 5 điểm.
+              </p>
+              <div className="cl-ids">
+                <div>
+                  <label className="ag-field-label" htmlFor="cl-label">
+                    Nhãn mờ (ví dụ B-0a3f1)
+                  </label>
+                  <input id="cl-label" className="ag-field" value={label} onChange={(e) => setLabel(e.target.value)} />
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="cl-case">
+                    Mã đề (không bắt buộc)
+                  </label>
+                  <input id="cl-case" className="ag-field" value={caseId} onChange={(e) => setCaseId(e.target.value)} />
+                </div>
+                <div>
+                  <label className="ag-field-label" htmlFor="cl-rater">
+                    Người chấm
+                  </label>
+                  <input id="cl-rater" className="ag-field" value={rater} onChange={(e) => setRater(e.target.value)} />
+                </div>
+              </div>
+              {RUBRIC_6.map((c) => (
+                <fieldset key={c.id} className="cl-crit">
+                  <legend>{c.name}</legend>
+                  <div className="cl-scale" role="radiogroup" aria-label={`Điểm: ${c.name}`}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <label key={n} className={points[c.id] === n ? 'on' : ''}>
+                        <input
+                          type="radio"
+                          name={`bl-${c.id}`}
+                          value={n}
+                          checked={points[c.id] === n}
+                          onChange={() => setPoints({ ...points, [c.id]: n })}
+                          aria-label={`${n} điểm`}
+                        />
+                        {n}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+              <button type="button" className="ag-btn dark" onClick={() => void submitScore()}>
+                Ghi điểm
+              </button>
+            </details>
+          </section>
+        )}
+
+        {msg && (
+          <div className={`ag-alert ${msg.kind}`} role={msg.kind === 'bad' ? 'alert' : 'status'}>
+            <Icon name={msg.kind === 'ok' ? 'check' : 'alert'} size={18} />
+            <div>{msg.text}</div>
+          </div>
+        )}
       </div>
     </Shell>
   );
