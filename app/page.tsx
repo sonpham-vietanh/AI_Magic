@@ -1,16 +1,7 @@
-import { DashboardClient } from '@/components/DashboardClient';
+import { AgentApp } from '@/components/agent/AgentApp';
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tool?: string; nodeId?: string; classId?: string }>;
-}) {
-  const params = await searchParams;
-  return (
-    <DashboardClient
-      initialToolId={params.tool}
-      initialNodeId={params.nodeId}
-      initialClassId={params.classId}
-    />
-  );
+export const metadata = { title: 'Trợ lý soạn bài' };
+
+export default function HomePage() {
+  return <AgentApp />;
 }

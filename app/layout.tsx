@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Be_Vietnam_Pro, Manrope } from 'next/font/google';
 import './globals.css';
+import './ui.css';
 
 const manrope = Manrope({
   subsets: ['vietnamese', 'latin'],

@@ -1,9 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import {
+  EVENT_HISTORY,
+  EVENT_NEW_CHAT,
+  EVENT_OPEN_HISTORY,
+  formatWhen,
+  loadHistory,
+  type HistoryItem,
+} from '@/lib/agent/history';
 import { AssistantDrawer } from './AssistantDrawer';
+import { Icon, type IconName } from './ui/icons';
 
 export interface ShellProps {
   children: React.ReactNode;
@@ -13,34 +22,58 @@ export interface ShellProps {
   rightAction?: React.ReactNode;
   rightActions?: React.ReactNode;
   hero?: React.ReactNode;
+  /** 'chat': toàn màn hình cho trợ lý; 'page': trang thường có tiêu đề. */
+  variant?: 'page' | 'chat';
 }
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: IconName;
+  exact?: boolean;
+}
+
+const WORK_NAV: NavItem[] = [
+  { href: '/', label: 'Trợ lý soạn bài', icon: 'sparkles', exact: true },
+  { href: '/duyet', label: 'Duyệt bản chuẩn', icon: 'shield' },
+  { href: '/kiem-tra', label: 'Kiểm tra & Đề thi', icon: 'exam' },
+  { href: '/chat-luong', label: 'Chất lượng & Tín hiệu', icon: 'chart' },
+];
+
+const DATA_NAV: NavItem[] = [
+  { href: '/cong-cu', label: 'Kho 82 công cụ', icon: 'grid' },
+  { href: '/thu-vien', label: 'Thư viện học liệu', icon: 'folder' },
+  { href: '/so-do-lien-mon', label: 'Sơ đồ liên môn', icon: 'graph' },
+  { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', icon: 'users' },
+  { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', icon: 'clipboard' },
+];
+
+const PAGE_TITLES: { prefix: string; title: string; subtitle: string }[] = [
   {
-    href: '/',
-    label: 'Bàn Làm Việc Bài Dạy',
-    badge: 'Studio',
-    match: (pathname: string) => pathname === '/',
+    prefix: '/cong-cu',
+    title: 'Kho 82 công cụ sư phạm',
+    subtitle: 'Biên soạn học liệu từ kho kiến thức, câu hỏi và kịch bản hỏi đáp của trường.',
   },
   {
-    href: '/so-do-lien-mon',
-    label: 'Bản Đồ Liên Môn & Tri Thức',
-    badge: '12.908',
-    match: (pathname: string) => pathname.startsWith('/so-do-lien-mon'),
+    prefix: '/so-do-lien-mon',
+    title: 'Sơ đồ liên môn',
+    subtitle: 'Tìm bài học và xem các liên kết giữa các môn trong cùng chủ đề.',
   },
   {
-    href: '/ho-so-lop-hoc',
-    label: 'Chương Trình & Đội Ngũ',
-    badge: '3.153',
-    match: (pathname: string) => pathname.startsWith('/ho-so-lop-hoc'),
+    prefix: '/ho-so-lop-hoc',
+    title: 'Lớp học & chương trình',
+    subtitle: 'Cây chương trình GDPT 2018, đội ngũ chuyên môn và ghi chú của giáo viên chủ nhiệm.',
   },
   {
-    href: '/thu-vien',
-    label: 'Kho Học Liệu & Mô Phỏng',
-    badge: '757',
-    match: (pathname: string) => pathname.startsWith('/thu-vien'),
+    prefix: '/thu-vien',
+    title: 'Thư viện học liệu',
+    subtitle: 'Học liệu đã lưu, tài nguyên tương tác và nhật ký hoạt động.',
   },
 ];
+
+function isActive(item: NavItem, pathname: string): boolean {
+  return item.exact ? pathname === item.href : pathname.startsWith(item.href);
+}
 
 export function Shell({
   children,
@@ -49,11 +82,15 @@ export function Shell({
   subtitle,
   rightAction,
   rightActions,
+  variant,
 }: ShellProps) {
   const pathname = usePathname() || '/';
-  const [internalAssistantOpen, setInternalAssistantOpen] = useState(false);
-
+  const router = useRouter();
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [recent, setRecent] = useState<HistoryItem[]>([]);
+
+  const mode = variant ?? 'page';
 
   useEffect(() => {
     setNavOpen(false);
@@ -68,176 +105,148 @@ export function Shell({
     return () => document.removeEventListener('keydown', onKey);
   }, [navOpen]);
 
-  const handleOpenAssistant = () => {
+  useEffect(() => {
+    const refresh = () => setRecent(loadHistory());
+    refresh();
+    window.addEventListener(EVENT_HISTORY, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(EVENT_HISTORY, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  const startNewChat = () => {
     setNavOpen(false);
-    if (onOpenAssistant) {
-      onOpenAssistant();
-    } else {
-      setInternalAssistantOpen(true);
-    }
+    if (pathname === '/') window.dispatchEvent(new CustomEvent(EVENT_NEW_CHAT));
+    else router.push('/?new=1');
   };
 
-  const defaultTitle = pathname.startsWith('/so-do-lien-mon')
-    ? 'Kho Tri thức & Sơ đồ Liên môn (Supabase)'
-    : pathname.startsWith('/ho-so-lop-hoc')
-      ? 'Cây Chương trình GDPT 2018 & Đội ngũ Chuyên môn (Supabase)'
-      : pathname.startsWith('/thu-vien')
-        ? 'Kho Tài nguyên Học thuật & Nhật ký Hoạt động (Supabase)'
-        : 'Kho 82 Công cụ Sư phạm Việt Anh';
+  const openHistory = (id: string) => {
+    setNavOpen(false);
+    if (pathname === '/') window.dispatchEvent(new CustomEvent(EVENT_OPEN_HISTORY, { detail: id }));
+    else router.push(`/?h=${encodeURIComponent(id)}`);
+  };
 
-  const defaultSubtitle = pathname.startsWith('/so-do-lien-mon')
-    ? 'Dữ liệu thực trực tiếp từ Supabase: 12.908 Đơn vị kiến thức, 8.968 Cạnh liên kết, 12.986 Câu hỏi & 7.612 Kịch bản Socratic.'
-    : pathname.startsWith('/ho-so-lop-hoc')
-      ? 'Cấu trúc 3.153 mục Cây chương trình (tree_scaffold), 13 Giáo viên & Quản trị (users) và Biên bản Thẩm định (reviews) trên Supabase.'
-      : pathname.startsWith('/thu-vien')
-        ? 'Quản lý 666 Tài nguyên HTML tương tác (tainguyen), 62 Học liệu (resources), 29 Gói bài giảng (packages) & 300 Nhật ký (activity).'
-        : 'Biên soạn học liệu từ 12.908 Đơn vị kiến thức (Atoms), Câu hỏi đánh giá & Kịch bản Socratic 4 bậc trên Supabase.';
+  const openAssistant = () => {
+    setNavOpen(false);
+    if (onOpenAssistant) onOpenAssistant();
+    else setAssistantOpen(true);
+  };
+
+  const meta = PAGE_TITLES.find((p) => pathname.startsWith(p.prefix));
+  const pageTitle = title ?? meta?.title ?? '';
+  const pageSubtitle = subtitle ?? meta?.subtitle ?? '';
+
+  const renderNav = (items: NavItem[]) => (
+    <nav className="ag-nav" aria-label="Điều hướng">
+      {items.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={`ag-nav-item${isActive(item, pathname) ? ' active' : ''}`}
+          aria-current={isActive(item, pathname) ? 'page' : undefined}
+        >
+          <Icon name={item.icon} />
+          <span className="ag-nav-text">{item.label}</span>
+        </Link>
+      ))}
+    </nav>
+  );
 
   return (
-    <div className={`va-shell${navOpen ? ' nav-open' : ''}`}>
-      <div className="va-mobilebar">
-        <Link href="/" className="va-mobilebar-brand">
+    <div className={`ag-shell${navOpen ? ' nav-open' : ''}`}>
+      <div className="ag-mobilebar">
+        <Link href="/" className="ag-brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-crest.webp" alt="" width={28} height={28} />
-          <span>TRƯỜNG VIỆT ANH</span>
+          <img src="/logo-crest.webp" alt="" />
+          <span className="ag-brand-name">Việt Anh MagicStudio</span>
         </Link>
         <button
           type="button"
-          className="va-menu-btn"
+          className="ag-iconbtn"
           aria-expanded={navOpen}
-          aria-controls="va-sidebar"
+          aria-controls="ag-rail"
           aria-label={navOpen ? 'Đóng menu' : 'Mở menu'}
           onClick={() => setNavOpen((v) => !v)}
         >
-          <span className="va-menu-icon" aria-hidden="true" />
+          <Icon name={navOpen ? 'x' : 'menu'} size={22} />
         </button>
       </div>
-      {navOpen && (
-        <div
-          className="va-nav-scrim"
-          aria-hidden="true"
-          onClick={() => setNavOpen(false)}
-        />
-      )}
-      <aside id="va-sidebar" className="va-sidebar">
-        <div>
-          <Link href="/" className="va-brand">
-            <div className="va-brand-crest">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/logo-crest.webp"
-                alt="Trường Việt Anh"
-                width={32}
-                height={32}
-              />
-            </div>
-            <div>
-              <div className="va-brand-title">TRƯỜNG VIỆT ANH</div>
-              <div className="va-brand-sub">SCHOOL AI FACTORY · SUPABASE</div>
-              <div className="va-rule" />
-            </div>
-          </Link>
+      {navOpen && <div className="ag-scrim" aria-hidden="true" onClick={() => setNavOpen(false)} />}
 
-          <div className="va-nav-section-label">Không gian chuyên môn</div>
-          <nav className="va-nav" aria-label="Điều hướng chính">
-            {NAV_ITEMS.map((item) => {
-              const active = item.match(pathname);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`va-nav-item ${active ? 'active' : ''}`}
-                >
-                  <span className="va-nav-item-left">
-                    <span className="va-nav-dot" />
-                    <span>{item.label}</span>
-                  </span>
-                  <span className="va-nav-badge">{item.badge}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="va-nav-section-label" style={{ marginTop: '8px' }}>
-            Hỗ trợ trực tuyến
-          </div>
-          <button
-            type="button"
-            className="va-assistant-trigger"
-            onClick={handleOpenAssistant}
-          >
-            <span>Hỏi Trợ lý Chuyên môn</span>
-            <span
-              style={{
-                background: 'var(--cta)',
-                color: 'var(--navy)',
-                fontSize: '11.5px',
-                fontWeight: 800,
-                padding: '2px 7px',
-                borderRadius: '4px',
-              }}
-            >
-              AI
+      <aside id="ag-rail" className="ag-rail">
+        <div className="ag-rail-head">
+          <Link href="/" className="ag-brand">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-crest.webp" alt="Trường Việt Anh" />
+            <span>
+              <span className="ag-brand-name">Việt Anh MagicStudio</span>
+              <span className="ag-brand-sub" style={{ display: 'block' }}>
+                Trợ lý soạn bài
+              </span>
             </span>
+          </Link>
+          <button type="button" className="ag-new" onClick={startNewChat}>
+            <Icon name="plus" />
+            Cuộc trò chuyện mới
           </button>
         </div>
 
-        <div className="va-sidebar-footer">
-          <div className="va-teacher-card">
-            <div className="va-avatar">AH</div>
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}
-              >
-                Anh Hùng
-              </div>
-              <div
-                style={{ fontSize: '12px', color: 'rgba(255,255,255,0.68)' }}
-              >
-                Quản trị học thuật · Supabase
-              </div>
+        <div className="ag-rail-scroll">
+          <div className="ag-label">Làm việc</div>
+          {renderNav(WORK_NAV)}
+
+          <div className="ag-label">Gần đây</div>
+          {recent.length === 0 ? (
+            <p className="ag-empty-note">Các bản soạn của cô/thầy sẽ hiện ở đây.</p>
+          ) : (
+            <div className="ag-recent">
+              {recent.map((h) => (
+                <button key={h.id} type="button" className="ag-recent-item" onClick={() => openHistory(h.id)}>
+                  <span className="ag-recent-title">{h.title}</span>
+                  <span className="ag-recent-meta">{formatWhen(h.at)}</span>
+                </button>
+              ))}
             </div>
-          </div>
-          <div className="va-status-line">
-            <span className="va-status-dot" />
-            <span>Supabase Live · jhqdzrejpcvasbsnamer</span>
-          </div>
+          )}
+
+          <div className="ag-label">Dữ liệu & công cụ</div>
+          {renderNav(DATA_NAV)}
+        </div>
+
+        <div className="ag-rail-foot">
+          <button type="button" className="ag-assist-btn" onClick={openAssistant}>
+            <Icon name="book" />
+            Hỏi đáp chuyên môn
+          </button>
         </div>
       </aside>
 
-      <div className="va-main-wrap">
-        <header className="va-topbar">
-          <div>
-            <div className="va-crumb">
-              HỌC VIỆN QUỐC TẾ VIỆT ANH · DỮ LIỆU THỰC SUPABASE (SCHOOL AI FACTORY)
-            </div>
-            <h1 className="va-page-title">{title || defaultTitle}</h1>
-            <p className="va-page-subtitle">{subtitle || defaultSubtitle}</p>
+      <div className="ag-main">
+        {mode === 'chat' ? (
+          <main id="main" tabIndex={-1} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {children}
+          </main>
+        ) : (
+          <div className="ag-page">
+            {(pageTitle || rightActions || rightAction) && (
+              <header className="ag-pagehead">
+                <div>
+                  {pageTitle && <h1>{pageTitle}</h1>}
+                  {pageSubtitle && <p>{pageSubtitle}</p>}
+                </div>
+                <div className="row-wrap">{rightActions || rightAction}</div>
+              </header>
+            )}
+            <main id="main" className="va-workspace" tabIndex={-1}>
+              {children}
+            </main>
           </div>
-
-          <div className="row-wrap">
-            {rightActions || rightAction}
-            <button
-              type="button"
-              className="btn"
-              onClick={handleOpenAssistant}
-            >
-              Hỏi đáp chuyên môn
-            </button>
-          </div>
-        </header>
-
-        <main id="main" className="va-workspace" tabIndex={-1}>
-          {children}
-        </main>
+        )}
       </div>
 
-      {!onOpenAssistant && (
-        <AssistantDrawer
-          open={internalAssistantOpen}
-          onClose={() => setInternalAssistantOpen(false)}
-        />
-      )}
+      {!onOpenAssistant && <AssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
     </div>
   );
 }
