@@ -90,6 +90,10 @@ export function cleanMath(text: string): string {
     .replace(/\\mathbb\{Q\}/g, 'ℚ')
     .replace(/\\mathbb\{N\}/g, 'ℕ')
     .replace(/\\mathbb\{Z\}/g, 'ℤ')
+    .replace(/\\emptyset/g, '∅')
+    .replace(/\\cup/g, '∪')
+    .replace(/\\cap/g, '∩')
+    .replace(/\\subset/g, '⊂')
     .replace(/\\[()]/g, '')
     .replace(/\\([a-zA-Z]+)/g, '$1');
 }

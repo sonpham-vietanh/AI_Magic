@@ -6,8 +6,9 @@ import '@/app/ui-sd.css';
 import { Shell } from '@/components/Shell';
 import { RelationGraph, type GraphLink } from '@/components/graph/RelationGraph';
 import { WeeklyTopics } from '@/components/graph/WeeklyTopics';
+import { planHref } from '@/components/graph/links';
 import { dedupeEdgesByAtom, edgePriority } from '@/components/graph/layout';
-import { LINK_LABEL, SUBJECT_NAMES, linkKind, subjectCode, subjectTone } from '@/components/graph/meta';
+import { LINK_LABEL, SUBJECT_NAMES, cleanMath, linkKind, subjectCode, subjectTone } from '@/components/graph/meta';
 import type {
   SupabaseAtom,
   SupabaseEdge,
@@ -41,10 +42,6 @@ interface AtomDetail {
 
 type Tab = 'graph' | 'weekly';
 type View = 'graph' | 'list';
-
-function planHref(center: SupabaseAtom, linkedId: string): string {
-  return `/?format=ke_hoach&bai=${center.id}&baiTitle=${encodeURIComponent(center.title)}&lienKet=${linkedId}`;
-}
 
 function directionText(edge: SupabaseEdge): string {
   const k = linkKind(edge);
@@ -241,7 +238,7 @@ export default function KnowledgeGraphPage() {
           ) : (
             <div className="sd-layout">
               {/* ---------- Tìm bài ---------- */}
-              <aside className="sd-side" aria-label="Tìm bài học">
+              <aside className="sd-side" aria-label="Tìm bài học theo môn và lớp">
                 <div className="ag-field-row">
                   <div>
                     <label className="ag-field-label" htmlFor="sb-subject">
@@ -326,7 +323,7 @@ export default function KnowledgeGraphPage() {
                       aria-current={a.id === selectedAtomId}
                       onClick={() => pickAtom(a.id)}
                     >
-                      <b>{a.title}</b>
+                      <b>{cleanMath(a.title)}</b>
                       <small>
                         {a.subject} · Lớp {a.grade}
                         {a.chapter ? ` · ${a.chapter}` : ''}
@@ -366,7 +363,7 @@ export default function KnowledgeGraphPage() {
                     )}
                     <div className="sd-head">
                       <div style={{ minWidth: 0 }}>
-                        <h2>{center.title}</h2>
+                        <h2>{cleanMath(center.title)}</h2>
                         <div className="sd-meta">
                           <span className="sd-pill">
                             {center.subject} · Lớp {center.grade}
@@ -411,7 +408,7 @@ export default function KnowledgeGraphPage() {
                                   <span>{subjectCode(atom.subject)}</span>
                                 </span>
                                 <span className="sd-link-body">
-                                  <b>{atom.title}</b>
+                                  <b>{cleanMath(atom.title)}</b>
                                   <small>
                                     {atom.subject} · Lớp {atom.grade} · {LINK_LABEL[kind]}
                                   </small>
@@ -433,7 +430,7 @@ export default function KnowledgeGraphPage() {
                     <div className="sd-pair">
                       <div className="sd-pair-node">
                         <small>Bài đang xem</small>
-                        <b>{center.title}</b>
+                        <b>{cleanMath(center.title)}</b>
                         <span>
                           {center.subject} · Lớp {center.grade}
                         </span>
@@ -445,7 +442,7 @@ export default function KnowledgeGraphPage() {
                       </div>
                       <div className="sd-pair-node">
                         <small>Bài liên kết</small>
-                        <b>{activeLink.atom.title}</b>
+                        <b>{cleanMath(activeLink.atom.title)}</b>
                         <span>
                           {activeLink.atom.subject} · Lớp {activeLink.atom.grade}
                         </span>

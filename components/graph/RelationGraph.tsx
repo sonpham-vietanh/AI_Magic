@@ -121,7 +121,7 @@ export function RelationGraph({ center, links, selectedId, onSelect, onRecenter 
           const { atom, edge } = link;
           const kind = linkKind(edge);
           const on = n.id === selectedId;
-          const maxChars = Math.floor((n.w - 14) / 6.3);
+          const maxChars = Math.floor((n.w - 28) / 6.3);
           const lines = wrapLabel(atom.title, maxChars, 2);
           const left = n.x - n.w / 2;
           const top = n.y - n.h / 2;
@@ -158,8 +158,8 @@ export function RelationGraph({ center, links, selectedId, onSelect, onRecenter 
                   {t}
                 </text>
               ))}
-              <circle className="sd-badge" cx={left + 4} cy={top + 4} r={14} />
-              <text className="sd-badge-text" x={left + 4} y={top + 8.5} textAnchor="middle">
+              <circle className="sd-badge" cx={left} cy={top} r={14} />
+              <text className="sd-badge-text" x={left} y={top + 4.5} textAnchor="middle">
                 {subjectCode(atom.subject)}
               </text>
               <title>{label}</title>
