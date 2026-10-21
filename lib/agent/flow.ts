@@ -36,6 +36,9 @@ export interface AgentSlots {
   ngayDay: string;
   classId?: string;
   suKien?: NewsEvent;
+  /** Bài thứ hai để soạn tích hợp liên môn (đến từ Sơ đồ liên môn). */
+  lienKetId?: string;
+  lienKetTitle?: string;
 }
 
 /** Quiz và đề kiểm tra không phụ thuộc phong cách dạy: dùng mặc định, bớt một câu hỏi. */
@@ -120,6 +123,7 @@ export function summaryRows(s: AgentSlots): SummaryRow[] {
     { step: 'bloom', label: 'Các bậc tư duy', value: bloomPreview(s.bloom).join(' → ') },
   ];
   if (needsStyle(s.format)) rows.push({ step: 'phongCach', label: 'Phong cách', value: styleLabel(s.phongCach) });
+  if (s.lienKetId) rows.push({ step: null, label: 'Bài liên kết (liên môn)', value: s.lienKetTitle ?? s.lienKetId });
   return rows;
 }
 
@@ -141,6 +145,7 @@ export function toParams(
     formatDauRa: s.format,
   };
   if (s.classId) raw.classId = s.classId;
+  if (s.lienKetId) raw.lienKetId = s.lienKetId;
   if (s.suKien) raw.suKienThoiSu = s.suKien;
   if (extra.teacher) raw.teacher = extra.teacher;
   if (extra.regenerationOf) raw.regenerationOf = extra.regenerationOf;

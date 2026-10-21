@@ -1,0 +1,593 @@
+/* ==========================================================================
+   Hộp thoại công cụ và ngăn hỏi đáp (tiền tố md-)
+   Dùng biến thương hiệu trong globals.css; lớp ag-* lấy từ ui.css.
+   ========================================================================== */
+
+.md-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(13, 14, 43, 0.62);
+  backdrop-filter: blur(3px);
+}
+.md-backdrop :focus-visible {
+  outline: none;
+  box-shadow: var(--ag-focus);
+  border-radius: 10px;
+}
+.md-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1240px, 100%);
+  height: min(860px, 100%);
+  min-height: 0;
+  border-radius: 20px;
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  outline: none;
+  animation: ag-in 220ms var(--ag-ease) both;
+}
+
+/* ---------- Đầu hộp thoại ---------- */
+.md-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px 22px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.md-head-main {
+  min-width: 0;
+}
+.md-kicker {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--gold-text);
+}
+.md-title {
+  margin: 2px 0 0;
+  font-size: 21px;
+  line-height: 1.3;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.md-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.md-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.md-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 99px;
+  background: var(--navy-50);
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 600;
+}
+.md-tag.warn {
+  background: var(--warn-bg);
+  color: #6b3a04;
+}
+
+/* ---------- Các bước trên điện thoại ---------- */
+.md-steps {
+  display: none;
+}
+
+/* ---------- Thân ---------- */
+.md-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+}
+.md-form-pane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--cream);
+}
+.md-form-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.md-group {
+  margin-bottom: 18px;
+}
+.md-group-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--navy);
+}
+.md-fld {
+  margin-bottom: 12px;
+}
+.md-fld .ag-field-label {
+  margin-bottom: 5px;
+}
+.md-req {
+  color: var(--danger);
+}
+.md-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.md-row2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.md-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 16px;
+}
+.md-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--navy);
+}
+.md-atom {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.md-atom summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy);
+}
+.md-atom p {
+  margin: 6px 0 0;
+}
+.md-atom .warn {
+  color: var(--gold-text);
+}
+.md-adv {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.md-adv summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+.md-adv[open] summary {
+  margin-bottom: 8px;
+}
+.md-form-foot {
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.md-form-foot .ag-btn {
+  width: 100%;
+  min-height: 50px;
+  font-size: 16.5px;
+}
+.md-form-foot .md-cancel {
+  margin-top: 8px;
+}
+
+/* ---------- Khung kết quả ---------- */
+.md-result-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.md-tabbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.md-tabbar .ag-tabs {
+  padding: 0;
+  border: 0;
+}
+.md-notice {
+  align-self: center;
+  max-width: 55%;
+  padding: 0 4px 6px;
+  font-size: 14px;
+  color: var(--success);
+  font-weight: 600;
+  text-align: right;
+}
+.md-notice.bad {
+  color: var(--danger);
+}
+.md-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--cream);
+}
+.md-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px 28px;
+}
+.md-paper {
+  max-width: 780px;
+  margin: 0 auto;
+}
+.md-doc-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  line-height: 1.3;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.md-doc-meta {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.md-sec h3 {
+  margin: 20px 0 6px;
+  font-size: 17.5px;
+  color: var(--navy);
+}
+.md-sec .ag-line:first-of-type {
+  margin-top: 0;
+}
+.md-edit-in {
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.md-edit-ta {
+  min-height: 120px;
+  margin-bottom: 14px;
+  font-family: inherit;
+}
+.md-refine {
+  max-width: 780px;
+  margin: 0 auto 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--cream);
+}
+.md-refine .ag-label {
+  display: block;
+  margin-bottom: 8px;
+}
+.md-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.md-checks .md-tag {
+  background: var(--success-bg);
+  color: #145c39;
+  min-height: 28px;
+  font-size: 13.5px;
+}
+
+/* trạng thái trống và đang chạy */
+.md-empty {
+  max-width: 560px;
+  margin: 24px auto 0;
+}
+.md-empty h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: var(--navy);
+}
+.md-empty p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 15.5px;
+}
+.md-empty ol {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  line-height: 1.8;
+  font-size: 16px;
+}
+.md-live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 780px;
+  margin: 0 auto 14px;
+  font-size: 15px;
+  color: var(--navy);
+  font-weight: 600;
+}
+.md-live .ag-btn {
+  margin-left: auto;
+}
+.md-cursor::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  background: var(--navy);
+  animation: md-blink 1s steps(2) infinite;
+}
+@keyframes md-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Kho câu hỏi ---------- */
+.md-q {
+  margin: 0 auto 12px;
+  max-width: 780px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.md-q-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.md-q-text {
+  margin: 0 0 8px;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.md-q-line {
+  margin: 0 0 4px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.md-q-line b {
+  color: var(--navy);
+}
+.md-q-line.warn {
+  color: var(--gold-text);
+}
+.md-sec-title {
+  max-width: 780px;
+  margin: 18px auto 10px;
+  font-size: 16px;
+  color: var(--navy);
+}
+.md-muted {
+  max-width: 780px;
+  margin: 0 auto 12px;
+  color: var(--muted);
+  font-size: 15.5px;
+}
+
+/* ---------- Điện thoại ---------- */
+@media (max-width: 900px) {
+  .md-backdrop {
+    padding: 0;
+  }
+  .md-dialog {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+  .md-head {
+    padding: 12px 8px 10px 16px;
+  }
+  .md-title {
+    font-size: 19px;
+  }
+  .md-steps {
+    display: flex;
+    gap: 4px;
+    padding: 0 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .md-steps .ag-tab {
+    flex: 1;
+  }
+  .md-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .md-body[data-step='form'] .md-result-pane,
+  .md-body[data-step='result'] .md-form-pane {
+    display: none;
+  }
+  .md-form-pane {
+    border-right: 0;
+  }
+  .md-scroll {
+    padding: 14px 16px 24px;
+  }
+  .md-notice {
+    max-width: 100%;
+    text-align: left;
+  }
+  .md-tabbar {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---------- Ngăn hỏi đáp ---------- */
+.md-assist {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  height: min(780px, 100%);
+  min-height: 0;
+  border-radius: 20px;
+  background: var(--cream);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  outline: none;
+  animation: ag-in 220ms var(--ag-ease) both;
+}
+.md-assist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 10px 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.md-assist-head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--navy);
+}
+.md-assist-head p {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.md-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  scroll-behavior: smooth;
+}
+.md-assist .ag-chips {
+  margin: 0;
+  padding: 0 20px 10px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.md-assist .ag-chip {
+  min-height: 44px;
+  height: auto;
+  padding: 8px 14px;
+  text-align: left;
+  line-height: 1.35;
+}
+.md-assist .ag-composer-wrap {
+  padding: 4px 16px 16px;
+}
+.md-assist .ag-composer {
+  max-width: none;
+}
+.md-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 15.5px;
+}
+.md-msg-err .ag-text {
+  color: #8e1f17;
+}
+@media (max-width: 900px) {
+  .md-assist {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+  .md-thread {
+    padding: 14px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-dialog,
+  .md-assist {
+    animation: none;
+  }
+  .md-thread {
+    scroll-behavior: auto;
+  }
+  .md-cursor::after {
+    animation: none;
+  }
+}
+
+/* ---------- In ---------- */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .md-print,
+  .md-print * {
+    visibility: visible !important;
+  }
+  .md-backdrop,
+  .md-dialog,
+  .md-body,
+  .md-result-pane,
+  .md-scroll {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+  .md-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

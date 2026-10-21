@@ -57,6 +57,26 @@ export async function POST(request: Request) {
       requiresApproval = true;
     }
 
+    // Bài liên kết (tích hợp liên môn): chỉ dùng cho các quy trình soạn bằng AI.
+    let linkedStd: Awaited<ReturnType<typeof getStandardLesson>> | undefined;
+    if (params.lienKetId) {
+      const wf = routeWorkflow(params.formatDauRa);
+      if (wf === 'quiz' || wf === 'de_kiem_tra') {
+        warnings.push('Sản phẩm này chưa hỗ trợ ghép bài liên kết nên mình bỏ qua bài liên kết.');
+      } else {
+        const l = await getStandardLesson(orgId, params.lienKetId);
+        if (l.status === 'khong_co') {
+          warnings.push('Không tìm thấy bài liên kết trong Kho nên mình chỉ soạn theo bài chính.');
+        } else {
+          linkedStd = l;
+          if (l.status === 'chua_duyet') {
+            warnings.push('Bài liên kết chưa qua người duyệt: phần tích hợp chỉ là bản nháp.');
+            requiresApproval = true;
+          }
+        }
+      }
+    }
+
     let guardrail: { ok: boolean; reasons: string[] } | undefined;
     if (params.suKienThoiSu) {
       const g = checkNewsEvent(params.suKienThoiSu);
@@ -105,6 +125,7 @@ export async function POST(request: Request) {
         standard: std as unknown as Record<string, unknown>,
         classContext: profile ? buildClassPedagogicalContext(profile) : undefined,
         news: params.suKienThoiSu,
+        linked: linkedStd as unknown as Record<string, unknown> | undefined,
       });
       const llm = await callLiveLlm(system, user, undefined, { maxTokens: 6000, timeoutMs: 90_000 });
       if (llm.ok && llm.content) {

@@ -1,8 +1,30 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import '@/app/ui-modal.css';
 import { cleanPedagogicalText } from '@/lib/text/clean';
+import { Icon } from '@/components/ui/icons';
+import { useDialog } from '@/components/studio/useDialog';
 import type { ClassProfile, GeneratedResource, KnowledgeNode } from '@/lib/types';
+
+type Msg = {
+  role: 'teacher' | 'assistant';
+  text: string;
+  mode?: string;
+  error?: boolean;
+};
+
+const WELCOME: Msg = {
+  role: 'assistant',
+  text: 'Chào thầy/cô. Thầy/cô cần hỏi về quy chế (Công văn 5512, Thông tư 22), hoạt động khởi động hay cách phân hóa bài tập cho lớp đang dạy?',
+};
+
+const DEFAULT_SUGGESTIONS = [
+  'Gợi ý hoạt động khởi động 5 phút đầu giờ',
+  'Cách giao bài phân hóa cho nhóm Cơ bản và Nâng cao',
+  'Kết nối bài học này với môn học khác',
+  'Cách viết nhận xét học bạ cuối kỳ theo Thông tư 22',
+];
 
 export function AssistantDrawer({
   open,
@@ -19,29 +41,35 @@ export function AssistantDrawer({
 }) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<
-    { role: 'teacher' | 'assistant'; text: string; mode?: string }[]
-  >([
-    {
-      role: 'assistant',
-      text: 'Chào thầy/cô. Tôi là Trợ lý Chuyên môn Trường Việt Anh. Thầy/cô cần tra cứu quy chế Công văn 5512, Thông tư 22/27, gợi ý hoạt động khởi động hay cách phân hóa bài tập cho lớp đang dạy?',
-    },
-  ]);
-  const [suggestions, setSuggestions] = useState<string[]>([
-    'Gợi ý hoạt động khởi động 5 phút đầu giờ tạo hứng thú',
-    'Cách giao bài phân hóa cho nhóm học sinh Cơ bản và Nâng cao',
-    'Gợi ý kết nối bài học này với môn học khác trong tuần',
-    'Cách viết nhận xét học bạ cuối kỳ theo Thông tư 22',
-  ]);
+  const [history, setHistory] = useState<Msg[]>([WELCOME]);
+  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const handleEscape = useCallback(() => {
+    onCloseRef.current();
+  }, []);
+  useDialog(dialogRef, open, handleEscape);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [history, loading, open]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [question, open]);
 
   if (!open) return null;
 
@@ -52,11 +80,14 @@ export function AssistantDrawer({
     setHistory((prev) => [...prev, { role: 'teacher', text: promptText }]);
     if (!qText) setQuestion('');
     setLoading(true);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
 
     try {
       const res = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
         body: JSON.stringify({
           question: promptText,
           classId: classProfile?.id,
@@ -78,7 +109,7 @@ export function AssistantDrawer({
             : res.status === 401
               ? 'Phiên làm việc đã hết hạn, vui lòng đăng nhập lại.'
               : data.error || `Trợ lý gặp lỗi (${res.status}), vui lòng thử lại sau.`;
-        setHistory((prev) => [...prev, { role: 'assistant', text: msg }]);
+        setHistory((prev) => [...prev, { role: 'assistant', text: msg, error: true }]);
         return;
       }
       setHistory((prev) => [
@@ -93,153 +124,151 @@ export function AssistantDrawer({
         setSuggestions(data.suggestions);
       }
     } catch {
+      if (ctrl.signal.aborted) return;
       setHistory((prev) => [
         ...prev,
         {
           role: 'assistant',
           text: 'Không kết nối được máy chủ, vui lòng thử lại.',
+          error: true,
         },
       ]);
     } finally {
+      if (abortRef.current === ctrl) abortRef.current = null;
       setLoading(false);
     }
   };
 
+  const scope = [
+    classProfile ? `Lớp ${classProfile.className}` : 'Toàn trường',
+    primaryNode ? primaryNode.title : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="md-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Trợ lý Chuyên môn Việt Anh"
-        className="va-assistant-panel"
-        style={{
-          width: '100%',
-          maxWidth: '680px',
-          maxHeight: '88vh',
-          background: 'var(--cream)',
-          border: '1px solid var(--line)',
-          borderRadius: '10px',
-          boxShadow: '0 24px 60px rgba(13, 14, 43, 0.4)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-        onClick={(e) => e.stopPropagation()}
+        aria-labelledby="md-assist-title"
+        className="md-assist"
+        tabIndex={-1}
       >
-        <header className="studio-header">
-          <div>
-            <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--cta)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              TRƯỜNG VIỆT ANH · HỖ TRỢ SƯ PHẠM TRỰC TUYẾN
-            </div>
-            <h2 style={{ color: '#ffffff', fontSize: '19px', fontWeight: 800, marginTop: '2px' }}>
-              Trợ lý Chuyên môn Việt Anh
-            </h2>
-            <p style={{ color: 'rgba(255,255,255,0.76)', fontSize: '13.5px', marginTop: '2px' }}>
-              {classProfile ? `Lớp ${classProfile.className} (${classProfile.campus})` : 'Toàn trường'}
-              {primaryNode ? ` · Bài: ${primaryNode.title}` : ''}
-            </p>
+        <header className="md-assist-head">
+          <div style={{ minWidth: 0 }}>
+            <h2 id="md-assist-title">Hỏi đáp chuyên môn</h2>
+            <p>{scope}</p>
           </div>
           <button
             type="button"
-            className="btn"
-            style={{
-              background: 'rgba(255,255,255,0.12)',
-              color: '#ffffff',
-              borderColor: 'rgba(255,255,255,0.25)',
-            }}
+            className="ag-iconbtn"
+            aria-label="Đóng hỏi đáp"
+            title="Đóng (Esc)"
             onClick={onClose}
           >
-            Đóng
+            <Icon name="x" />
           </button>
         </header>
 
         <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '20px 22px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
+          className="md-thread"
+          ref={threadRef}
+          role="log"
+          aria-live="polite"
+          aria-label="Cuộc trò chuyện"
         >
-          {history.map((item, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '14px 16px',
-                borderRadius: '8px',
-                background: item.role === 'teacher' ? 'var(--navy)' : '#ffffff',
-                border: item.role === 'teacher' ? 'none' : '1px solid var(--line)',
-                borderLeft: item.role === 'assistant' ? '4px solid var(--gold)' : 'none',
-                color: item.role === 'teacher' ? '#ffffff' : 'var(--ink)',
-                marginLeft: item.role === 'teacher' ? '48px' : '0',
-                marginRight: item.role === 'assistant' ? '24px' : '0',
-                whiteSpace: 'pre-wrap',
-                fontSize: '15.5px',
-                lineHeight: 1.6,
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: '12.5px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  color: item.role === 'teacher' ? 'var(--cta)' : 'var(--gold-text)',
-                  marginBottom: '4px',
-                }}
-              >
-                {item.role === 'teacher' ? 'Giáo viên' : 'Trợ lý Chuyên môn Việt Anh'}
+          {history.map((item, idx) =>
+            item.role === 'teacher' ? (
+              <div key={idx} className="ag-msg user">
+                <div className="ag-bubble">{item.text}</div>
               </div>
-              <div>{cleanPedagogicalText(item.text)}</div>
+            ) : (
+              <div
+                key={idx}
+                className={`ag-msg${item.error ? ' md-msg-err' : ''}`}
+              >
+                <div className="ag-avatar">
+                  <img src="/logo-crest.webp" alt="" />
+                </div>
+                <div className="ag-body">
+                  <div className="ag-text">{cleanPedagogicalText(item.text)}</div>
+                </div>
+              </div>
+            ),
+          )}
+          {loading && (
+            <div className="ag-msg">
+              <div className="ag-avatar">
+                <img src="/logo-crest.webp" alt="" />
+              </div>
+              <div className="ag-body">
+                <div className="md-typing" role="status">
+                  <span className="ag-spin" aria-hidden="true" />
+                  Đang trả lời...
+                </div>
+              </div>
             </div>
-          ))}
+          )}
         </div>
 
-        <div
-          style={{
-            padding: '14px 22px 18px',
-            background: '#ffffff',
-            borderTop: '1px solid var(--line)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
-          }}
-        >
-          <div className="row-wrap">
+        {suggestions.length > 0 && (
+          <div className="ag-chips" aria-label="Câu hỏi gợi ý">
             {suggestions.map((sug) => (
               <button
                 key={sug}
                 type="button"
-                className="va-badge va-badge-gold"
-                style={{ cursor: 'pointer', padding: '5px 10px', fontSize: '13px' }}
+                className="ag-chip"
+                disabled={loading}
                 onClick={() => void sendQuestion(sug)}
               >
                 {sug}
               </button>
             ))}
           </div>
+        )}
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void sendQuestion();
-            }}
-            className="va-assistant-form"
-            style={{ display: 'flex', gap: '10px' }}
-          >
-            <input
-              type="text"
+        <form
+          className="ag-composer-wrap"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sendQuestion();
+          }}
+        >
+          <div className="ag-composer">
+            <label htmlFor="md-assist-q" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+              Câu hỏi của thầy/cô
+            </label>
+            <textarea
+              id="md-assist-q"
+              ref={inputRef}
+              rows={1}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Nhập câu hỏi về phương pháp dạy học, Công văn 5512, Thông tư 22..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void sendQuestion();
+                }
+              }}
+              placeholder="Hỏi về phương pháp dạy, quy chế..."
             />
-            <button type="submit" className="btn btn-cta" disabled={loading}>
-              {loading ? 'Đang xử lý...' : 'Gửi câu hỏi'}
+            <button
+              type="submit"
+              className="ag-send"
+              aria-label="Gửi câu hỏi"
+              disabled={loading || !question.trim()}
+            >
+              <Icon name="send" />
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
       </div>
     </div>
   );

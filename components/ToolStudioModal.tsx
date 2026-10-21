@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import '@/app/ui-modal.css';
 import { getCategoryMeta, SUBJECTS } from '@/lib/catalog';
 import { cleanPedagogicalText } from '@/lib/text/clean';
 import { CLASS_PROFILES } from '@/lib/classes';
 import { pickDefaultClass } from '@/lib/classes/pickDefaultClass';
+import { Icon } from '@/components/ui/icons';
+import { DocBody } from '@/components/studio/DocBody';
+import { QuestionBank } from '@/components/studio/QuestionBank';
+import { useDialog } from '@/components/studio/useDialog';
 import type {
   SupabaseAtom,
   SupabaseQuestion,
@@ -25,24 +30,30 @@ const POST_ACTIONS: {
   label: string;
 }[] = [
   { action: 'rut_ngan', label: 'Rút gọn 1 trang A4' },
-  { action: 'tang_do_kho', label: 'Tăng độ khó (Vận dụng cao)' },
+  { action: 'tang_do_kho', label: 'Tăng độ khó' },
   { action: 'giam_do_kho', label: 'Hỗ trợ nhóm Cơ bản' },
-  { action: 'tao_rubric', label: '+ Bảng tiêu chí chấm điểm' },
-  { action: 'tao_phieu_hoc_tap', label: '+ Phiếu học tập trên lớp' },
+  { action: 'tao_rubric', label: 'Thêm bảng tiêu chí chấm' },
+  { action: 'tao_phieu_hoc_tap', label: 'Thêm phiếu học tập' },
   { action: 'song_ngu_anh_viet', label: 'Song ngữ Anh - Việt' },
-  { action: 'them_hoat_dong_vui_ve', label: '+ Hoạt động khởi động 5 phút' },
+  { action: 'them_hoat_dong_vui_ve', label: 'Thêm khởi động 5 phút' },
 ];
 
 const AI_MODELS = [
   {
     id: 'cc/claude-haiku-4-5-20251001',
-    label: 'Claude Haiku 4.5 (Tốc độ nhanh ~15–20 giây)',
+    label: 'Nhanh (khoảng 15-20 giây)',
   },
   {
     id: 'cc/claude-sonnet-5-5',
-    label: 'Claude Sonnet 5.5 (Phân tích sâu ~35–50 giây)',
+    label: 'Kỹ hơn (khoảng 35-50 giây)',
   },
 ];
+
+const DATA_SOURCE_LABEL: Record<string, string> = {
+  supabase_rich: 'Dùng dữ liệu thật của bài',
+  class_profile: 'Dùng hồ sơ lớp',
+  prompt_only: 'Chỉ theo ô nhập',
+};
 
 const LAST_CLASS_KEY = 'va:lastClassId';
 
@@ -68,6 +79,15 @@ function friendlyModelLabel(modelUsed: string): string {
     ? 'Trợ lý AI'
     : 'Mẫu soạn sẵn (AI không phản hồi)';
 }
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+const BAD_NOTICE = /không|lỗi|hết hạn|quá tải|gián đoạn|đã hủy/i;
 
 export function ToolStudioModal({
   tool,
@@ -106,6 +126,7 @@ export function ToolStudioModal({
   const [atomQuestions, setAtomQuestions] = useState<SupabaseQuestion[]>([]);
   const [atomSocratic, setAtomSocratic] = useState<SupabaseSocratic[]>([]);
   const [rightTab, setRightTab] = useState<'document' | 'bank'>('document');
+  const [step, setStep] = useState<'form' | 'result'>('form');
   const [isEditingDoc, setIsEditingDoc] = useState<boolean>(false);
   const [bankError, setBankError] = useState<string>('');
   const [autoTopic, setAutoTopic] = useState<string>('');
@@ -132,21 +153,24 @@ export function ToolStudioModal({
     if (!manualClassRef.current) {
       manualClassRef.current = readLastClassId();
     }
-    const preferred =
-      manualClassRef.current ?? initialClassProfile?.id;
+    const preferred = manualClassRef.current ?? initialClassProfile?.id;
     setClassId(
       pickDefaultClass(CLASS_PROFILES, grade, subject, preferred)?.id ?? '',
     );
   }, [grade, subject, initialClassProfile?.id]);
 
-  // Focus vào hộp thoại khi mở, trả focus khi đóng.
+  // Focus vào hộp thoại, bẫy Tab, ESC (đang chạy thì lần 1 hủy, lần 2 đóng).
   const toolOpen = Boolean(tool);
-  useEffect(() => {
-    if (!toolOpen) return;
-    const prev = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-    return () => prev?.focus?.();
-  }, [toolOpen]);
+  const handleEscape = useCallback(() => {
+    const running = abortRef.current;
+    if (running && !running.signal.aborted) {
+      running.abort();
+      return true;
+    }
+    onCloseRef.current();
+    return false;
+  }, []);
+  useDialog(dialogRef, toolOpen, handleEscape);
 
   // Prefill chủ đề từ bài được chọn; chỉ ghi đè khi GV chưa tự sửa.
   const applyAutoTopic = (title: string) => {
@@ -162,10 +186,10 @@ export function ToolStudioModal({
   };
 
   useEffect(() => {
-    if (previewRef.current) {
+    if (previewRef.current && loading) {
       previewRef.current.scrollTop = previewRef.current.scrollHeight;
     }
-  }, [streamText]);
+  }, [streamText, loading]);
 
   useEffect(() => {
     if (!loading) return;
@@ -197,6 +221,7 @@ export function ToolStudioModal({
     setResource(null);
     setSaveNotice('');
     setRightTab('document');
+    setStep('form');
     setIsEditingDoc(false);
   }, [tool, initialGrade, initialSubject, initialNode]);
 
@@ -249,6 +274,7 @@ export function ToolStudioModal({
         );
       });
     return () => ctrl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, grade, subject]);
 
   useEffect(() => {
@@ -293,26 +319,14 @@ export function ToolStudioModal({
     return () => ctrl.abort();
   }, [tool, atomId]);
 
-  useEffect(() => {
-    if (!tool) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      const running = abortRef.current;
-      if (running && !running.signal.aborted) {
-        e.preventDefault();
-        running.abort(); // ESC lần 1: hủy biên soạn
-        return;
-      }
-      onCloseRef.current(); // ESC lần 2 / không chạy: đóng
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tool]);
-
   if (!tool) return null;
 
   const selectedSbAtom = sbAtoms.find((a) => a.id === atomId);
   const catMeta = getCategoryMeta(tool.category);
+  const dataSourceLabel = tool.dataSource
+    ? DATA_SOURCE_LABEL[tool.dataSource]
+    : undefined;
+  const experimental = tool.maturity === 'experimental';
 
   const handleGenerate = async (
     postAction?: GenerationRequest['postAction'],
@@ -336,6 +350,8 @@ export function ToolStudioModal({
     setSaveNotice('');
     setStreamText('');
     setRightTab('document');
+    setIsEditingDoc(false);
+    setStep('result');
     type Done = {
       resource?: GeneratedResource;
       warning?: string;
@@ -346,10 +362,10 @@ export function ToolStudioModal({
       setResource(data.resource);
       const savedNote =
         data.saved && !data.saved.local && !data.saved.supabase
-          ? 'nhưng chưa lưu được vào Kho Tài nguyên.'
-          : '& lưu vào Kho Tài nguyên.';
+          ? 'nhưng chưa lưu được vào Kho tài nguyên.'
+          : 'và đã lưu vào Kho tài nguyên.';
       setSaveNotice(
-        `Đã biên soạn bằng ${friendlyModelLabel(data.resource.modelUsed)} ${savedNote}${
+        `Soạn xong ${savedNote}${
           data.warning ? ` Lưu ý: ${data.warning}` : ''
         }`,
       );
@@ -466,7 +482,7 @@ export function ToolStudioModal({
         objectives: `${String(prev.objectives || '')}\n\n[Đưa câu hỏi vào bài]:\n${formatted}`.trim(),
       }));
       setSaveNotice(
-        'Đã chèn câu hỏi vào ô Yêu cầu đầu vào để AI lồng ghép vào bài soạn!',
+        'Đã chèn câu hỏi vào ô yêu cầu để AI lồng ghép vào bài soạn.',
       );
       return;
     }
@@ -492,7 +508,7 @@ export function ToolStudioModal({
       markdownContent: `${resource.markdownContent}\n\n${formatted}`,
     });
     setRightTab('document');
-    setSaveNotice('Đã chèn câu hỏi trực tiếp vào cuối trang giấy A4!');
+    setSaveNotice('Đã chèn câu hỏi vào cuối bản soạn.');
   };
 
   const handleInsertSocraticToDoc = (s: SupabaseSocratic, idx: number) => {
@@ -509,9 +525,7 @@ export function ToolStudioModal({
         ...prev,
         objectives: `${String(prev.objectives || '')}\n\n[Lồng ghép kịch bản Socratic]:\n${formatted}`.trim(),
       }));
-      setSaveNotice(
-        'Đã đưa kịch bản Socratic vào yêu cầu đầu vào cho bài soạn!',
-      );
+      setSaveNotice('Đã đưa kịch bản Socratic vào ô yêu cầu cho bài soạn.');
       return;
     }
 
@@ -526,7 +540,7 @@ export function ToolStudioModal({
       markdownContent: `${resource.markdownContent}\n\n${formatted}`,
     });
     setRightTab('document');
-    setSaveNotice('Đã chèn kịch bản Socratic vào trang giấy A4!');
+    setSaveNotice('Đã chèn kịch bản Socratic vào bản soạn.');
   };
 
   const handleUpdateSection = (
@@ -552,7 +566,7 @@ export function ToolStudioModal({
     if (!resource) return;
     const htmlDoc = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="vi">
-<head><meta charset="utf-8"><title>${resource.title}</title>
+<head><meta charset="utf-8"><title>${escapeHtml(resource.title)}</title>
 <style>
   body { font-family: 'Times New Roman', Arial, sans-serif; font-size: 13pt; line-height: 1.5; color: #000000; }
   h1 { font-size: 15pt; text-transform: uppercase; margin-bottom: 8px; }
@@ -564,18 +578,18 @@ export function ToolStudioModal({
 <body>
   <div class="meta">
     <b>TRƯỜNG TIỂU HỌC, THCS & THPT VIỆT ANH</b><br/>
-    <b>Tài liệu:</b> ${resource.title}<br/>
-    <b>Giáo viên:</b> ${resource.teacher.name} · <b>Khối:</b> ${resource.grade}<br/>
-    <b>Căn cứ chuyên môn:</b> ${tool.moetStandardRef}
+    <b>Tài liệu:</b> ${escapeHtml(resource.title)}<br/>
+    <b>Giáo viên:</b> ${escapeHtml(resource.teacher.name)} · <b>Khối:</b> ${escapeHtml(String(resource.grade))}<br/>
+    <b>Căn cứ chuyên môn:</b> ${escapeHtml(tool.moetStandardRef)}
   </div>
   ${resource.structuredSections
     .map(
       (s) =>
-        `<h2>${s.heading}</h2><pre>${s.body.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`,
+        `<h2>${escapeHtml(s.heading)}</h2><pre>${escapeHtml(s.body)}</pre>`,
     )
     .join('\n')}
 </body></html>`;
-    const blob = new Blob(['\ufeff', htmlDoc], {
+    const blob = new Blob(['﻿', htmlDoc], {
       type: 'application/msword;charset=utf-8',
     });
     const url = URL.createObjectURL(blob);
@@ -584,7 +598,7 @@ export function ToolStudioModal({
     a.download = `${tool.slug}-khoi-${resource.grade}.doc`;
     a.click();
     URL.revokeObjectURL(url);
-    setSaveNotice('Đã tải về file Word (.doc) sẵn sàng in ấn.');
+    setSaveNotice('Đã tải về file Word (.doc).');
   };
 
   const handleDownloadMarkdown = () => {
@@ -603,153 +617,110 @@ export function ToolStudioModal({
 
   const handleCopy = async () => {
     if (!resource) return;
-    await navigator.clipboard.writeText(resource.markdownContent);
-    setSaveNotice('Đã sao chép toàn bộ nội dung vào bộ nhớ tạm.');
+    try {
+      await navigator.clipboard.writeText(resource.markdownContent);
+      setSaveNotice('Đã sao chép nội dung.');
+    } catch {
+      setSaveNotice('Không sao chép được, thầy/cô thử lại giúp.');
+    }
   };
 
+  const setField = (id: string, value: string) =>
+    setInputs((prev) => ({ ...prev, [id]: value }));
+
+  const noticeText = bankError || saveNotice;
+  const noticeBad = Boolean(bankError) || BAD_NOTICE.test(saveNotice);
+  const classOptions = CLASS_PROFILES.filter((c) => c.grade === grade);
+  const hasStream = loading && streamText.length > 0;
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="md-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         ref={dialogRef}
-        className="studio-modal"
+        className="md-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={tool.name}
+        aria-labelledby="md-tool-title"
         tabIndex={-1}
-        style={{ outline: 'none' }}
-        onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER */}
-        <header className="studio-header">
-          <div>
-            <div className="row-wrap" style={{ marginBottom: '6px' }}>
-              <span
-                style={{
-                  background: 'var(--cta)',
-                  color: 'var(--navy)',
-                  fontWeight: 800,
-                  fontSize: '12px',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {catMeta.name}
-              </span>
-              <span
-                style={{
-                  background: 'rgba(255,255,255,0.14)',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '12.5px',
-                  padding: '2px 9px',
-                  borderRadius: '4px',
-                }}
-              >
-                {tool.moetStandardRef}
-              </span>
-              {selectedSbAtom && (
-                <span
-                  style={{
-                    background: 'rgba(59, 209, 127, 0.2)',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                    fontSize: '12.5px',
-                    padding: '2px 9px',
-                    borderRadius: '4px',
-                  }}
-                >
-                  Bài dạy: {selectedSbAtom.code} ({atomQuestions.length} câu hỏi · {atomSocratic.length} kịch bản Socratic)
+        {/* ĐẦU */}
+        <header className="md-head no-print">
+          <div className="md-head-main">
+            <div className="md-kicker">{catMeta.name}</div>
+            <h2 className="md-title" id="md-tool-title">
+              {tool.name}
+            </h2>
+            <p className="md-desc">{tool.shortDescription}</p>
+            <div className="md-tags">
+              {experimental && (
+                <span className="md-tag warn" title={tool.maturityNote}>
+                  <Icon name="alert" size={16} />
+                  Thử nghiệm
+                </span>
+              )}
+              {dataSourceLabel && (
+                <span className="md-tag">
+                  <Icon name="info" size={16} />
+                  {dataSourceLabel}
                 </span>
               )}
             </div>
-            <h2 style={{ color: '#ffffff', fontSize: '20px', fontWeight: 800 }}>
-              {tool.name}
-            </h2>
-          </div>
-
-          <div className="row-wrap">
-            {resource && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-cta"
-                  onClick={handleDownloadWord}
-                >
-                  Tải file Word (.doc)
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setIsEditingDoc((prev) => !prev)}
-                  style={{
-                    background: isEditingDoc ? 'var(--gold)' : undefined,
-                    color: isEditingDoc ? 'var(--navy)' : undefined,
-                    fontWeight: 700,
-                  }}
-                >
-                  {isEditingDoc ? '✓ Xong chỉnh sửa' : 'Chỉnh sửa trực tiếp'}
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => window.print()}
-                >
-                  In / Xuất PDF A4
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => void handleCopy()}
-                >
-                  Sao chép
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={handleDownloadMarkdown}
-                >
-                  Tải .md
-                </button>
-              </>
+            {experimental && tool.maturityNote && (
+              <p className="md-hint">{tool.maturityNote}</p>
             )}
-            <button
-              type="button"
-              className="btn"
-              style={{
-                background: 'rgba(255,255,255,0.12)',
-                color: '#ffffff',
-                borderColor: 'rgba(255,255,255,0.28)',
-              }}
-              onClick={onClose}
-            >
-              Đóng [ESC]
-            </button>
           </div>
+          <button
+            type="button"
+            className="ag-iconbtn"
+            aria-label="Đóng hộp thoại"
+            title="Đóng (Esc)"
+            onClick={onClose}
+          >
+            <Icon name="x" />
+          </button>
         </header>
 
-        {/* 2-COLUMN SPLIT BODY */}
-        <div className="studio-body">
-          {/* LEFT PANE: SUPABASE ATOM CONTEXT + INPUT FORM */}
-          <aside className="studio-form-pane">
-            <div
-              style={{
-                background: 'var(--cream)',
-                border: '1px solid var(--line)',
-                borderLeft: '4px solid var(--gold)',
-                borderRadius: '6px',
-                padding: '14px 16px',
-              }}
-            >
-              <div className="va-crumb" style={{ marginBottom: '8px' }}>
-                1. CHỌN BÀI DẠY & CHẾ ĐỘ AI BIÊN SOẠN
-              </div>
+        {/* BƯỚC (điện thoại) */}
+        <div className="md-steps no-print" role="tablist" aria-label="Các bước">
+          <button
+            type="button"
+            role="tab"
+            className="ag-tab"
+            aria-selected={step === 'form'}
+            onClick={() => setStep('form')}
+          >
+            1. Nhập yêu cầu
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className="ag-tab"
+            aria-selected={step === 'result'}
+            onClick={() => setStep('result')}
+          >
+            2. Xem kết quả
+          </button>
+        </div>
 
-              <div className="stack" style={{ gap: '10px' }}>
-                <div className="grid-2" style={{ gap: '10px' }}>
-                  <div className="field">
-                    <label>Khối lớp</label>
+        <div className="md-body" data-step={step}>
+          {/* TRÁI: BIỂU MẪU */}
+          <section className="md-form-pane no-print" aria-label="Biểu mẫu">
+            <div className="md-form-scroll">
+              <div className="md-group">
+                <h3 className="md-group-title">Bài dạy</h3>
+                <div className="md-row2 md-fld">
+                  <div>
+                    <label className="ag-field-label" htmlFor="md-grade">
+                      Khối
+                    </label>
                     <select
+                      id="md-grade"
+                      className="ag-field"
                       value={grade}
                       onChange={(e) => setGrade(e.target.value as GradeLevel)}
                     >
@@ -760,13 +731,15 @@ export function ToolStudioModal({
                       ))}
                     </select>
                   </div>
-                  <div className="field">
-                    <label>Môn học</label>
+                  <div>
+                    <label className="ag-field-label" htmlFor="md-subject">
+                      Môn
+                    </label>
                     <select
+                      id="md-subject"
+                      className="ag-field"
                       value={subject}
-                      onChange={(e) =>
-                        setSubject(e.target.value as SubjectCode)
-                      }
+                      onChange={(e) => setSubject(e.target.value as SubjectCode)}
                     >
                       {SUBJECTS.map((s) => (
                         <option key={s.code} value={s.code}>
@@ -777,9 +750,13 @@ export function ToolStudioModal({
                   </div>
                 </div>
 
-                <div className="field">
-                  <label>Lớp</label>
+                <div className="md-fld">
+                  <label className="ag-field-label" htmlFor="md-class">
+                    Lớp
+                  </label>
                   <select
+                    id="md-class"
+                    className="ag-field"
                     value={classId}
                     onChange={(e) => {
                       manualClassRef.current = e.target.value;
@@ -787,14 +764,12 @@ export function ToolStudioModal({
                       writeLastClassId(e.target.value);
                     }}
                   >
-                    {CLASS_PROFILES.filter((c) => c.grade === grade).map(
-                      (c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.className}
-                        </option>
-                      ),
-                    )}
-                    {CLASS_PROFILES.every((c) => c.grade !== grade) &&
+                    {classOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.className}
+                      </option>
+                    ))}
+                    {classOptions.length === 0 &&
                       CLASS_PROFILES.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.className} (Khối {c.grade})
@@ -803,709 +778,389 @@ export function ToolStudioModal({
                   </select>
                 </div>
 
-                <div className="field">
-                  <label>Bài học / Đơn vị kiến thức ({sbAtoms.length} bài)</label>
+                <div className="md-fld">
+                  <label className="ag-field-label" htmlFor="md-atom">
+                    Bài học
+                  </label>
                   <select
+                    id="md-atom"
+                    className="ag-field"
                     value={atomId}
                     onChange={(e) => {
                       const nextAtomId = e.target.value;
                       setAtomId(nextAtomId);
-                      const foundAtom = sbAtoms.find(
-                        (a) => a.id === nextAtomId,
-                      );
+                      const foundAtom = sbAtoms.find((a) => a.id === nextAtomId);
                       if (foundAtom) {
                         applyAutoTopic(foundAtom.title);
                         setInputs((prev) => ({
                           ...prev,
-                          objectives:
-                            foundAtom.yeu_cau || prev.objectives || '',
+                          objectives: foundAtom.yeu_cau || prev.objectives || '',
                         }));
                       }
                     }}
                   >
+                    {sbAtoms.length === 0 && (
+                      <option value={atomId}>Đang tải danh sách bài...</option>
+                    )}
                     {sbAtoms.map((a) => (
                       <option key={a.id} value={a.id}>
-                        [{a.code}] {a.title}
+                        {a.title}
                       </option>
                     ))}
                   </select>
+                  {selectedSbAtom &&
+                    (selectedSbAtom.yeu_cau || selectedSbAtom.quan_niem_sai) && (
+                      <details className="md-atom">
+                        <summary>Yêu cầu cần đạt và lỗi hay gặp</summary>
+                        <p>
+                          {selectedSbAtom.chapter} · {selectedSbAtom.lesson}
+                        </p>
+                        {selectedSbAtom.yeu_cau && (
+                          <p>
+                            <b>Cần đạt:</b> {selectedSbAtom.yeu_cau}
+                          </p>
+                        )}
+                        {selectedSbAtom.quan_niem_sai && (
+                          <p className="warn">
+                            <b>Học sinh hay sai:</b> {selectedSbAtom.quan_niem_sai}
+                          </p>
+                        )}
+                      </details>
+                    )}
                 </div>
+              </div>
 
-                <div className="field">
-                  <label>Bộ não AI xử lý trực tiếp</label>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                  >
-                    {AI_MODELS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedSbAtom && (
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid var(--line)',
-                      borderRadius: '6px',
-                      padding: '10px 12px',
-                      fontSize: '13px',
-                      lineHeight: 1.5,
-                      display: 'grid',
-                      gap: '5px',
-                    }}
-                  >
-                    <div>
-                      <b style={{ color: 'var(--navy)' }}>
-                        {selectedSbAtom.code} ({selectedSbAtom.bloom} · DOK{' '}
-                        {selectedSbAtom.dok}):
-                      </b>{' '}
-                      {selectedSbAtom.chapter} · {selectedSbAtom.lesson}
+              <div className="md-group">
+                <h3 className="md-group-title">Yêu cầu của cô/thầy</h3>
+                {tool.inputFields.map((field) => {
+                  const fid = `md-f-${field.id}`;
+                  return (
+                    <div key={field.id} className="md-fld">
+                      <label className="ag-field-label" htmlFor={fid}>
+                        {field.label}
+                        {field.required && (
+                          <span className="md-req" aria-hidden="true">
+                            {' '}
+                            *
+                          </span>
+                        )}
+                      </label>
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          id={fid}
+                          className="ag-field"
+                          rows={4}
+                          value={String(inputs[field.id] ?? '')}
+                          placeholder={field.placeholder}
+                          onChange={(e) => setField(field.id, e.target.value)}
+                        />
+                      ) : field.type === 'select' && field.options ? (
+                        <select
+                          id={fid}
+                          className="ag-field"
+                          value={String(
+                            inputs[field.id] ?? field.defaultValue ?? '',
+                          )}
+                          onChange={(e) => setField(field.id, e.target.value)}
+                        >
+                          {field.options.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          id={fid}
+                          className="ag-field"
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          value={String(inputs[field.id] ?? '')}
+                          placeholder={field.placeholder}
+                          onChange={(e) => setField(field.id, e.target.value)}
+                        />
+                      )}
+                      {field.helpText && (
+                        <span className="md-hint">{field.helpText}</span>
+                      )}
+                      {field.id === 'topic' &&
+                        autoTopic &&
+                        String(inputs.topic ?? '') === autoTopic && (
+                          <span className="md-hint">
+                            Lấy theo bài đã chọn, cô/thầy có thể sửa.
+                          </span>
+                        )}
                     </div>
-                    {selectedSbAtom.yeu_cau && (
-                      <div>
-                        <b>Yêu cầu cần đạt:</b> {selectedSbAtom.yeu_cau}
-                      </div>
-                    )}
-                    {selectedSbAtom.quan_niem_sai && (
-                      <div style={{ color: 'var(--gold-text)' }}>
-                        <b>⚠️ Lỗi sai HS hay mắc:</b>{' '}
-                        {selectedSbAtom.quan_niem_sai}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })}
               </div>
+
+              <details className="md-adv">
+                <summary>Tùy chọn nâng cao</summary>
+                <label className="ag-field-label" htmlFor="md-model">
+                  Tốc độ soạn
+                </label>
+                <select
+                  id="md-model"
+                  className="ag-field"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                >
+                  {AI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </details>
             </div>
 
-            <div className="va-crumb" style={{ marginTop: '4px' }}>
-              2. YÊU CẦU CỤ THỂ CỦA GIÁO VIÊN CHO TIẾT NÀY
-            </div>
-
-            {tool.inputFields.map((field) => (
-              <div key={field.id} className="field">
-                <label>{field.label}</label>
-                {field.type === 'textarea' ? (
-                  <textarea
-                    value={String(inputs[field.id] ?? '')}
-                    placeholder={field.placeholder}
-                    onChange={(e) =>
-                      setInputs((prev) => ({
-                        ...prev,
-                        [field.id]: e.target.value,
-                      }))
-                    }
-                  />
-                ) : field.type === 'select' && field.options ? (
-                  <select
-                    value={String(
-                      inputs[field.id] ?? field.defaultValue ?? '',
-                    )}
-                    onChange={(e) =>
-                      setInputs((prev) => ({
-                        ...prev,
-                        [field.id]: e.target.value,
-                      }))
-                    }
-                  >
-                    {field.options.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+            <div className="md-form-foot">
+              <button
+                type="button"
+                className="ag-btn primary"
+                disabled={loading}
+                onClick={() => void handleGenerate()}
+              >
+                {loading ? (
+                  <>
+                    <span className="ag-spin" aria-hidden="true" />
+                    Đang soạn...
+                  </>
                 ) : (
-                  <input
-                    type={field.type === 'number' ? 'number' : 'text'}
-                    value={String(inputs[field.id] ?? '')}
-                    placeholder={field.placeholder}
-                    onChange={(e) =>
-                      setInputs((prev) => ({
-                        ...prev,
-                        [field.id]: e.target.value,
-                      }))
-                    }
-                  />
+                  <>
+                    <Icon name="sparkles" size={18} />
+                    {resource ? 'Soạn lại' : 'Biên soạn'}
+                  </>
                 )}
-                {field.id === 'topic' &&
-                  autoTopic &&
-                  String(inputs.topic ?? '') === autoTopic && (
-                    <small style={{ color: 'var(--muted)' }}>
-                      Đang dùng bài: {autoTopic}
-                    </small>
-                  )}
-              </div>
-            ))}
-
-            <button
-              type="button"
-              className="btn btn-cta"
-              style={{
-                width: '100%',
-                minHeight: '48px',
-                fontSize: '16px',
-                marginTop: '6px',
-              }}
-              disabled={loading}
-              onClick={() => void handleGenerate()}
-            >
-              {loading
-                ? 'AI đang biên soạn bài dạy (~15–20 giây)...'
-                : 'Biên soạn Học liệu bằng AI ngay →'}
-            </button>
-            {loading && (
-              <div className="stack" style={{ gap: '6px' }}>
-                <div
-                  className="row-between"
-                  style={{ fontSize: '13px', color: 'var(--muted)' }}
-                >
-                  <span>
-                    Đang nhận nội dung từ AI... {elapsed} giây
-                    {streamText ? ` · ${streamText.length} ký tự` : ''}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ minHeight: '28px', padding: '2px 10px' }}
-                    onClick={() => abortRef.current?.abort()}
-                  >
-                    Hủy
-                  </button>
-                </div>
-                <div
-                  ref={previewRef}
-                  aria-live="off"
-                  style={{
-                    maxHeight: '220px',
-                    overflowY: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: '13px',
-                    lineHeight: 1.5,
-                    background: '#ffffff',
-                    border: '1px dashed var(--line)',
-                    borderRadius: '6px',
-                    padding: '8px 10px',
-                  }}
-                >
-                  {streamText || 'Đang chờ AI bắt đầu viết...'}
-                </div>
-              </div>
-            )}
-          </aside>
-
-          {/* RIGHT PANE: TABS FOR A4 DOCUMENT & INSTANT LESSON QUESTION BANK */}
-          <div className="studio-preview-pane">
-            <div
-              className="row-between no-print"
-              style={{
-                maxWidth: '860px',
-                margin: '0 auto 14px auto',
-                background: '#ffffff',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--line)',
-              }}
-            >
-              <div className="row-wrap">
+              </button>
+              {loading && (
                 <button
                   type="button"
-                  className={`va-tab ${rightTab === 'document' ? 'active' : ''}`}
+                  className="ag-btn small ghost md-cancel"
+                  onClick={() => abortRef.current?.abort()}
+                >
+                  Hủy
+                </button>
+              )}
+            </div>
+          </section>
+
+          {/* PHẢI: KẾT QUẢ */}
+          <section className="md-result-pane" aria-label="Kết quả">
+            <div className="md-tabbar no-print">
+              <div className="ag-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  className="ag-tab"
+                  aria-selected={rightTab === 'document'}
                   onClick={() => setRightTab('document')}
                 >
-                  1. Bản thảo Giáo án / Học liệu A4
+                  Bản soạn
                 </button>
                 <button
                   type="button"
-                  className={`va-tab ${rightTab === 'bank' ? 'active' : ''}`}
+                  role="tab"
+                  className="ag-tab"
+                  aria-selected={rightTab === 'bank'}
                   onClick={() => setRightTab('bank')}
                 >
-                  2. Kho Câu hỏi & Kịch bản Socratic có sẵn của bài này
-                  <span className="va-tab-count">
-                    {atomQuestions.length + atomSocratic.length}
-                  </span>
+                  Câu hỏi có sẵn ({atomQuestions.length + atomSocratic.length})
                 </button>
               </div>
-              {saveNotice && (
-                <span className="va-badge va-badge-green">{saveNotice}</span>
-              )}
-              {bankError && (
-                <span
-                  role="alert"
-                  className="va-badge"
-                  style={{ whiteSpace: 'normal', color: '#b42318' }}
-                >
-                  {bankError}
-                </span>
-              )}
+              <div
+                className={`md-notice${noticeBad ? ' bad' : ''}`}
+                role={noticeBad ? 'alert' : 'status'}
+                aria-live="polite"
+              >
+                {noticeText}
+              </div>
             </div>
 
-            {rightTab === 'bank' ? (
-              <div
-                className="stack"
-                style={{ maxWidth: '860px', margin: '0 auto', gap: '16px' }}
-              >
-                <div className="card stack" style={{ gap: '12px' }}>
-                  <div className="row-between">
-                    <div>
-                      <div className="va-crumb">
-                        NGÂN HÀNG CÂU HỎI ĐÁNH GIÁ CỦA BÀI {selectedSbAtom?.code}
-                      </div>
-                      <h3 style={{ fontSize: '18px', fontWeight: 800 }}>
-                        {atomQuestions.length} Câu hỏi có sẵn (Kèm đáp án, lời giải & phân tích lỗi sai học sinh)
-                      </h3>
-                    </div>
-                  </div>
-
-                  {atomQuestions.length === 0 ? (
-                    <p style={{ color: 'var(--muted)' }}>
-                      Chưa có câu hỏi đính kèm cho mã bài này.
-                    </p>
-                  ) : (
-                    <div className="stack" style={{ gap: '12px' }}>
-                      {atomQuestions.map((q, idx) => (
-                        <div
-                          key={q.id}
-                          style={{
-                            border: '1px solid var(--line)',
-                            borderRadius: '8px',
-                            padding: '14px 16px',
-                            background: 'var(--cream)',
-                          }}
-                        >
-                          <div
-                            className="row-between"
-                            style={{ marginBottom: '8px' }}
-                          >
-                            <div className="row-wrap">
-                              <span className="va-badge va-badge-navy">
-                                Câu {idx + 1} ({q.id})
-                              </span>
-                              <span className="va-badge va-badge-gold">
-                                Độ khó: {q.do_kho} · DOK {q.dok}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn btn-cta"
-                              style={{ minHeight: '32px', padding: '4px 12px', fontSize: '13px' }}
-                              onClick={() => handleInsertQuestionToDoc(q, idx)}
-                            >
-                              + Đưa câu này vào bài soạn
-                            </button>
-                          </div>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              fontSize: '15px',
-                              marginBottom: '8px',
-                            }}
-                          >
-                            {q.noi_dung}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '14px',
-                              display: 'grid',
-                              gap: '4px',
-                            }}
-                          >
-                            <div>
-                              <b style={{ color: 'var(--green)' }}>
-                                ✓ Đáp án đúng:
-                              </b>{' '}
-                              {q.dap_an}
-                            </div>
-                            <div>
-                              <b>Hướng dẫn giải:</b> {q.loi_giai}
-                            </div>
-                            {Array.isArray(q.nhieu) && q.nhieu.length > 0 && (
-                              <div style={{ color: 'var(--gold-text)' }}>
-                                <b>Phân tích bẫy/lỗi sai học sinh hay chọn:</b>{' '}
-                                {q.nhieu
-                                  .map((n) => `"${n.noiDung}" (${n.lyDo})`)
-                                  .join(' | ')}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="card stack" style={{ gap: '12px' }}>
-                  <div>
-                    <div className="va-crumb">
-                      KỊCH BẢN HỎI ĐÁP SOCRATIC 4 BẬC (DÙNG KHI HỌC SINH TRẢ LỜI SAI TRÊN LỚP)
-                    </div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 800 }}>
-                      {atomSocratic.length} Kịch bản gợi mở từng bước giúp học sinh tự phát hiện lỗi sai
-                    </h3>
-                  </div>
-
-                  {atomSocratic.length === 0 ? (
-                    <p style={{ color: 'var(--muted)' }}>
-                      Chưa có kịch bản Socratic cho bài học này.
-                    </p>
-                  ) : (
-                    <div className="stack" style={{ gap: '12px' }}>
-                      {atomSocratic.map((s, idx) => (
-                        <div
-                          key={s.id}
-                          style={{
-                            border: '1px solid var(--line)',
-                            borderRadius: '8px',
-                            padding: '14px 16px',
-                            background: '#ffffff',
-                          }}
-                        >
-                          <div
-                            className="row-between"
-                            style={{ marginBottom: '8px' }}
-                          >
-                            <span className="va-badge va-badge-gold">
-                              Tình huống {idx + 1}: Khi HS trả lời sai &ldquo;
-                              {s.wrong_answer}&rdquo;
-                            </span>
-                            <button
-                              type="button"
-                              className="btn"
-                              style={{ minHeight: '32px', padding: '4px 12px', fontSize: '13px' }}
-                              onClick={() => handleInsertSocraticToDoc(s, idx)}
-                            >
-                              + Đưa kịch bản này vào giáo án
-                            </button>
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '14px',
-                              marginBottom: '8px',
-                              color: 'var(--muted)',
-                            }}
-                          >
-                            <b>Nguyên nhân gốc rễ học sinh hiểu nhầm:</b>{' '}
-                            {s.misconception}
-                          </div>
-                          <div
-                            style={{
-                              display: 'grid',
-                              gap: '6px',
-                              fontSize: '14px',
-                              background: 'var(--cream)',
-                              padding: '10px 12px',
-                              borderRadius: '6px',
-                            }}
-                          >
-                            <div>
-                              <b>Bước 1 (Khơi gợi):</b> {s.bac_1}
-                            </div>
-                            <div>
-                              <b>Bước 2 (Định hướng):</b> {s.bac_2}
-                            </div>
-                            <div>
-                              <b>Bước 3 (Phản biện):</b> {s.bac_3}
-                            </div>
-                            <div>
-                              <b style={{ color: 'var(--navy)' }}>
-                                Bước 4 (Chốt kiến thức):
-                              </b>{' '}
-                              {s.bac_4}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : !resource ? (
-              <div
-                className="doc-paper"
-                style={{
-                  padding: '44px 40px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '18px',
-                }}
-              >
-                <div>
-                  <div className="va-crumb">
-                    BẢN XEM TRƯỚC CẤU TRÚC TÀI LIỆU
-                  </div>
-                  <h3
-                    style={{
-                      fontSize: '22px',
-                      fontWeight: 800,
-                      marginTop: '4px',
-                    }}
-                  >
-                    {tool.name}
-                  </h3>
-                  <div
-                    className="va-rule"
-                    style={{ marginTop: '8px', marginBottom: '12px' }}
-                  />
-                  <p style={{ color: 'var(--muted)', fontSize: '15.5px' }}>
-                    {tool.vietAnhValueAdd}
-                  </p>
-                </div>
-
-                {loading ? (
-                  <div
-                    style={{
-                      background: 'var(--cream)',
-                      border: '2px solid var(--gold)',
-                      borderRadius: '8px',
-                      padding: '24px',
-                      display: 'grid',
-                      gap: '10px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '17px',
-                        fontWeight: 800,
-                        color: 'var(--navy)',
-                      }}
-                    >
-                      ⏳ Hệ thống AI đang biên soạn học liệu cho bài{' '}
-                      {selectedSbAtom?.code || atomId}...
-                    </div>
-                    <div style={{ fontSize: '14.5px', color: 'var(--muted)', lineHeight: 1.7 }}>
-                      ✓ Bước 1: Đã nạp Yêu cầu cần đạt & Lỗi sai thường gặp của học sinh từ Kho Tri thức
-                      <br />✓ Bước 2: Đã nạp {atomQuestions.length} câu hỏi đánh giá & {atomSocratic.length} kịch bản Socratic 4 bậc
-                      <br />⚡ Bước 3: Trợ lý AI (<b title={selectedModel}>{AI_MODELS.find((m) => m.id === selectedModel)?.label.split(' (')[0] ?? 'Claude'}</b>) đang viết chi tiết các hoạt động dạy học chuẩn {tool.moetStandardRef}...
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      background: 'var(--cream)',
-                      border: '1px solid var(--line)',
-                      borderRadius: '6px',
-                      padding: '16px 20px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 800,
-                        color: 'var(--navy)',
-                        marginBottom: '8px',
-                      }}
-                    >
-                      Các phần sẽ được AI biên soạn đầy đủ kèm dữ liệu thực của bài học:
-                    </div>
-                    <ol
-                      style={{
-                        margin: 0,
-                        paddingLeft: '20px',
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      {tool.outputSections.map((sec, idx) => (
-                        <li key={idx} style={{ fontWeight: 600 }}>
-                          {sec}
-                        </li>
-                      ))}
-                      <li
-                        style={{ fontWeight: 700, color: 'var(--gold-text)' }}
-                      >
-                        Phụ lục: {atomQuestions.length} Câu hỏi Đánh giá &{' '}
-                        {atomSocratic.length} Kịch bản Socratic 4 Bậc của bài{' '}
-                        {selectedSbAtom?.code}
-                      </li>
-                    </ol>
-                  </div>
-                )}
-
-                <div className="row-between" style={{ paddingTop: '8px' }}>
-                  <div style={{ fontSize: '14px', color: 'var(--muted)' }}>
-                    Đang gắn với bài{' '}
-                    <b>
-                      {selectedSbAtom
-                        ? `[${selectedSbAtom.code}] ${selectedSbAtom.title}`
-                        : atomId}
-                    </b>{' '}
-                    (Khối {grade}).
-                  </div>
-                  <div className="row-wrap">
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setRightTab('bank')}
-                    >
-                      Xem ngay {atomQuestions.length} câu hỏi có sẵn
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-cta"
-                      style={{ minHeight: '44px', paddingInline: '24px' }}
-                      disabled={loading}
-                      onClick={() => void handleGenerate()}
-                    >
-                      {loading
-                        ? 'Đang biên soạn...'
-                        : `Bấm để AI soạn ngay bài ${selectedSbAtom?.code || `Khối ${grade}`} →`}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div
-                className="stack"
-                style={{ maxWidth: '860px', margin: '0 auto', gap: '16px' }}
-              >
-                {/* 7 NÚT TINH CHỈNH NHANH 1-CLICK */}
-                <div className="card no-print" style={{ padding: '14px 18px' }}>
-                  <div
-                    className="row-between"
-                    style={{ marginBottom: '10px' }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 800,
-                        color: 'var(--gold-text)',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      Tinh chỉnh & Mở rộng nhanh bằng AI (1-Click):
-                    </span>
-                    <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
-                      Bấm nút bất kỳ để AI viết lại hoặc bổ sung thêm phần phụ lục
-                    </span>
-                  </div>
-                  <div className="row-wrap">
-                    {POST_ACTIONS.map((item) => (
-                      <button
-                        key={item.action}
-                        type="button"
-                        className="cat-tab"
-                        style={{
-                          minHeight: '34px',
-                          padding: '5px 11px',
-                          fontSize: '13.5px',
-                        }}
-                        disabled={loading}
-                        onClick={() => void handleGenerate(item.action)}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* THANH ĐỐI CHIẾU CHUẨN BỘ GD&ĐT */}
-                <div className="card no-print" style={{ padding: '14px 18px' }}>
-                  <div className="row-wrap">
-                    <strong style={{ fontSize: '13.5px', color: 'var(--navy)' }}>
-                      Kiểm định quy chế ({tool.moetStandardRef}):
-                    </strong>
-                    {resource.moetComplianceChecklist.map((chk, idx) => (
-                      <span
-                        key={idx}
-                        className="va-badge va-badge-green"
-                        title={chk.note}
-                      >
-                        ✓ {chk.criterion}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* TỜ GIẤY A4 HIỂN THỊ KẾT QUẢ */}
-                <div id="tool-studio-a4-preview" className="doc-paper">
-                  <div className="doc-header">
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 800,
-                          color: 'var(--navy)',
-                          fontSize: '15px',
-                        }}
-                      >
-                        TRƯỜNG TIỂU HỌC, THCS & THPT VIỆT ANH
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '13.5px',
-                          color: 'var(--muted)',
-                          marginTop: '3px',
-                        }}
-                      >
-                        Khối lớp: <b>Khối {resource.grade}</b> · Giáo viên:{' '}
-                        <b>{resource.teacher.name}</b>
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        textAlign: 'right',
-                        display: 'flex',
-                        gap: '8px',
-                        flexWrap: 'wrap',
-                        justifyContent: 'flex-end',
-                      }}
-                    >
-                      <span
-                        className="va-badge va-badge-navy"
-                        title={resource.modelUsed}
-                      >
-                        {friendlyModelLabel(resource.modelUsed)}
-                      </span>
-                      <span className="va-badge va-badge-gold">
-                        {tool.moetStandardRef}
-                      </span>
-                    </div>
-                  </div>
-
-                  <h2
-                    style={{
-                      fontSize: '21px',
-                      fontWeight: 800,
-                      marginBottom: '14px',
-                    }}
-                  >
-                    {resource.title}
-                  </h2>
-
-                  {resource.structuredSections.map((sec, idx) => (
-                    <div key={idx} className="section-block">
-                      {isEditingDoc ? (
-                        <div className="stack" style={{ gap: '8px' }}>
-                          <input
-                            type="text"
-                            value={sec.heading}
-                            onChange={(e) =>
-                              handleUpdateSection(idx, 'heading', e.target.value)
-                            }
-                            style={{ fontWeight: 800, fontSize: '16px' }}
-                          />
-                          <textarea
-                            value={sec.body}
-                            rows={Math.max(4, sec.body.split('\n').length)}
-                            onChange={(e) =>
-                              handleUpdateSection(idx, 'body', e.target.value)
-                            }
-                            style={{ fontFamily: 'inherit', lineHeight: 1.6 }}
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <h3>{cleanPedagogicalText(sec.heading)}</h3>
-                          <div className="whitespace-pre">
-                            {cleanPedagogicalText(sec.body)}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
+            {rightTab === 'document' && resource && !loading && (
+              <div className="md-toolbar no-print">
+                <button
+                  type="button"
+                  className="ag-btn small primary"
+                  onClick={handleDownloadWord}
+                >
+                  <Icon name="download" size={16} />
+                  Tải Word
+                </button>
+                <button
+                  type="button"
+                  className="ag-btn small"
+                  aria-pressed={isEditingDoc}
+                  onClick={() => setIsEditingDoc((p) => !p)}
+                >
+                  <Icon name={isEditingDoc ? 'check' : 'edit'} size={16} />
+                  {isEditingDoc ? 'Xong chỉnh sửa' : 'Chỉnh sửa'}
+                </button>
+                <button
+                  type="button"
+                  className="ag-btn small"
+                  onClick={() => window.print()}
+                >
+                  <Icon name="print" size={16} />
+                  In
+                </button>
+                <button
+                  type="button"
+                  className="ag-btn small"
+                  onClick={() => void handleCopy()}
+                >
+                  <Icon name="clipboard" size={16} />
+                  Sao chép
+                </button>
+                <button
+                  type="button"
+                  className="ag-btn small ghost"
+                  onClick={handleDownloadMarkdown}
+                >
+                  Tải .md
+                </button>
               </div>
             )}
-          </div>
+
+            <div className="md-scroll" ref={previewRef}>
+              {rightTab === 'bank' ? (
+                <QuestionBank
+                  questions={atomQuestions}
+                  socratic={atomSocratic}
+                  onInsertQuestion={handleInsertQuestionToDoc}
+                  onInsertSocratic={handleInsertSocraticToDoc}
+                />
+              ) : loading ? (
+                <>
+                  <div className="md-live no-print" role="status">
+                    <span className="ag-spin" aria-hidden="true" />
+                    <span>
+                      Đang soạn... {elapsed} giây
+                      {hasStream ? ` · ${streamText.length} ký tự` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      className="ag-btn small"
+                      onClick={() => abortRef.current?.abort()}
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                  <div className="md-paper md-cursor" aria-live="off">
+                    {hasStream ? (
+                      <DocBody text={streamText} />
+                    ) : (
+                      <p className="ag-line">Đang chờ AI bắt đầu viết...</p>
+                    )}
+                  </div>
+                </>
+              ) : !resource ? (
+                <div className="md-empty">
+                  <h3>Bản soạn sẽ gồm</h3>
+                  <p>
+                    Điền yêu cầu ở bên trái rồi bấm Biên soạn. Kết quả hiện ở đây.
+                  </p>
+                  <ol>
+                    {tool.outputSections.map((sec, idx) => (
+                      <li key={idx}>{sec}</li>
+                    ))}
+                  </ol>
+                  {step === 'result' && (
+                    <div className="ag-chips">
+                      <button
+                        type="button"
+                        className="ag-chip"
+                        onClick={() => setStep('form')}
+                      >
+                        Quay lại nhập yêu cầu
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="md-refine no-print">
+                    <span className="ag-label">Chỉnh nhanh bằng AI</span>
+                    <div className="ag-chips" style={{ marginTop: 0 }}>
+                      {POST_ACTIONS.map((item) => (
+                        <button
+                          key={item.action}
+                          type="button"
+                          className="ag-chip"
+                          disabled={loading}
+                          onClick={() => void handleGenerate(item.action)}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div id="tool-studio-a4-preview" className="md-paper md-print">
+                    <h2 className="md-doc-title">{resource.title}</h2>
+                    <p className="md-doc-meta">
+                      Khối {resource.grade} · {resource.teacher.name} ·{' '}
+                      {friendlyModelLabel(resource.modelUsed)}
+                    </p>
+                    {resource.moetComplianceChecklist.length > 0 && (
+                      <div className="md-checks no-print">
+                        {resource.moetComplianceChecklist.map((chk, idx) => (
+                          <span key={idx} className="md-tag" title={chk.note}>
+                            <Icon name="check" size={14} />
+                            {chk.criterion}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {resource.structuredSections.map((sec, idx) => (
+                      <div key={idx} className="md-sec">
+                        {isEditingDoc ? (
+                          <>
+                            <label
+                              className="ag-field-label"
+                              htmlFor={`md-sec-h-${idx}`}
+                            >
+                              Tiêu đề mục {idx + 1}
+                            </label>
+                            <input
+                              id={`md-sec-h-${idx}`}
+                              type="text"
+                              className="ag-field md-edit-in"
+                              value={sec.heading}
+                              onChange={(e) =>
+                                handleUpdateSection(idx, 'heading', e.target.value)
+                              }
+                            />
+                            <label
+                              className="ag-field-label"
+                              htmlFor={`md-sec-b-${idx}`}
+                            >
+                              Nội dung mục {idx + 1}
+                            </label>
+                            <textarea
+                              id={`md-sec-b-${idx}`}
+                              className="ag-field md-edit-ta"
+                              rows={Math.max(4, sec.body.split('\n').length)}
+                              value={sec.body}
+                              onChange={(e) =>
+                                handleUpdateSection(idx, 'body', e.target.value)
+                              }
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <h3>{cleanPedagogicalText(sec.heading)}</h3>
+                            <DocBody text={cleanPedagogicalText(sec.body)} />
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>

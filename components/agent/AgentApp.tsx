@@ -27,6 +27,7 @@ import {
 import { matchLessons, parseIntent, pickConfident, type CommandId } from '@/lib/agent/intent';
 import { formatApiError, type BloomStart } from '@/lib/ui/soanBai';
 import type { WorkflowResult } from '@/lib/workflows/types';
+import { getClassById } from '@/lib/classes';
 import { Shell } from '../Shell';
 import { Canvas } from './Canvas';
 import { BloomChoices, ConfirmCard, FormatChoices, LessonPicker, RunCard, StyleChoices } from './Cards';
@@ -424,13 +425,47 @@ export function AgentApp() {
       const h = q.get('h');
       const fresh = q.get('new');
       const fmt = q.get('format') as FormatValue | null;
+      // Tham số đến từ các trang khác: lớp (Lớp học), bài và bài liên kết (Sơ đồ liên môn).
+      const classId = q.get('classId');
+      const bai = q.get('bai');
+      const baiTitle = q.get('baiTitle');
+      const lienKet = q.get('lienKet');
+      const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
+      const patch: Partial<AgentSlots> = {};
+      const cls = classId ? getClassById(classId) : undefined;
+      if (cls) {
+        patch.classId = cls.id;
+        patch.grade = String(cls.grade);
+      }
+      if (bai && ID_RE.test(bai)) {
+        patch.baiDayId = bai;
+        patch.baiTitle = (baiTitle ?? '').trim().slice(0, 200) || bai;
+      }
+      if (lienKet && ID_RE.test(lienKet)) patch.lienKetId = lienKet;
+      const hasPatch = Object.keys(patch).length > 0;
+      const validFmt = fmt && ['ke_hoach', 'slide', 'worksheet', 'quiz', 'de_kiem_tra', 'audio', 'video', 'tai_nguyen_6_dang'].includes(fmt);
+
       if (h) openHistory(h);
-      else if (fmt && ['ke_hoach', 'slide', 'worksheet', 'quiz', 'de_kiem_tra', 'audio', 'video', 'tai_nguyen_6_dang'].includes(fmt)) {
-        const next = apply({ format: fmt });
-        userSay(formatLabel(fmt));
+      else if (validFmt || hasPatch) {
+        const next = apply({ ...patch, ...(validFmt ? { format: fmt as FormatValue } : {}) });
+        if (validFmt) userSay(formatLabel(fmt as FormatValue));
+        const bits: string[] = [];
+        if (cls) bits.push(`lớp ${cls.className}`);
+        if (patch.baiTitle) bits.push(`bài “${patch.baiTitle}”`);
+        if (patch.lienKetId) bits.push('bài liên kết để tích hợp liên môn');
+        if (bits.length) say(`Mình đã nhận sẵn: ${bits.join(', ')}.`);
         advance(next);
+        if (patch.lienKetId) {
+          // Lấy tên bài liên kết để hiển thị thân thiện (không bắt buộc).
+          fetch(`/api/supabase/knowledge?atomId=${encodeURIComponent(patch.lienKetId)}`)
+            .then(async (res) => {
+              const j = (await res.json().catch(() => ({}))) as { ok?: boolean; atom?: { title?: string } };
+              if (res.ok && j.ok && j.atom?.title) apply({ lienKetTitle: j.atom.title });
+            })
+            .catch(() => undefined);
+        }
       } else if (fresh) resetChat();
-      if (h || fresh || fmt) window.history.replaceState(null, '', '/');
+      if (h || fresh || validFmt || hasPatch) window.history.replaceState(null, '', '/');
     } catch {
       /* bỏ qua */
     }

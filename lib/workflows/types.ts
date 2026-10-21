@@ -44,6 +44,11 @@ export const WorkflowParamsSchema = z.object({
       return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
     }, 'ngayDay không phải ngày hợp lệ'),
   baiDayId: z.string().trim().min(1).max(128),
+  /** Bài thứ hai để soạn bài tích hợp liên môn (tuỳ chọn). */
+  lienKetId: z
+    .string()
+    .regex(/^[A-Za-z0-9_.:-]{1,64}$/)
+    .optional(),
   bloomThapNhat: z.enum(['nho', 'hieu', 'van_dung']),
   ngonNgu: z.enum(['vi', 'en', 'song_ngu']),
   phongCach: z.enum(['truyen_thong', 'kham_pha', 'hop_tac', 'tro_choi', 'du_an']),
