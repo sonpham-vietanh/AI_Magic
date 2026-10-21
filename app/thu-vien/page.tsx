@@ -4,14 +4,15 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { GRADES, SUBJECTS } from '@/lib/catalog';
-import { cleanPedagogicalText } from '@/lib/engine/smartGenerator';
+import { cleanPedagogicalText } from '@/lib/text/clean';
+import { keepSelection } from '@/lib/ui/notes';
 import type { GeneratedResource, MajorOsUsageEvent } from '@/lib/types';
 
 export default function ResourceLibraryPage() {
   const [activeView, setActiveView] = useState<'library' | 'major-os'>('library');
   const [resources, setResources] = useState<GeneratedResource[]>([]);
   const [events, setEvents] = useState<MajorOsUsageEvent[]>([]);
-  const [selectedResource, setSelectedResource] = useState<GeneratedResource | null>(null);
+  const [selectedRaw, setSelectedResource] = useState<GeneratedResource | null>(null);
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -71,6 +72,8 @@ export default function ResourceLibraryPage() {
     }
     return true;
   });
+
+  const selectedResource = keepSelection(filtered, selectedRaw?.id) ? selectedRaw : null;
 
   const totalMinutesSaved = events.reduce((acc, e) => acc + (e.so_phut || 15), 0);
 
@@ -190,8 +193,9 @@ export default function ResourceLibraryPage() {
               }}
             >
               <div className="field">
-                <label>Tìm kiếm tên tài liệu / lớp</label>
+                <label htmlFor="lib-search">Tìm kiếm tên tài liệu / lớp</label>
                 <input
+                  id="lib-search"
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -200,8 +204,8 @@ export default function ResourceLibraryPage() {
               </div>
 
               <div className="field">
-                <label>Môn học</label>
-                <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+                <label htmlFor="lib-subject">Môn học</label>
+                <select id="lib-subject" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
                   <option value="all">Tất cả môn học</option>
                   {SUBJECTS.map((s) => (
                     <option key={s.code} value={s.code}>
@@ -212,8 +216,8 @@ export default function ResourceLibraryPage() {
               </div>
 
               <div className="field">
-                <label>Khối lớp</label>
-                <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
+                <label htmlFor="lib-grade">Khối lớp</label>
+                <select id="lib-grade" value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
                   <option value="all">Tất cả khối</option>
                   {GRADES.map((g) => (
                     <option key={g.grade} value={g.grade}>
@@ -343,7 +347,7 @@ export default function ResourceLibraryPage() {
                 </>
               ) : (
                 <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
-                  Chọn một tài liệu bên trái để xem chi tiết và tải về file Word.
+                  {filtered.length === 0 ? "Không có tài liệu nào khớp bộ lọc hiện tại." : "Chọn một tài liệu bên trái để xem chi tiết và tải về file Word."}
                 </div>
               )}
             </div>

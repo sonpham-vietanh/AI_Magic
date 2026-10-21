@@ -1,9 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { CAMPUS_LIST, CLASS_PROFILES } from '@/lib/classes';
+import { mergeNotes, type ClassNoteItem } from '@/lib/ui/notes';
+
+const LS_KEY = 'va-class-notes-v1';
+
+function readLocalNotes(classId: string): ClassNoteItem[] {
+  try {
+    const all = JSON.parse(localStorage.getItem(LS_KEY) || '{}') as Record<string, ClassNoteItem[]>;
+    return Array.isArray(all[classId]) ? all[classId] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalNotes(classId: string, notes: ClassNoteItem[]) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LS_KEY) || '{}') as Record<string, ClassNoteItem[]>;
+    all[classId] = notes.slice(-50);
+    localStorage.setItem(LS_KEY, JSON.stringify(all));
+  } catch {
+    /* bỏ qua */
+  }
+}
 
 const LEARNING_STYLE_LABELS: Record<string, string> = {
   thi_giac: 'Thị giác (Sơ đồ, hình ảnh)',
@@ -18,7 +40,9 @@ export default function ClassProfilesPage() {
     CLASS_PROFILES[0].id,
   );
   const [teacherNote, setTeacherNote] = useState<string>('');
-  const [customNotes, setCustomNotes] = useState<Record<string, string[]>>({});
+  const [customNotes, setCustomNotes] = useState<Record<string, ClassNoteItem[]>>({});
+  const [notesLoading, setNotesLoading] = useState<boolean>(false);
+  const [notesError, setNotesError] = useState<string>('');
   const [saveBanner, setSaveBanner] = useState<string>('');
   const [saveFailed, setSaveFailed] = useState<boolean>(false);
 
@@ -30,6 +54,46 @@ export default function ClassProfilesPage() {
     filteredClasses[0] ||
     CLASS_PROFILES[0];
 
+  const activeClassId = activeClass.id;
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setNotesLoading(true);
+    setNotesError('');
+    fetch(`/api/classes?classId=${encodeURIComponent(activeClassId)}`, { signal: ctrl.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as { notes?: { id: string; note: string; createdAt?: string }[] };
+      })
+      .then((data) => {
+        const server = (data.notes || []).map((n) => ({
+          id: n.id,
+          note: n.note,
+          createdAt: n.createdAt,
+        }));
+        setCustomNotes((prev) => ({
+          ...prev,
+          [activeClassId]: mergeNotes(server, [
+            ...readLocalNotes(activeClassId),
+            ...(prev[activeClassId] || []),
+          ]),
+        }));
+      })
+      .catch((err: unknown) => {
+        if (ctrl.signal.aborted) return;
+        setNotesError(
+          `Không tải được ghi chú đã lưu (${err instanceof Error ? err.message : 'lỗi'}). Đang hiển thị ghi chú lưu tạm trên trình duyệt.`,
+        );
+        setCustomNotes((prev) => ({
+          ...prev,
+          [activeClassId]: mergeNotes(prev[activeClassId] || [], readLocalNotes(activeClassId)),
+        }));
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setNotesLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [activeClassId]);
+
   const totalStudentsAll = CLASS_PROFILES.reduce((acc, c) => acc + c.studentCount, 0);
 
   const handleAddNote = async (e: React.FormEvent) => {
@@ -37,10 +101,16 @@ export default function ClassProfilesPage() {
     const noteText = teacherNote.trim();
     if (!noteText) return;
 
+    const localNote: ClassNoteItem = {
+      id: `local-${Date.now()}`,
+      note: noteText,
+      createdAt: new Date().toISOString(),
+    };
     setCustomNotes((prev) => ({
       ...prev,
-      [activeClass.id]: [...(prev[activeClass.id] || []), noteText],
+      [activeClass.id]: [...(prev[activeClass.id] || []), localNote],
     }));
+    writeLocalNotes(activeClass.id, [...readLocalNotes(activeClass.id), localNote]);
     setTeacherNote('');
     setSaveFailed(false);
     setSaveBanner(`Đã lưu ghi chú sư phạm cho Lớp ${activeClass.className}.`);
@@ -55,7 +125,12 @@ export default function ClassProfilesPage() {
           note: noteText,
         }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        writeLocalNotes(
+          activeClass.id,
+          readLocalNotes(activeClass.id).filter((n) => n.id !== localNote.id),
+        );
+      } else {
         setSaveFailed(true);
         setSaveBanner(
           res.status === 429
@@ -415,6 +490,7 @@ export default function ClassProfilesPage() {
                     type="text"
                     value={teacherNote}
                     onChange={(e) => setTeacherNote(e.target.value)}
+                    aria-label="Ghi chú quan sát sư phạm"
                     placeholder="Nhập nhận xét tình hình học tập của lớp trong tuần để AI tự động lưu ý khi soạn bài..."
                   />
                   <button type="submit" className="btn btn-navy">
@@ -437,11 +513,21 @@ export default function ClassProfilesPage() {
                   </div>
                 )}
 
+                {notesLoading && (
+                  <div role="status" style={{ fontSize: '14px', color: 'var(--muted)' }}>
+                    Đang tải ghi chú đã lưu...
+                  </div>
+                )}
+                {notesError && (
+                  <div role="alert" style={{ fontSize: '14px', color: '#b42318' }}>
+                    {notesError}
+                  </div>
+                )}
                 {(customNotes[activeClass.id] || []).length > 0 && (
                   <div className="stack" style={{ gap: '6px', marginTop: '4px' }}>
-                    {(customNotes[activeClass.id] || []).map((note, idx) => (
+                    {(customNotes[activeClass.id] || []).map((n) => (
                       <div
-                        key={idx}
+                        key={n.id}
                         style={{
                           background: 'var(--success-bg)',
                           color: 'var(--success)',
@@ -451,7 +537,7 @@ export default function ClassProfilesPage() {
                           fontWeight: 600,
                         }}
                       >
-                        Ghi chú giáo viên: {note}
+                        Ghi chú giáo viên: {n.note}
                       </div>
                     ))}
                   </div>

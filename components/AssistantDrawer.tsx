@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { cleanPedagogicalText } from '@/lib/engine/smartGenerator';
+import { useEffect, useState } from 'react';
+import { cleanPedagogicalText } from '@/lib/text/clean';
 import type { ClassProfile, GeneratedResource, KnowledgeNode } from '@/lib/types';
 
 export function AssistantDrawer({
@@ -33,6 +33,15 @@ export function AssistantDrawer({
     'Gợi ý kết nối bài học này với môn học khác trong tuần',
     'Cách viết nhận xét học bạ cuối kỳ theo Thông tư 22',
   ]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -99,6 +108,10 @@ export function AssistantDrawer({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Trợ lý Chuyên môn Việt Anh"
+        className="va-assistant-panel"
         style={{
           width: '100%',
           maxWidth: '680px',
@@ -213,6 +226,7 @@ export function AssistantDrawer({
               e.preventDefault();
               void sendQuestion();
             }}
+            className="va-assistant-form"
             style={{ display: 'flex', gap: '10px' }}
           >
             <input

@@ -11,25 +11,8 @@ import type {
 import { callLiveLlm } from './llmClient';
 import { buildSystemAndUserPrompt } from './promptBuilder';
 
-export function cleanPedagogicalText(raw: string): string {
-  if (!raw) return '';
-  return raw
-    .replace(/\r\n/g, '\n')
-    .replace(/\*\*([^*\n]+?)\*\*/g, '$1')
-    .replace(/(^|[^\w])__([^_\n]+?)__(?=[^\w]|$)/g, '$1$2')
-    .replace(/`+([^`\n]*)`+/g, '$1')
-    .split('\n')
-    .filter((line) => !/^\s*([-*_]{3,})\s*$/.test(line))
-    .map((line) =>
-      line
-        .replace(/^\s*#{1,6}\s+/, '')
-        .replace(/^(\s*)[-*+\u2022]\s+/, '$1')
-        .replace(/(^|[^*\w])\*([^*\s](?:[^*\n]*?[^*\s])?)\*(?![*\w])/g, '$1$2'),
-    )
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+import { cleanPedagogicalText } from '../text/clean';
+export { cleanPedagogicalText };
 
 const nowIsoVietnam = (): string => {
   const now = new Date();
@@ -45,6 +28,7 @@ export const generatePedagogicalResource = async (params: {
   primaryNode?: KnowledgeNode;
   linkedNodes: { node: KnowledgeNode; edge?: KnowledgeEdge }[];
   preferredModel?: string;
+  atomContext?: string;
 }): Promise<GeneratedResource> => {
   const {
     tool,

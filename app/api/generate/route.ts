@@ -6,6 +6,10 @@ import { getToolById } from "@/lib/catalog";
 import { getClassById } from "@/lib/classes";
 import { withLlmDeltaSink } from "@/lib/engine/llmClient";
 import { generatePedagogicalResource } from "@/lib/engine/smartGenerator";
+import {
+  buildAtomContextBlock,
+  resolveLessonTopic,
+} from "@/lib/engine/promptBuilder";
 import { getConnectedNodes, getNodeById } from "@/lib/knowledge-graph";
 import { recordUsageEvent, saveGeneratedResource } from "@/lib/server/store";
 import {
@@ -221,6 +225,30 @@ async function executeGenerate(
             .filter((item): item is NonNullable<typeof item> => item !== null)
         : connected.slice(0, 2).map((c) => ({ node: c.node, edge: c.edge }));
 
+  // Ưu tiên chủ đề: khi đã chọn atom/node, tên atom là chủ đề bài học; topic mặc định
+  // của form (= sampleInput.topic) không được đè lên atom. Topic người dùng gõ khác
+  // mặc định được giữ như ghi chú trọng tâm bổ sung.
+  const baseInputs = (body.inputs || tool.sampleInput) as Record<
+    string,
+    string | number | boolean
+  >;
+  const resolvedInputs = { ...baseInputs };
+  if (primaryNode) {
+    const { topic, extraFocus } = resolveLessonTopic({
+      inputTopic: baseInputs.topic,
+      defaultTopic: tool.sampleInput.topic,
+      atomTitle: primaryNode.title,
+    });
+    resolvedInputs.topic = topic;
+    if (extraFocus) resolvedInputs.trong_tam_bo_sung = extraFocus;
+  }
+
+  // Dữ liệu thật Supabase đưa thẳng vào prompt (không chỉ phụ lục sau khi sinh).
+  const atomContext =
+    supabaseDetail.atom && !body.postAction
+      ? buildAtomContextBlock(supabaseDetail) || undefined
+      : undefined;
+
   const genRequest: GenerationRequest = {
     toolId: tool.id,
     teacherEmail:
@@ -234,7 +262,7 @@ async function executeGenerate(
     classId: classProfile?.id,
     knowledgeNodeId: primaryNode?.id || requestedNodeId,
     linkedNodeIds: linkedNodes.map((l) => l.node.id),
-    inputs: body.inputs || tool.sampleInput,
+    inputs: resolvedInputs,
     postAction: body.postAction,
     previousContent: body.previousContent,
   };
@@ -246,69 +274,18 @@ async function executeGenerate(
     primaryNode,
     linkedNodes,
     preferredModel: body.preferredModel,
+    atomContext,
   });
 
-  // If we have real Supabase questions or Socratic dialogues for this Atom, enrich the generated output!
+  // Ghi nhận việc tích hợp dữ liệu thật Supabase vào checklist.
   if (
     supabaseDetail.atom &&
     (supabaseDetail.questions.length > 0 ||
       supabaseDetail.socratic.length > 0) &&
     !body.postAction
   ) {
-    const extraLines: string[] = [];
     const a = supabaseDetail.atom;
-    extraLines.push(
-      `Mã bài học (Supabase Atom): ${a.code} (${a.id}), ${a.chapter}, ${a.lesson}`,
-    );
-    if (a.quan_niem_sai) {
-      extraLines.push(
-        `Lưu ý lỗi sai thường gặp của học sinh: ${a.quan_niem_sai}`,
-      );
-    }
-
-    if (supabaseDetail.questions.length > 0) {
-      extraLines.push("\n1. NGÂN HÀNG CÂU HỎI ĐÁNH GIÁ TỪ SUPABASE:");
-      supabaseDetail.questions.slice(0, 4).forEach((q, idx) => {
-        extraLines.push(
-          `\nCâu ${idx + 1} (Mã ${q.id}, Mức độ: ${q.do_kho}, DOK ${q.dok}): ${q.noi_dung}`,
-        );
-        extraLines.push(`   a) Đáp án đúng: ${q.dap_an}`);
-        extraLines.push(`   b) Hướng dẫn giải: ${q.loi_giai}`);
-        if (Array.isArray(q.nhieu) && q.nhieu.length > 0) {
-          extraLines.push(
-            `   c) Phân tích lỗi sai học sinh dễ mắc: ` +
-              q.nhieu
-                .slice(0, 2)
-                .map((n) => `"${n.noiDung}" (${n.lyDo})`)
-                .join("; "),
-          );
-        }
-      });
-    }
-
-    if (supabaseDetail.socratic.length > 0) {
-      extraLines.push(
-        "\n2. KỊCH BẢN DẪN DẮT SOCRATIC 4 BẬC (KHI HỌC SINH TRẢ LỜI SAI):",
-      );
-      supabaseDetail.socratic.slice(0, 2).forEach((s, idx) => {
-        extraLines.push(
-          `\nTình huống ${idx + 1} (${s.id}): Khi học sinh chọn sai "${s.wrong_answer}" do hiểu nhầm: ${s.misconception}`,
-        );
-        extraLines.push(`   Bước 1 (Khơi gợi): ${s.bac_1}`);
-        extraLines.push(`   Bước 2 (Định hướng): ${s.bac_2}`);
-        extraLines.push(`   Bước 3 (Phản biện): ${s.bac_3}`);
-        extraLines.push(`   Bước 4 (Chốt kiến thức): ${s.bac_4}`);
-      });
-    }
-
-    const sbSection = {
-      heading:
-        "Phụ lục Dữ liệu Học thuật Supabase (Câu hỏi Đánh giá & Gợi mở Socratic 4 Bậc)",
-      body: extraLines.join("\n"),
-    };
-
-    resource.structuredSections.push(sbSection);
-    resource.markdownContent += `\n\n${sbSection.heading}\n\n${sbSection.body}`;
+    // Dữ liệu đã được đưa vào prompt (atomContext) nên không nối phụ lục nữa để tránh trùng lặp.
     resource.moetComplianceChecklist.push({
       criterion: `Tích hợp dữ liệu thực Supabase (${a.code})`,
       passed: true,

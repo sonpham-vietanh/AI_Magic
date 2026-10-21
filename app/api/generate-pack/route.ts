@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getClassById } from '@/lib/classes';
-import { callLiveLlm } from '@/lib/engine/llmClient';
-import { cleanPedagogicalText as basePedagogicalClean } from '@/lib/engine/smartGenerator';
+import { callLiveLlm, withLlmDeltaSink } from '@/lib/engine/llmClient';
+import { cleanPedagogicalText as basePedagogicalClean } from '@/lib/text/clean';
 import { requireAccess } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
 import { cleanFactoryText, fetchSupabaseAtomDetail } from '@/lib/supabase';
@@ -23,7 +23,20 @@ const packBodySchema = z.object({
     .optional(),
   classId: z.string().max(100).optional(),
   teacherName: z.string().max(100).optional(),
+  stream: z.boolean().optional(),
 });
+
+export type PackStreamEvent =
+  | {
+      type: 'stage';
+      id: LessonPackSection['id'];
+      status: 'start' | 'done';
+    }
+  | { type: 'delta'; text: string }
+  | { type: 'done'; pack: CompleteLessonPack }
+  | { type: 'error'; error: string };
+
+type Emit = (event: PackStreamEvent) => void;
 
 export interface LessonPackSection {
   id: 'giao_an' | 'phieu_hoc_tap' | 'kiem_tra_nhanh' | 'cam_nang_socratic';
@@ -80,8 +93,11 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
+  const wantsStream =
+    body.stream === true ||
+    (request.headers.get('accept') || '').includes('text/event-stream');
 
+  const run = async (emit: Emit): Promise<CompleteLessonPack> => {
     const classProfile = getClassById(body.classId);
     const teacherName = body.teacherName || 'Giáo viên Việt Anh';
 
@@ -249,7 +265,7 @@ export async function POST(request: Request) {
         ],
       };
 
-      return NextResponse.json({ ok: true, pack: examPack });
+      return examPack;
     }
 
     const atomId = body.atomId as string;
@@ -371,11 +387,20 @@ export async function POST(request: Request) {
       .filter(Boolean)
       .join('\n');
 
-    const live = await callLiveLlm(
-      systemPrompt,
-      userPrompt,
-      undefined,
+    // Hai phần tất định đã có đủ dữ liệu ngay sau khi tải từ Supabase.
+    emit({ type: 'stage', id: 'kiem_tra_nhanh', status: 'start' });
+    emit({ type: 'stage', id: 'kiem_tra_nhanh', status: 'done' });
+    emit({ type: 'stage', id: 'cam_nang_socratic', status: 'start' });
+    emit({ type: 'stage', id: 'cam_nang_socratic', status: 'done' });
+    emit({ type: 'stage', id: 'giao_an', status: 'start' });
+    emit({ type: 'stage', id: 'phieu_hoc_tap', status: 'start' });
+
+    const live = await withLlmDeltaSink(
+      (text) => emit({ type: 'delta', text }),
+      () => callLiveLlm(systemPrompt, userPrompt, undefined),
     );
+    emit({ type: 'stage', id: 'giao_an', status: 'done' });
+    emit({ type: 'stage', id: 'phieu_hoc_tap', status: 'done' });
 
     let giaoAnContent = '';
     let phieuHocTapContent = '';
@@ -510,6 +535,63 @@ export async function POST(request: Request) {
       ],
     };
 
+    return pack;
+  };
+
+  if (wantsStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let closed = false;
+        const emit: Emit = (event) => {
+          if (closed) return;
+          try {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(event)}
+
+`),
+            );
+          } catch {
+            closed = true;
+          }
+        };
+        try {
+          const pack = await run(emit);
+          emit({ type: 'done', pack });
+        } catch (err) {
+          console.error('[generate-pack] stream failed:', err);
+          emit({
+            type: 'error',
+            error: 'Lỗi khi tạo trọn bộ hồ sơ tiết dạy. Vui lòng thử lại.',
+          });
+        } finally {
+          if (!closed) {
+            closed = true;
+            try {
+              controller.close();
+            } catch {
+              // đã đóng
+            }
+          }
+        }
+      },
+      cancel() {
+        // client hủy: emit() sẽ tự bỏ qua
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  }
+
+  try {
+    const pack = await run(() => {});
     return NextResponse.json({ ok: true, pack });
   } catch (err) {
     console.error('[generate-pack] failed:', err);

@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   CompleteLessonPack,
   LessonPackSection,
+  PackStreamEvent,
 } from '@/app/api/generate-pack/route';
 import {
   ALL_TOOLS,
@@ -81,6 +82,44 @@ async function readApiJson<T>(res: Response): Promise<T> {
   }
   return body;
 }
+
+const CLASS_BY_GRADE_KEY = 'va.classByGrade';
+
+function readClassByGrade(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(CLASS_BY_GRADE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberClassForGrade(gradeKey: string, classId: string) {
+  try {
+    const map = readClassByGrade();
+    map[gradeKey] = classId;
+    window.localStorage.setItem(CLASS_BY_GRADE_KEY, JSON.stringify(map));
+  } catch {
+    // localStorage bị chặn: bỏ qua
+  }
+}
+
+type PackStepStatus = 'waiting' | 'running' | 'done';
+const PACK_STEP_IDS: LessonPackSection['id'][] = [
+  'giao_an',
+  'phieu_hoc_tap',
+  'kiem_tra_nhanh',
+  'cam_nang_socratic',
+];
+const initialPackSteps = (): Record<LessonPackSection['id'], PackStepStatus> => ({
+  giao_an: 'waiting',
+  phieu_hoc_tap: 'waiting',
+  kiem_tra_nhanh: 'waiting',
+  cam_nang_socratic: 'waiting',
+});
 
 const SUPABASE_SUBJECTS = [
   'Toán',
@@ -210,6 +249,14 @@ export function DashboardClient({
   const [activePackTab, setActivePackTab] =
     useState<LessonPackSection['id']>('giao_an');
   const [packNotice, setPackNotice] = useState<string>('');
+  const [packSteps, setPackSteps] = useState(initialPackSteps);
+  const [packElapsed, setPackElapsed] = useState<number>(0);
+  const [packPreview, setPackPreview] = useState<string>('');
+  const packAbortRef = useRef<AbortController | null>(null);
+  const previewRef = useRef<HTMLPreElement | null>(null);
+  const skipClassAutoRef = useRef<boolean>(
+    Boolean(initialClassId && getClassById(initialClassId)),
+  );
   const [dataError, setDataError] = useState<string>('');
 
   useEffect(() => {
@@ -347,6 +394,64 @@ export function DashboardClient({
   const selectedSbAtom = sbAtoms.find((a) => a.id === atomId);
   const subjectCode = mapSupabaseSubjectToCode(sbSubject);
   const activeClassProfile = getClassById(selectedClassId);
+  const atomGrade = selectedSbAtom ? String(selectedSbAtom.grade) : grade;
+  const classGradeMismatch =
+    !!activeClassProfile && activeClassProfile.grade !== atomGrade;
+
+  // Lớp áp dụng đi theo khối của bài/bộ lọc; nhớ lựa chọn thủ công theo từng khối.
+  useEffect(() => {
+    if (skipClassAutoRef.current) {
+      skipClassAutoRef.current = false;
+      return;
+    }
+    setSelectedClassId((cur) => {
+      const curProfile = getClassById(cur);
+      if (curProfile && curProfile.grade === atomGrade) return cur;
+      const remembered = getClassById(readClassByGrade()[atomGrade]);
+      if (remembered && remembered.grade === atomGrade) return remembered.id;
+      const first = CLASS_PROFILES.find((c) => c.grade === atomGrade);
+      return first ? first.id : cur;
+    });
+  }, [atomGrade]);
+
+  // Đồng hồ đếm giây khi đang soạn.
+  useEffect(() => {
+    if (!packLoading) return;
+    const t0 = Date.now();
+    setPackElapsed(0);
+    const timer = window.setInterval(
+      () => setPackElapsed(Math.floor((Date.now() - t0) / 1000)),
+      500,
+    );
+    return () => window.clearInterval(timer);
+  }, [packLoading]);
+
+  useEffect(() => {
+    if (previewRef.current) {
+      previewRef.current.scrollTop = previewRef.current.scrollHeight;
+    }
+  }, [packPreview]);
+
+  const cancelPackGeneration = () => {
+    packAbortRef.current?.abort();
+    packAbortRef.current = null;
+  };
+
+  // ESC: đang chạy thì hủy trước, không chạy thì đóng modal.
+  useEffect(() => {
+    if (!packModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (packLoading) {
+        packAbortRef.current?.abort();
+        packAbortRef.current = null;
+      } else {
+        setPackModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [packModalOpen, packLoading]);
 
   const activeNode: KnowledgeNode | undefined = selectedSbAtom
     ? {
@@ -405,13 +510,23 @@ export function DashboardClient({
   const currentQuestion = atomQuestions[activeQuestionIdx];
 
   const handleGenerateCompletePack = async () => {
+    packAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    packAbortRef.current = ctrl;
     setPackModalOpen(true);
     setPackLoading(true);
     setPackNotice('');
+    setPackPreview('');
+    setPackSteps(initialPackSteps());
+    setLessonPack(null);
     try {
       const res = await fetch('/api/generate-pack', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        signal: ctrl.signal,
         body: JSON.stringify({
           mode: 'lesson_pack',
           atomId,
@@ -419,25 +534,81 @@ export function DashboardClient({
           grade,
           classId: selectedClassId,
           teacherName: selectedTeacherName,
+          stream: true,
         }),
       });
-      const data = await readApiJson<{
-        ok?: boolean;
-        pack?: CompleteLessonPack;
-        warning?: string;
-      }>(res);
-      if (data.ok && data.pack) {
-        setLessonPack(data.pack);
-        setActivePackTab('giao_an');
-        if (data.warning) setPackNotice(data.warning);
-      } else {
-        setPackNotice('Không thể tạo bộ hồ sơ. Vui lòng thử lại.');
+      const isStream = (res.headers.get('content-type') || '').includes(
+        'text/event-stream',
+      );
+      if (!isStream || !res.body) {
+        const data = await readApiJson<{
+          ok?: boolean;
+          pack?: CompleteLessonPack;
+          warning?: string;
+        }>(res);
+        if (data.ok && data.pack) {
+          setLessonPack(data.pack);
+          setActivePackTab('giao_an');
+          if (data.warning) setPackNotice(data.warning);
+        } else {
+          setPackNotice('Không thể tạo bộ hồ sơ. Vui lòng thử lại.');
+        }
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finished = false;
+      const handleEvent = (ev: PackStreamEvent) => {
+        if (ev.type === 'stage') {
+          setPackSteps((cur) => ({
+            ...cur,
+            [ev.id]: ev.status === 'start' ? 'running' : 'done',
+          }));
+        } else if (ev.type === 'delta') {
+          setPackPreview((cur) => (cur + ev.text).slice(-6000));
+        } else if (ev.type === 'done') {
+          finished = true;
+          setLessonPack(ev.pack);
+          setActivePackTab('giao_an');
+        } else if (ev.type === 'error') {
+          finished = true;
+          setPackNotice(ev.error || 'Không thể tạo bộ hồ sơ. Vui lòng thử lại.');
+        }
+      };
+      const handleChunk = (block: string) => {
+        for (const line of block.split(/\r?\n/)) {
+          if (!line.startsWith('data:')) continue;
+          try {
+            handleEvent(JSON.parse(line.slice(5).trim()) as PackStreamEvent);
+          } catch {
+            // bỏ qua dòng lỗi
+          }
+        }
+      };
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() ?? '';
+        blocks.forEach(handleChunk);
+      }
+      if (buffer.trim()) handleChunk(buffer);
+      if (!finished) {
+        setPackNotice('Kết nối bị gián đoạn trước khi hoàn tất. Vui lòng thử lại.');
       }
     } catch (err) {
-      setPackNotice(
-        err instanceof Error ? err.message : 'Lỗi kết nối máy chủ.',
-      );
+      if (ctrl.signal.aborted) {
+        setPackNotice('Đã hủy tạo hồ sơ.');
+      } else {
+        setPackNotice(
+          err instanceof Error ? err.message : 'Lỗi kết nối máy chủ.',
+        );
+      }
     } finally {
+      if (packAbortRef.current === ctrl) packAbortRef.current = null;
       setPackLoading(false);
     }
   };
@@ -676,14 +847,31 @@ export function DashboardClient({
               <select
                 id="ctx-class"
                 value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedClassId(e.target.value);
+                  const picked = getClassById(e.target.value);
+                  if (picked) rememberClassForGrade(picked.grade, picked.id);
+                }}
               >
                 {CLASS_PROFILES.map((c) => (
                   <option key={c.id} value={c.id}>
-                    Lớp {c.className} ({c.studentCount} HS)
+                    Lớp {c.className} (Khối {c.grade}, {c.studentCount} HS)
                   </option>
                 ))}
               </select>
+              {classGradeMismatch && (
+                <span
+                  className="va-badge"
+                  role="status"
+                  style={{
+                    marginTop: '6px',
+                    background: '#fff4e5',
+                    color: '#b54708',
+                  }}
+                >
+                  Lớp khác khối (bài học thuộc Khối {atomGrade})
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1850,7 +2038,9 @@ export function DashboardClient({
       {packModalOpen && (
         <div
           className="modal-backdrop"
-          onClick={() => setPackModalOpen(false)}
+          onClick={() => {
+            if (!packLoading) setPackModalOpen(false);
+          }}
         >
           <div
             className="studio-modal"
@@ -1909,9 +2099,11 @@ export function DashboardClient({
                     background: 'rgba(255,255,255,0.14)',
                     color: '#ffffff',
                   }}
-                  onClick={() => setPackModalOpen(false)}
+                  onClick={() =>
+                    packLoading ? cancelPackGeneration() : setPackModalOpen(false)
+                  }
                 >
-                  Đóng [ESC]
+                  {packLoading ? 'Hủy [ESC]' : 'Đóng [ESC]'}
                 </button>
               </div>
             </header>
@@ -1927,25 +2119,70 @@ export function DashboardClient({
               {packLoading ? (
                 <div
                   className="doc-paper"
-                  style={{
-                    padding: '44px',
-                    textAlign: 'center',
-                    display: 'grid',
-                    gap: '14px',
-                  }}
+                  style={{ padding: '32px', display: 'grid', gap: '14px' }}
                 >
-                  <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--navy)' }}>
-                    Hệ thống đang đồng bộ Trọn Bộ 4 Hồ Sơ cho tiết dạy...
-                  </h3>
-                  <div style={{ fontSize: '15px', color: 'var(--muted)', lineHeight: 1.8 }}>
-                    1. Đang soạn Kế hoạch bài dạy chuẩn Công văn 5512 (4 hoạt động)
-                    <br />
-                    2. Đang thiết kế Phiếu học tập in A4 chia 3 mức cho Lớp {activeClassProfile?.className}
-                    <br />
-                    3. Đang trích xuất {atomQuestions.length} câu hỏi kiểm tra cuối tiết từ ngân hàng Supabase
-                    <br />
-                    4. Đang đóng gói {atomSocratic.length} kịch bản hỏi đáp Socratic 4 bậc & cầu nối liên môn
+                  <div className="row-between">
+                    <h3 style={{ fontSize: '19px', fontWeight: 800, color: 'var(--navy)' }}>
+                      Đang soạn Trọn Bộ 4 Hồ Sơ... ({packElapsed} giây)
+                    </h3>
+                    <button type="button" className="btn" onClick={cancelPackGeneration}>
+                      Hủy
+                    </button>
                   </div>
+                  <ol
+                    style={{
+                      listStyle: 'none',
+                      padding: 0,
+                      margin: 0,
+                      display: 'grid',
+                      gap: '6px',
+                      fontSize: '15px',
+                    }}
+                  >
+                    {PACK_STEP_IDS.map((id) => {
+                      const st = packSteps[id];
+                      const label =
+                        id === 'giao_an'
+                          ? 'Kế hoạch bài dạy chuẩn Công văn 5512 (4 hoạt động)'
+                          : id === 'phieu_hoc_tap'
+                            ? `Phiếu học tập in A4 chia 3 mức cho Lớp ${activeClassProfile?.className ?? ''}`
+                            : id === 'kiem_tra_nhanh'
+                              ? `Kiểm tra cuối tiết (${atomQuestions.length} câu từ ngân hàng)`
+                              : `Cẩm nang Socratic 4 bậc (${atomSocratic.length} kịch bản) và liên môn`;
+                      const mark = st === 'done' ? '✓' : st === 'running' ? '…' : '○';
+                      const text =
+                        st === 'done' ? 'xong' : st === 'running' ? 'đang soạn' : 'chờ';
+                      return (
+                        <li
+                          key={id}
+                          style={{
+                            color: st === 'waiting' ? 'var(--muted)' : 'var(--navy)',
+                            fontWeight: st === 'running' ? 700 : 500,
+                          }}
+                        >
+                          {mark} {label} — {text}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <pre
+                    ref={previewRef}
+                    aria-live="off"
+                    style={{
+                      maxHeight: '320px',
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      background: '#f8fafc',
+                      border: '1px solid var(--line)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      fontSize: '13px',
+                      lineHeight: 1.6,
+                      margin: 0,
+                    }}
+                  >
+                    {packPreview || 'Đang chờ máy chủ phản hồi...'}
+                  </pre>
                 </div>
               ) : lessonPack ? (
                 <div className="stack" style={{ maxWidth: '880px', margin: '0 auto', gap: '16px' }}>

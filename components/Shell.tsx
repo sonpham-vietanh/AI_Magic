@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AssistantDrawer } from './AssistantDrawer';
 
 export interface ShellProps {
@@ -53,7 +53,23 @@ export function Shell({
   const pathname = usePathname() || '/';
   const [internalAssistantOpen, setInternalAssistantOpen] = useState(false);
 
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navOpen]);
+
   const handleOpenAssistant = () => {
+    setNavOpen(false);
     if (onOpenAssistant) {
       onOpenAssistant();
     } else {
@@ -78,8 +94,32 @@ export function Shell({
         : 'Biên soạn học liệu từ 12.908 Đơn vị kiến thức (Atoms), Câu hỏi đánh giá & Kịch bản Socratic 4 bậc trên Supabase.';
 
   return (
-    <div className="va-shell">
-      <aside className="va-sidebar">
+    <div className={`va-shell${navOpen ? ' nav-open' : ''}`}>
+      <div className="va-mobilebar">
+        <Link href="/" className="va-mobilebar-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-crest.webp" alt="" width={28} height={28} />
+          <span>TRƯỜNG VIỆT ANH</span>
+        </Link>
+        <button
+          type="button"
+          className="va-menu-btn"
+          aria-expanded={navOpen}
+          aria-controls="va-sidebar"
+          aria-label={navOpen ? 'Đóng menu' : 'Mở menu'}
+          onClick={() => setNavOpen((v) => !v)}
+        >
+          <span className="va-menu-icon" aria-hidden="true" />
+        </button>
+      </div>
+      {navOpen && (
+        <div
+          className="va-nav-scrim"
+          aria-hidden="true"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <aside id="va-sidebar" className="va-sidebar">
         <div>
           <Link href="/" className="va-brand">
             <div className="va-brand-crest">

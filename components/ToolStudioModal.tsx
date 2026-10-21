@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getCategoryMeta, SUBJECTS } from '@/lib/catalog';
-import { cleanPedagogicalText } from '@/lib/engine/smartGenerator';
+import { cleanPedagogicalText } from '@/lib/text/clean';
+import { CLASS_PROFILES } from '@/lib/classes';
+import { pickDefaultClass } from '@/lib/classes/pickDefaultClass';
 import type {
   SupabaseAtom,
   SupabaseQuestion,
@@ -41,6 +43,31 @@ const AI_MODELS = [
     label: 'Claude Sonnet 5.5 (Phân tích sâu ~35–50 giây)',
   },
 ];
+
+const LAST_CLASS_KEY = 'va:lastClassId';
+
+function readLastClassId(): string | undefined {
+  try {
+    return window.localStorage.getItem(LAST_CLASS_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeLastClassId(id: string) {
+  try {
+    window.localStorage.setItem(LAST_CLASS_KEY, id);
+  } catch {
+    /* localStorage không khả dụng */
+  }
+}
+
+/** Nhãn thân thiện cho giáo viên; giá trị gốc chỉ để trong title. */
+function friendlyModelLabel(modelUsed: string): string {
+  return /^Live AI|^Google Gemini|claude|gemini/i.test(modelUsed)
+    ? 'Trợ lý AI'
+    : 'Mẫu soạn sẵn (AI không phản hồi)';
+}
 
 export function ToolStudioModal({
   tool,
@@ -81,12 +108,58 @@ export function ToolStudioModal({
   const [rightTab, setRightTab] = useState<'document' | 'bank'>('document');
   const [isEditingDoc, setIsEditingDoc] = useState<boolean>(false);
   const [bankError, setBankError] = useState<string>('');
+  const [autoTopic, setAutoTopic] = useState<string>('');
+  const [classId, setClassId] = useState<string>('');
+  const manualClassRef = useRef<string | undefined>(undefined);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const atomIdRef = useRef(atomId);
+  const autoTopicRef = useRef('');
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
     atomIdRef.current = atomId;
   }, [atomId]);
+  useEffect(() => {
+    autoTopicRef.current = autoTopic;
+  }, [autoTopic]);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Lớp đi theo khối: ưu tiên lựa chọn thủ công gần nhất (nếu cùng khối).
+  useEffect(() => {
+    if (!manualClassRef.current) {
+      manualClassRef.current = readLastClassId();
+    }
+    const preferred =
+      manualClassRef.current ?? initialClassProfile?.id;
+    setClassId(
+      pickDefaultClass(CLASS_PROFILES, grade, subject, preferred)?.id ?? '',
+    );
+  }, [grade, subject, initialClassProfile?.id]);
+
+  // Focus vào hộp thoại khi mở, trả focus khi đóng.
+  const toolOpen = Boolean(tool);
+  useEffect(() => {
+    if (!toolOpen) return;
+    const prev = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [toolOpen]);
+
+  // Prefill chủ đề từ bài được chọn; chỉ ghi đè khi GV chưa tự sửa.
+  const applyAutoTopic = (title: string) => {
+    const prevAuto = autoTopicRef.current;
+    const defaultTopic = String(tool?.sampleInput.topic ?? '');
+    setInputs((prev) => {
+      const cur = String(prev.topic ?? '');
+      const untouched = !cur || cur === defaultTopic || cur === prevAuto;
+      return untouched ? { ...prev, topic: title } : prev;
+    });
+    autoTopicRef.current = title;
+    setAutoTopic(title);
+  };
 
   useEffect(() => {
     if (previewRef.current) {
@@ -110,9 +183,12 @@ export function ToolStudioModal({
     setGrade(initialGrade);
     setSubject(initialSubject);
     setAtomId(initialNode?.id || 'KC-4402137');
+    const nodeTitle = initialNode?.title || '';
+    autoTopicRef.current = nodeTitle;
+    setAutoTopic(nodeTitle);
     setInputs({
       ...tool.sampleInput,
-      topic: initialNode?.title || tool.sampleInput.topic || '',
+      topic: nodeTitle || tool.sampleInput.topic || '',
       objectives:
         initialNode?.moetRequiredOutcomes?.join('; ') ||
         tool.sampleInput.objectives ||
@@ -158,9 +234,9 @@ export function ToolStudioModal({
         if (list.length > 0 && !list.some((a) => a.id === cur)) {
           const first = list[0];
           setAtomId(first.id);
+          applyAutoTopic(first.title);
           setInputs((prev) => ({
             ...prev,
-            topic: `[${first.code}] ${first.title}`,
             objectives: first.yeu_cau || prev.objectives || '',
           }));
         }
@@ -220,11 +296,18 @@ export function ToolStudioModal({
   useEffect(() => {
     if (!tool) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      const running = abortRef.current;
+      if (running && !running.signal.aborted) {
+        e.preventDefault();
+        running.abort(); // ESC lần 1: hủy biên soạn
+        return;
+      }
+      onCloseRef.current(); // ESC lần 2 / không chạy: đóng
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tool, onClose]);
+  }, [tool]);
 
   if (!tool) return null;
 
@@ -235,6 +318,18 @@ export function ToolStudioModal({
     postAction?: GenerationRequest['postAction'],
   ) => {
     abortRef.current?.abort();
+    const { topic: rawTopic, ...restInputs } = inputs;
+    const topicText = String(rawTopic ?? '').trim();
+    const sendInputs: Record<string, string | number | boolean> = {
+      ...restInputs,
+    };
+    if (
+      topicText &&
+      topicText !== String(tool.sampleInput.topic ?? '').trim() &&
+      topicText !== autoTopic.trim()
+    ) {
+      sendInputs.topic = topicText;
+    }
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
@@ -254,7 +349,7 @@ export function ToolStudioModal({
           ? 'nhưng chưa lưu được vào Kho Tài nguyên.'
           : '& lưu vào Kho Tài nguyên.';
       setSaveNotice(
-        `Đã biên soạn bằng ${data.resource.modelUsed} ${savedNote}${
+        `Đã biên soạn bằng ${friendlyModelLabel(data.resource.modelUsed)} ${savedNote}${
           data.warning ? ` Lưu ý: ${data.warning}` : ''
         }`,
       );
@@ -274,11 +369,11 @@ export function ToolStudioModal({
           teacherEmail,
           grade,
           subject,
-          classId: initialClassProfile?.id,
+          classId: classId || undefined,
           knowledgeNodeId: atomId,
           atomId,
           preferredModel: selectedModel,
-          inputs,
+          inputs: sendInputs,
           postAction,
           previousContent: resource?.markdownContent,
           stream: true,
@@ -514,7 +609,16 @@ export function ToolStudioModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="studio-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="studio-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={tool.name}
+        tabIndex={-1}
+        style={{ outline: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* HEADER */}
         <header className="studio-header">
           <div>
@@ -674,6 +778,32 @@ export function ToolStudioModal({
                 </div>
 
                 <div className="field">
+                  <label>Lớp</label>
+                  <select
+                    value={classId}
+                    onChange={(e) => {
+                      manualClassRef.current = e.target.value;
+                      setClassId(e.target.value);
+                      writeLastClassId(e.target.value);
+                    }}
+                  >
+                    {CLASS_PROFILES.filter((c) => c.grade === grade).map(
+                      (c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.className}
+                        </option>
+                      ),
+                    )}
+                    {CLASS_PROFILES.every((c) => c.grade !== grade) &&
+                      CLASS_PROFILES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.className} (Khối {c.grade})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="field">
                   <label>Bài học / Đơn vị kiến thức ({sbAtoms.length} bài)</label>
                   <select
                     value={atomId}
@@ -684,9 +814,9 @@ export function ToolStudioModal({
                         (a) => a.id === nextAtomId,
                       );
                       if (foundAtom) {
+                        applyAutoTopic(foundAtom.title);
                         setInputs((prev) => ({
                           ...prev,
-                          topic: `[${foundAtom.code}] ${foundAtom.title}`,
                           objectives:
                             foundAtom.yeu_cau || prev.objectives || '',
                         }));
@@ -800,6 +930,13 @@ export function ToolStudioModal({
                     }
                   />
                 )}
+                {field.id === 'topic' &&
+                  autoTopic &&
+                  String(inputs.topic ?? '') === autoTopic && (
+                    <small style={{ color: 'var(--muted)' }}>
+                      Đang dùng bài: {autoTopic}
+                    </small>
+                  )}
               </div>
             ))}
 
@@ -1140,7 +1277,7 @@ export function ToolStudioModal({
                     <div style={{ fontSize: '14.5px', color: 'var(--muted)', lineHeight: 1.7 }}>
                       ✓ Bước 1: Đã nạp Yêu cầu cần đạt & Lỗi sai thường gặp của học sinh từ Kho Tri thức
                       <br />✓ Bước 2: Đã nạp {atomQuestions.length} câu hỏi đánh giá & {atomSocratic.length} kịch bản Socratic 4 bậc
-                      <br />⚡ Bước 3: Model <b>{selectedModel}</b> đang viết chi tiết các hoạt động dạy học chuẩn {tool.moetStandardRef}...
+                      <br />⚡ Bước 3: Trợ lý AI (<b title={selectedModel}>{AI_MODELS.find((m) => m.id === selectedModel)?.label.split(' (')[0] ?? 'Claude'}</b>) đang viết chi tiết các hoạt động dạy học chuẩn {tool.moetStandardRef}...
                     </div>
                   </div>
                 ) : (
@@ -1312,8 +1449,11 @@ export function ToolStudioModal({
                         justifyContent: 'flex-end',
                       }}
                     >
-                      <span className="va-badge va-badge-navy">
-                        {resource.modelUsed}
+                      <span
+                        className="va-badge va-badge-navy"
+                        title={resource.modelUsed}
+                      >
+                        {friendlyModelLabel(resource.modelUsed)}
                       </span>
                       <span className="va-badge va-badge-gold">
                         {tool.moetStandardRef}

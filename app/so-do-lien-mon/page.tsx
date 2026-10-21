@@ -17,6 +17,7 @@ import type {
   SupabaseSocratic,
   SupabaseStatsOverview,
 } from '@/lib/supabase';
+import { classifySearchQuery } from '@/lib/ui/searchQuery';
 import type { GradeLevel, SubjectCode } from '@/lib/types';
 
 async function readApiJson<T>(res: Response): Promise<T> {
@@ -112,10 +113,15 @@ export default function KnowledgeGraphPage() {
     const ctrl = new AbortController();
     setLoadingList(true);
     const params = new URLSearchParams();
-    if (sbSubject !== 'all') params.set('subject', sbSubject);
-    if (sbGrade !== 'all') params.set('grade', sbGrade);
-    if (debouncedSearch) params.set('q', debouncedSearch);
-    params.set('limit', '60');
+    const parsedQuery = classifySearchQuery(debouncedSearch);
+    if (parsedQuery.kind === 'atomId') {
+      params.set('atomId', parsedQuery.atomId);
+    } else {
+      if (sbSubject !== 'all') params.set('subject', sbSubject);
+      if (sbGrade !== 'all') params.set('grade', sbGrade);
+      if (parsedQuery.kind === 'text') params.set('q', parsedQuery.q);
+      params.set('limit', '60');
+    }
 
     fetch(`/api/supabase/knowledge?${params.toString()}`, {
       signal: ctrl.signal,
@@ -124,22 +130,32 @@ export default function KnowledgeGraphPage() {
         readApiJson<{
           ok?: boolean;
           atoms?: SupabaseAtom[];
+          atom?: SupabaseAtom | null;
           totalCount?: number;
         }>(r),
       )
       .then((data) => {
-        const list = data.atoms || [];
+        const list =
+          parsedQuery.kind === 'atomId'
+            ? data.atom
+              ? [data.atom]
+              : []
+            : data.atoms || [];
         setLoadError('');
         setAtoms(list);
         setAtomsTotal(data.totalCount || list.length);
-        setSelectedAtomId((cur) =>
-          list[0] && !list.some((a) => a.id === cur) ? list[0].id : cur,
-        );
+        setSelectedAtomId((cur) => {
+          if (list.length === 0) return '';
+          return list.some((a) => a.id === cur) ? cur : list[0].id;
+        });
+        if (list.length === 0) setAtomDetail(null);
       })
       .catch((err: unknown) => {
         if (ctrl.signal.aborted) return;
         setAtoms([]);
         setAtomsTotal(0);
+        setSelectedAtomId('');
+        setAtomDetail(null);
         setLoadError(
           err instanceof Error ? err.message : 'Không tải được danh sách bài học.',
         );
@@ -151,7 +167,11 @@ export default function KnowledgeGraphPage() {
   }, [viewMode, sbSubject, sbGrade, debouncedSearch]);
 
   useEffect(() => {
-    if (viewMode !== 'supabase' || !selectedAtomId) return;
+    if (viewMode !== 'supabase') return;
+    if (!selectedAtomId) {
+      setAtomDetail(null);
+      return;
+    }
     const ctrl = new AbortController();
     setLoadingDetail(true);
     fetch(`/api/supabase/knowledge?atomId=${encodeURIComponent(selectedAtomId)}`, {
@@ -298,14 +318,15 @@ export default function KnowledgeGraphPage() {
 
               <div className="field" style={{ gridColumn: 'span 2' }}>
                 <label htmlFor="sb-search">
-                  3. Tìm kiếm theo Mã Atom, Chương, Bài học hoặc Nội dung
+                  3. Tìm theo mã (TO07-…, KC-…), chương, bài học hoặc nội dung
                 </label>
                 <input
                   id="sb-search"
                   type="search"
                   value={sbSearch}
                   onChange={(e) => setSbSearch(e.target.value)}
-                  placeholder="VD: TO07-C01, số hữu tỉ, định lí Pythagore, quang hợp, mệnh đề..."
+                  aria-label="Tìm kiếm đơn vị kiến thức"
+                  placeholder="Tên bài hoặc mã (TO07-…, KC-…)"
                 />
               </div>
             </div>
@@ -320,8 +341,9 @@ export default function KnowledgeGraphPage() {
               }}
             >
               <div className="field">
-                <label>Khối lớp</label>
+                <label htmlFor="wk-grade">Khối lớp</label>
                 <select
+                  id="wk-grade"
                   value={grade}
                   onChange={(e) =>
                     setGrade(e.target.value as GradeLevel | 'all')
@@ -336,8 +358,9 @@ export default function KnowledgeGraphPage() {
                 </select>
               </div>
               <div className="field">
-                <label>Môn học</label>
+                <label htmlFor="wk-subject">Môn học</label>
                 <select
+                  id="wk-subject"
                   value={subject}
                   onChange={(e) =>
                     setSubject(e.target.value as SubjectCode | 'all')
@@ -394,6 +417,11 @@ export default function KnowledgeGraphPage() {
                 )}
               </div>
 
+              {!loadingList && atoms.length === 0 && (
+                <div style={{ color: 'var(--muted)', fontSize: '15px' }}>
+                  Không có đơn vị kiến thức nào khớp bộ lọc hiện tại.
+                </div>
+              )}
               <div className="stack" style={{ gap: '8px' }}>
                 {atoms.map((a) => {
                   const isSelected = a.id === selectedAtomId;
@@ -832,6 +860,10 @@ export default function KnowledgeGraphPage() {
                     )}
                   </section>
                 </>
+              ) : atoms.length === 0 && !loadingList ? (
+                <div className="card" style={{ padding: '40px', textAlign: 'center' }}>
+                  Không có kết quả để hiển thị. Hãy đổi từ khóa hoặc bộ lọc.
+                </div>
               ) : null}
             </div>
           </div>
