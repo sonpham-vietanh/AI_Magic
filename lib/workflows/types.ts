@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RESOURCE_KINDS, type Artifact, type ArtifactKind, type StructureCheck } from '@/lib/resources/types';
 
 export const BLOOM_LEVELS = ['Nhớ', 'Hiểu', 'Vận dụng', 'Phân tích', 'Đánh giá', 'Sáng tạo'] as const;
 
@@ -26,9 +27,12 @@ export const FORMAT_DAU_RA = [
   { id: 'worksheet', label: 'Phiếu học tập' },
   { id: 'quiz', label: 'Quiz củng cố trong tiết' },
   { id: 'de_kiem_tra', label: 'Đề kiểm tra + ma trận' },
-  { id: 'audio', label: 'Audio / Podcast' },
-  { id: 'video', label: 'Video' },
-  { id: 'tai_nguyen_6_dang', label: '6 dạng tài nguyên' },
+  { id: 'infographic', label: 'Infographic' },
+  { id: 'mindmap', label: 'Sơ đồ tư duy (Mindmap)' },
+  { id: 'podcast', label: 'Podcast' },
+  { id: 'tranh_luan', label: 'Audio tranh luận 2 chuyên gia' },
+  { id: 'video', label: 'Video 1–8 phút' },
+  { id: 'tai_nguyen_6_dang', label: 'Trọn bộ 6 dạng tài nguyên' },
 ] as const;
 
 export type FormatId = (typeof FORMAT_DAU_RA)[number]['id'];
@@ -66,7 +70,10 @@ export const WorkflowParamsSchema = z.object({
     'worksheet',
     'quiz',
     'de_kiem_tra',
-    'audio',
+    'infographic',
+    'mindmap',
+    'podcast',
+    'tranh_luan',
     'video',
     'tai_nguyen_6_dang',
   ]),
@@ -78,6 +85,8 @@ export const WorkflowParamsSchema = z.object({
     .object({ name: z.string().trim().min(1).max(100), email: z.string().max(200).optional() })
     .optional(),
   regenerationOf: z.string().max(128).optional(),
+  /** Dạng tài nguyên muốn sinh (workflow thứ 6); mặc định theo formatDauRa. */
+  dangTaiNguyen: z.array(z.enum(RESOURCE_KINDS)).max(6).optional(),
 });
 
 export type WorkflowParams = z.infer<typeof WorkflowParamsSchema>;
@@ -113,4 +122,10 @@ export interface WorkflowResult {
   reflection: Reflection;
   guardrail?: { ok: boolean; reasons: string[] };
   requiresApproval: boolean;
+  /** Sản phẩm có cấu trúc (slide, worksheet, tài nguyên); rỗng khi chỉ là văn bản. */
+  artifacts: Artifact[];
+  /** Kiểm tra cấu trúc xác định (không do AI tự chấm). */
+  structure: StructureCheck[];
+  /** Các dạng lấy thẳng từ bản chuẩn đã duyệt trong Kho (không gọi AI). */
+  fromKho?: ArtifactKind[];
 }

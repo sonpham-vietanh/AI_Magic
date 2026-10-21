@@ -84,12 +84,16 @@ export async function recordGeneration(e: {
   });
 }
 
+/**
+ * Chuẩn hoá để chỉ đếm khác biệt về NỘI DUNG: bỏ dòng trống và khoảng trắng thừa. Nếu không, hai cách trình bày
+ * cùng một văn bản (dòng trống khác nhau) bị tính là "giáo viên đã sửa", làm sai chỉ số "% duyệt không sửa gì".
+ */
 function splitLines(s: string): string[] {
   return s
     .replace(/\r\n?/g, '\n')
     .split('\n')
-    .map((l) => l.trimEnd())
-    .filter((l, i, arr) => !(l === '' && (i === arr.length - 1 || i === 0)))
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l !== '')
     .slice(0, MAX_DIFF_LINES);
 }
 

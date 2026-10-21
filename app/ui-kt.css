@@ -85,6 +85,29 @@
 .kt-tl-note { display: block; color: var(--ink-secondary); }
 .kt-log summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 36px; display: flex; align-items: center; }
 
+/* thẻ câu hỏi, nhãn, chiếu lớp */
+.kt-line { margin: 0 0 6px; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
+.kt-opts { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 17px; line-height: 1.55; }
+.kt-q-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.kt-q-no { font-weight: 800; color: var(--navy); }
+.kt-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.kt-tag { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: 999px; background: var(--navy-50); color: var(--navy); font-size: 14px; font-weight: 600; }
+.kt-tag.warn { background: var(--warn-bg); color: var(--warn); }
+.kt-bq { display: grid; gap: 6px; margin-top: 0; }
+.kt-ans-open { border-top: 1px dashed var(--line-strong); padding-top: 8px; color: var(--success); }
+.kt-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+.kt-table-sm { min-width: 520px; }
+.kt-low { color: var(--danger); font-weight: 700; }
+.kt-present { position: fixed; inset: 0; z-index: 100; background: var(--cream); display: grid; grid-template-rows: auto 1fr auto; outline: none; }
+.kt-present-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 20px; background: var(--navy); color: #fff; font-weight: 700; }
+.kt-present-hint { font-size: 14px; font-weight: 500; opacity: .85; }
+.kt-present-body { overflow-y: auto; padding: clamp(16px, 4vw, 48px); display: grid; align-content: start; gap: 24px; }
+.kt-present-q .kt-line, .kt-present-q .kt-opts { font-size: clamp(22px, 3.4vw, 40px); line-height: 1.5; }
+.kt-present-a { border-left: 6px solid var(--success); padding-left: 16px; color: var(--success); }
+.kt-present-a .kt-line { font-size: clamp(20px, 3vw, 32px); }
+.kt-present-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--surface); }
+.kt-present-nav .ag-btn { min-width: 140px; min-height: 48px; }
+
 @media (max-width: 1000px) {
   .kt-split { grid-template-columns: minmax(0, 1fr); }
 }
@@ -100,3 +123,6 @@
   .kt-split { display: block; }
   .kt-ans { border: 0; }
 }
+
+.kt-table tbody th { min-width: 200px; }
+.kt-table td { min-width: 96px; }

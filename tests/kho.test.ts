@@ -23,6 +23,7 @@ let dir = '';
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'kho-'));
   process.env.KHO_REVIEWS_FILE = join(dir, 'kho-reviews.json');
+  process.env.KHO_ASSETS_FILE = join(dir, 'kho-assets.json');
   detailMock.mockReset();
   atomsMock.mockReset();
 });

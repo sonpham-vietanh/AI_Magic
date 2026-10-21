@@ -139,3 +139,63 @@ describe('hiểu câu gõ tự do (luật từ khoá)', () => {
     expect(matchLessons('to10-c03-b04', LESSONS)[0]?.lesson.id).toBe('c');
   });
 });
+
+import {
+  ALL_RESOURCES,
+  FORMAT_GROUPS,
+  FORMAT_ITEMS,
+  attachResources,
+  normalizeResources,
+  toggleResource,
+} from '@/lib/agent/flow';
+import { getArtifacts, getStructure, structureSummary } from '@/lib/agent/result';
+
+describe('11 định dạng theo sơ đồ v2.1', () => {
+  it('đủ 11 sản phẩm, chia 3 nhóm 3 + 2 + 6, mỗi thẻ có mô tả đầu ra', () => {
+    expect(FORMAT_ITEMS).toHaveLength(11);
+    expect(FORMAT_GROUPS.map((g) => g.items.length)).toEqual([3, 2, 6]);
+    for (const f of FORMAT_ITEMS) expect(f.desc.length).toBeGreaterThan(10);
+    expect(FORMAT_ITEMS.find((f) => f.value === 'slide')?.desc).toContain('PowerPoint');
+  });
+
+  it('trọn bộ 6 dạng hỏi thêm bước chọn dạng, mặc định đủ 6, tối thiểu 1', () => {
+    let s = full({ format: 'tai_nguyen_6_dang' });
+    expect(nextStep(s)).toBe('dangTaiNguyen');
+    s = { ...s, dangTaiNguyen: ALL_RESOURCES };
+    expect(nextStep(s)).toBe('confirm');
+    expect(summaryRows(s).some((r) => r.step === 'dangTaiNguyen' && r.value === 'Cả 6 dạng')).toBe(true);
+    expect(toggleResource(['mindmap'], 'mindmap')).toEqual(['mindmap']); // không bỏ dạng cuối
+    expect(toggleResource(ALL_RESOURCES, 'video')).not.toContain('video');
+    expect(normalizeResources(['podcast', 'x', 'text', 'text'])).toEqual(['text', 'podcast']);
+    expect(clearStep(s, 'format').dangTaiNguyen).toBeUndefined();
+  });
+
+  it('toParams gửi dangTaiNguyen chỉ với trọn bộ; sản phẩm khác thì không', () => {
+    const p = toParams(full({ format: 'tai_nguyen_6_dang', dangTaiNguyen: ['mindmap', 'text'] }));
+    expect(p.ok).toBe(true);
+    if (p.ok) expect(p.params.dangTaiNguyen).toEqual(['text', 'mindmap']);
+    const q = toParams(full({ format: 'slide', dangTaiNguyen: ['mindmap'] }));
+    expect(q.ok).toBe(true);
+    if (q.ok) expect(q.params.dangTaiNguyen).toBeUndefined();
+    expect(attachResources({}, 'tai_nguyen_6_dang', []).ok).toBe(false);
+  });
+
+  it('nhận diện từ khoá của các sản phẩm mới', () => {
+    expect(parseIntent('làm trọn bộ 6 dạng cho bài hàm số').format).toBe('tai_nguyen_6_dang');
+    expect(parseIntent('tạo mindmap bài hàm số').format).toBe('mindmap');
+    expect(parseIntent('sơ đồ tư duy bài hàm số').format).toBe('mindmap');
+    expect(parseIntent('infographic bài hàm số').format).toBe('infographic');
+    expect(parseIntent('audio tranh luận hai chuyên gia').format).toBe('tranh_luan');
+    expect(parseIntent('podcast bài hàm số').format).toBe('podcast');
+    expect(parseIntent('video bài hàm số').format).toBe('video');
+    expect(parseIntent('đề kiểm tra định kỳ có ma trận').format).toBe('de_kiem_tra');
+    expect(parseIntent('phiếu học tập hàm số').format).toBe('worksheet');
+    expect(parseIntent('slide bài hàm số').format).toBe('slide');
+  });
+
+  it('đọc kết quả mở rộng chịu được dữ liệu thiếu hoặc sai', () => {
+    expect(getArtifacts({})).toEqual([]);
+    expect(getStructure({ structure: [{ id: 'a', label: 'A', ok: true }, { bad: 1 } as never] })).toHaveLength(1);
+    expect(structureSummary([{ id: 'a', label: 'A', ok: true }, { id: 'b', label: 'B', ok: false }])).toMatchObject({ ok: 1, total: 2 });
+  });
+});

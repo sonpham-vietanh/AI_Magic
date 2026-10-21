@@ -13,6 +13,7 @@ import {
 } from '@/lib/agent/history';
 import { AssistantDrawer } from './AssistantDrawer';
 import { Icon, type IconName } from './ui/icons';
+import '../app/ui-ls.css';
 
 export interface ShellProps {
   children: React.ReactNode;
@@ -33,20 +34,29 @@ interface NavItem {
   exact?: boolean;
 }
 
+// Menu theo mục "Web App" của sơ đồ v2.1.
 const WORK_NAV: NavItem[] = [
   { href: '/', label: 'Trợ lý soạn bài', icon: 'sparkles', exact: true },
-  { href: '/duyet', label: 'Duyệt bản chuẩn', icon: 'shield' },
+  { href: '/kho', label: 'Thư viện tiết học', icon: 'library' },
   { href: '/kiem-tra', label: 'Kiểm tra & Đề thi', icon: 'exam' },
+  { href: '/lich-su', label: 'Lịch sử của tôi', icon: 'clock' },
+];
+
+const BUILD_NAV: NavItem[] = [
+  { href: '/duyet', label: 'Dựng kho — Pha A', icon: 'shield' },
   { href: '/chat-luong', label: 'Chất lượng & Tín hiệu', icon: 'chart' },
 ];
 
-const DATA_NAV: NavItem[] = [
+const EXTRA_NAV: NavItem[] = [
   { href: '/cong-cu', label: 'Kho 82 công cụ', icon: 'grid' },
-  { href: '/thu-vien', label: 'Thư viện học liệu', icon: 'folder' },
+  { href: '/thu-vien', label: 'Thư viện cũ', icon: 'folder' },
   { href: '/so-do-lien-mon', label: 'Sơ đồ liên môn', icon: 'graph' },
   { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', icon: 'users' },
   { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', icon: 'clipboard' },
+  { href: '/ket-noi', label: 'Kết nối dịch vụ ngoài', icon: 'plug' },
 ];
+
+const EXTRA_KEY = 'va.nav.extra';
 
 const PAGE_TITLES: { prefix: string; title: string; subtitle: string }[] = [
   {
@@ -89,6 +99,7 @@ export function Shell({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [recent, setRecent] = useState<HistoryItem[]>([]);
+  const [extraOpen, setExtraOpen] = useState(false);
 
   const mode = variant ?? 'page';
 
@@ -104,6 +115,29 @@ export function Shell({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [navOpen]);
+
+  useEffect(() => {
+    try {
+      setExtraOpen(localStorage.getItem(EXTRA_KEY) === '1');
+    } catch {
+      /* không có localStorage */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (EXTRA_NAV.some((i) => isActive(i, pathname))) setExtraOpen(true);
+  }, [pathname]);
+
+  const toggleExtra = () => {
+    setExtraOpen((v) => {
+      try {
+        localStorage.setItem(EXTRA_KEY, v ? '0' : '1');
+      } catch {
+        /* bỏ qua */
+      }
+      return !v;
+    });
+  };
 
   useEffect(() => {
     const refresh = () => setRecent(loadHistory());
@@ -138,8 +172,8 @@ export function Shell({
   const pageTitle = title ?? meta?.title ?? '';
   const pageSubtitle = subtitle ?? meta?.subtitle ?? '';
 
-  const renderNav = (items: NavItem[]) => (
-    <nav className="ag-nav" aria-label="Điều hướng">
+  const renderNav = (items: NavItem[], label = 'Điều hướng') => (
+    <nav className="ag-nav" aria-label={label}>
       {items.map((item) => (
         <Link
           key={item.href}
@@ -194,8 +228,8 @@ export function Shell({
         </div>
 
         <div className="ag-rail-scroll">
-          <div className="ag-label">Làm việc</div>
-          {renderNav(WORK_NAV)}
+          <div className="ag-label">Soạn và dùng</div>
+          {renderNav(WORK_NAV, 'Soạn và dùng')}
 
           <div className="ag-label">Gần đây</div>
           {recent.length === 0 ? (
@@ -211,8 +245,25 @@ export function Shell({
             </div>
           )}
 
-          <div className="ag-label">Dữ liệu & công cụ</div>
-          {renderNav(DATA_NAV)}
+          <div className="ag-label">Dựng kho và chất lượng</div>
+          {renderNav(BUILD_NAV, 'Dựng kho và chất lượng')}
+
+          <button
+            type="button"
+            className="ls-nav-toggle"
+            aria-expanded={extraOpen}
+            aria-controls="ls-nav-extra"
+            onClick={toggleExtra}
+          >
+            <span>Công cụ phụ</span>
+            <Icon name="chevronDown" size={18} />
+          </button>
+          {(extraOpen) && (
+            <div id="ls-nav-extra">
+              <p className="ls-nav-note">Ngoài phạm vi sơ đồ v1</p>
+              {renderNav(EXTRA_NAV, 'Công cụ phụ')}
+            </div>
+          )}
         </div>
 
         <div className="ag-rail-foot">

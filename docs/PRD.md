@@ -1,3 +1,5 @@
+> Ghi chú: phần mô tả kiến trúc trong tài liệu này đã được thay thế bởi [KIEN_TRUC_V2_1.md](KIEN_TRUC_V2_1.md). Giữ lại để tham khảo.
+
 # TÀI LIỆU YÊU CẦU SẢN PHẨM (PRD)
 ## Hệ thống AI Sinh Tài nguyên Dạy học Liên môn Trường Việt Anh (Việt Anh MagicStudio)
 

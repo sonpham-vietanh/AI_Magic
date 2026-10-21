@@ -10,12 +10,19 @@ import { getStandardLesson } from '@/lib/kho';
 import { generateQuiz, draftExam } from '@/lib/assessment';
 import { checkNewsEvent } from '@/lib/guardrails/news';
 import { recordGeneration } from '@/lib/signals';
-import { routeWorkflow } from '@/lib/workflows/router';
+import { routeWorkflow, resourceKindsFor } from '@/lib/workflows/router';
+import { generateArtifact, generateAllResources, artifactToText, checkArtifact, type GenContext } from '@/lib/resources';
+import { ARTIFACT_LABELS, type Artifact, type ArtifactKind, type ResourceKind, type StructureCheck } from '@/lib/resources/types';
+import { approvedArtifacts, canUseStandardAsIs, baseForUpgrade } from '@/lib/workflows/khoFirst';
+import { ensureKhbdStructure } from '@/lib/workflows/khbdFix';
+import { checkKhbdStructure, checkExamStructure, checkQuizStructure } from '@/lib/workflows/validators';
 import { reflect } from '@/lib/workflows/reflection';
-import { buildPrompts, markdownToSections } from '@/lib/workflows/prompts';
+import { buildPrompts, markdownToSections, groundingBlock } from '@/lib/workflows/prompts';
 import {
   WorkflowParamsSchema,
   bloomLevelsFor,
+  PHONG_CACH,
+  type Reflection,
   type Section,
   type WorkflowResult,
 } from '@/lib/workflows/types';
@@ -93,6 +100,10 @@ export async function POST(request: Request) {
 
     let sections: Section[];
     let markdown: string;
+    let artifacts: Artifact[] = [];
+    let structure: StructureCheck[] = [];
+    let fromKho: ArtifactKind[] = [];
+    let allFromKho = false;
 
     if (workflow === 'quiz') {
       const q = await generateQuiz({
@@ -104,6 +115,7 @@ export async function POST(request: Request) {
       });
       sections = q.sections;
       markdown = q.markdown;
+      structure = checkQuizStructure(q.questionIds ?? [], bloomLevels);
     } else if (workflow === 'de_kiem_tra') {
       const d = await draftExam({
         orgId,
@@ -115,35 +127,134 @@ export async function POST(request: Request) {
       });
       sections = d.sections;
       markdown = d.markdown;
+      structure = checkExamStructure(d.matrix, d.markdown);
       requiresApproval = true;
     } else {
       const profile = getClassById(params.classId);
-      const { system, user } = buildPrompts({
-        workflow,
-        params,
-        bloomLevels,
-        standard: std as unknown as Record<string, unknown>,
-        classContext: profile ? buildClassPedagogicalContext(profile) : undefined,
-        news: params.suKienThoiSu,
-        linked: linkedStd as unknown as Record<string, unknown> | undefined,
-      });
-      const llm = await callLiveLlm(system, user, undefined, { maxTokens: 6000, timeoutMs: 90_000 });
-      if (llm.ok && llm.content) {
-        markdown = cleanPedagogicalText(llm.content);
-        sections = markdownToSections(markdown);
+      const classContext = profile ? buildClassPedagogicalContext(profile) : undefined;
+      if (workflow === 'khbd') {
+        const { system, user } = buildPrompts({
+          workflow,
+          params,
+          bloomLevels,
+          standard: std as unknown as Record<string, unknown>,
+          classContext,
+          news: params.suKienThoiSu,
+          linked: linkedStd as unknown as Record<string, unknown> | undefined,
+        });
+        const llm = await callLiveLlm(system, user, undefined, { maxTokens: 6000, timeoutMs: 90_000 });
+        if (llm.ok && llm.content) {
+          markdown = cleanPedagogicalText(llm.content);
+          const fix = await ensureKhbdStructure(markdown, bloomLevels);
+          markdown = fix.markdown;
+          structure = fix.structure;
+          if (fix.attempted) {
+            const left = structure.filter((c) => !c.ok);
+            warnings.push(
+              fix.fixed
+                ? left.length
+                  ? `Kế hoạch bài dạy thiếu thành phần nên hệ thống đã tự sửa 1 lần, nhưng còn ${left.length} mục chưa đạt: ${left.map((c) => c.label).join('; ')}`
+                  : 'Kế hoạch bài dạy ban đầu thiếu thành phần bắt buộc; hệ thống đã tự bổ sung 1 lần và hiện đủ cấu trúc.'
+                : `Kế hoạch bài dạy còn thiếu ${left.length} mục bắt buộc và lần tự sửa chưa cải thiện được: ${left.map((c) => c.label).join('; ')}`,
+            );
+          }
+          sections = markdownToSections(markdown);
+        } else {
+          warnings.push('AI không phản hồi, hiển thị bản chuẩn gốc');
+          const pkgs = (std.packages ?? []) as unknown[];
+          markdown = pkgs
+            .map((p) => (typeof p === 'string' ? p : JSON.stringify(p, null, 2)))
+            .join('\n\n')
+            .trim();
+          if (!markdown) return fail(502, 'AI không phản hồi');
+          sections = [{ heading: std.title ?? 'Bản chuẩn', body: markdown }];
+          structure = checkKhbdStructure(markdown, bloomLevels);
+        }
       } else {
-        warnings.push('AI không phản hồi, hiển thị bản chuẩn gốc');
-        const pkgs = (std.packages ?? []) as unknown[];
-        markdown = pkgs
-          .map((p) => (typeof p === 'string' ? p : JSON.stringify(p, null, 2)))
-          .join('\n\n')
-          .trim();
-        if (!markdown) return fail(502, 'AI không phản hồi');
-        sections = [{ heading: std.title ?? 'Bản chuẩn', body: markdown }];
+        // slide / worksheet / tai_nguyen_6_dang: sản phẩm có cấu trúc, Kho-trước.
+        const kinds: ArtifactKind[] =
+          workflow === 'slide'
+            ? ['slides']
+            : workflow === 'worksheet'
+              ? ['worksheet']
+              : resourceKindsFor(params.formatDauRa, params.dangTaiNguyen);
+        const base = approvedArtifacts(std, kinds);
+        const asIs = canUseStandardAsIs(params, Boolean(linkedStd));
+        const direct = asIs ? kinds.filter((k) => base.has(k)) : [];
+        const toMake = kinds.filter((k) => !direct.includes(k));
+        const got = new Map<ArtifactKind, Artifact>();
+        for (const k of direct) got.set(k, base.get(k)!);
+        if (direct.length) {
+          fromKho = direct;
+          warnings.push(
+            `Lấy trực tiếp từ bản chuẩn đã duyệt trong Kho (không gọi AI): ${direct.map((k) => ARTIFACT_LABELS[k]).join(', ')}`,
+          );
+        }
+
+        const errors: { kind: ArtifactKind; error: string }[] = [];
+        if (toMake.length) {
+          const upgrade = baseForUpgrade(base);
+          const extra = [
+            upgrade,
+            linkedStd
+              ? `<bai_lien_ket>\n${groundingBlock(linkedStd as unknown as Record<string, unknown>, 7000)}\n</bai_lien_ket>\nBài thứ hai cần TÍCH HỢP LIÊN MÔN với bài chính; kiến thức bài liên kết chỉ lấy từ khối này.`
+              : '',
+            params.suKienThoiSu
+              ? `Sự kiện thời sự đã qua kiểm tra (dữ liệu): ${params.suKienThoiSu.tieuDe} (${params.suKienThoiSu.url}, đăng ${params.suKienThoiSu.ngayDang}). ${(params.suKienThoiSu.noiDung ?? '').slice(0, 2000)}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n');
+          const ctx: GenContext = {
+            title: std.title ?? params.baiDayId,
+            grade: std.grade,
+            subject: std.subject,
+            language: params.ngonNgu,
+            style: PHONG_CACH.find((p) => p.id === params.phongCach)?.label ?? params.phongCach,
+            bloomLevels,
+            grounding: groundingBlock(std as unknown as Record<string, unknown>),
+            ...(extra ? { extra } : {}),
+            ...(classContext ? { classContext } : {}),
+          };
+          if (workflow === 'tai_nguyen_6_dang') {
+            const r = await generateAllResources(ctx, toMake as ResourceKind[]);
+            for (const a of r.artifacts) got.set(a.kind, a);
+            errors.push(...r.errors);
+          } else {
+            const kind = toMake[0];
+            const r = await generateArtifact(kind, ctx);
+            if (r.ok) got.set(kind, r.value as Artifact);
+            else errors.push({ kind, error: r.error });
+          }
+        }
+        for (const e of errors) {
+          warnings.push(`Không sinh được ${ARTIFACT_LABELS[e.kind]}: ${e.error}`);
+        }
+        artifacts = kinds.filter((k) => got.has(k)).map((k) => got.get(k)!);
+        if (!artifacts.length) {
+          return fail(
+            502,
+            `Không sinh được sản phẩm: ${errors.map((e) => `${ARTIFACT_LABELS[e.kind]} (${e.error})`).join('; ') || 'AI không phản hồi'}`,
+          );
+        }
+        structure = artifacts.flatMap((a) =>
+          checkArtifact(a).map((c) =>
+            artifacts.length > 1 ? { ...c, id: `${a.kind}.${c.id}`, label: `${ARTIFACT_LABELS[a.kind]}: ${c.label}` } : c,
+          ),
+        );
+        for (const e of errors) {
+          structure.push({ id: `${e.kind}.sinh`, label: `${ARTIFACT_LABELS[e.kind]}: sinh được`, ok: false, note: e.error });
+        }
+        sections = artifacts.map((a) => ({ heading: ARTIFACT_LABELS[a.kind], body: artifactToText(a) }));
+        markdown = sections.map((x) => `## ${x.heading}\n${x.body}`).join('\n\n');
+        allFromKho = errors.length === 0 && toMake.length === 0;
       }
     }
 
-    const reflection = await reflect(markdown);
+    // Mọi sản phẩm lấy thẳng từ bản chuẩn đã duyệt thì không tự chấm lại (đã qua người duyệt).
+    const reflection: Reflection = allFromKho
+      ? { scores: [], average: 0, issues: [], skipped: true }
+      : await reflect(markdown);
 
     try {
       await recordGeneration({
@@ -154,7 +265,14 @@ export async function POST(request: Request) {
         runId,
         regenerationOf: params.regenerationOf,
         requiresApproval,
-        text: markdown,
+        // Bản gốc để so sánh phải giống HỆT văn bản giao diện hiển thị/gửi lại (mục ghép từ tiêu đề + thân bài).
+        text:
+          sections.length > 0
+            ? sections
+                .map((x) => (x.heading ? `${x.heading}\n${x.body}` : x.body))
+                .join('\n\n')
+                .trim()
+            : markdown,
       });
     } catch (e) {
       console.error('recordGeneration failed', e);
@@ -170,6 +288,9 @@ export async function POST(request: Request) {
       reflection,
       ...(guardrail ? { guardrail } : {}),
       requiresApproval,
+      artifacts,
+      structure,
+      ...(fromKho.length ? { fromKho } : {}),
     };
     return NextResponse.json({ ok: true, result });
   } catch (e) {

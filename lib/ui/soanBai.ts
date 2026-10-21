@@ -25,9 +25,12 @@ export const FORMAT_OPTIONS = [
   { value: 'worksheet', label: 'Phiếu bài tập (worksheet)' },
   { value: 'quiz', label: 'Quiz nhanh' },
   { value: 'de_kiem_tra', label: 'Đề kiểm tra' },
-  { value: 'audio', label: 'Audio' },
-  { value: 'video', label: 'Video' },
-  { value: 'tai_nguyen_6_dang', label: 'Tài nguyên 6 dạng' },
+  { value: 'infographic', label: 'Infographic' },
+  { value: 'mindmap', label: 'Sơ đồ tư duy (Mindmap)' },
+  { value: 'podcast', label: 'Podcast' },
+  { value: 'tranh_luan', label: 'Audio tranh luận 2 chuyên gia' },
+  { value: 'video', label: 'Video 1–8 phút' },
+  { value: 'tai_nguyen_6_dang', label: 'Trọn bộ 6 dạng tài nguyên' },
 ] as const;
 
 export const NGON_NGU_OPTIONS: { value: NgonNgu; label: string }[] = [

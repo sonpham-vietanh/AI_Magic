@@ -5,6 +5,11 @@ import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
 import { LessonField, LessonMultiField } from '@/components/agent/LessonField';
 import { QuestionSet, type Section } from '@/components/kiem-tra/QuestionSet';
+import { QuizView } from '@/components/kiem-tra/QuizView';
+import { ExamExport } from '@/components/kiem-tra/ExamExport';
+import { BankTab } from '@/components/kiem-tra/BankTab';
+import type { QuizItem } from '@/lib/assessment/examDoc';
+import type { ExamItemSnapshot } from '@/lib/assessment/types';
 import type { AtomLite } from '@/components/agent/types';
 import '@/app/ui-kt.css';
 
@@ -42,6 +47,7 @@ interface Exam {
   locked?: boolean;
   lockedReason?: string | null;
   sections?: Section[];
+  items?: ExamItemSnapshot[];
   accessLog?: { at: string; actor: string; action: string }[];
   approvals?: { reviewer: string; decision: string; note: string; at: string }[];
 }
@@ -166,14 +172,14 @@ function QuizTab() {
   const [count, setCount] = useState(5);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [sections, setSections] = useState<Section[]>([]);
+  const [quiz, setQuiz] = useState<{ items: QuizItem[]; notes: string[] } | null>(null);
 
   const run = async () => {
     setBusy(true); setErr('');
     try {
-      const r = await api<{ quiz: { sections: Section[] } }>('/api/assessment/quiz', post('/api/assessment/quiz', { atomId: lesson?.id ?? '', bloomLevels: bloom, language, style, count }));
-      setSections(r.quiz.sections);
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Lỗi'); setSections([]); } finally { setBusy(false); }
+      const r = await api<{ quiz: { items: QuizItem[]; notes: string[] } }>('/api/assessment/quiz', post('/api/assessment/quiz', { atomId: lesson?.id ?? '', bloomLevels: bloom, language, style, count }));
+      setQuiz({ items: r.quiz.items, notes: r.quiz.notes });
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Lỗi'); setQuiz(null); } finally { setBusy(false); }
   };
 
   return (
@@ -200,8 +206,8 @@ function QuizTab() {
         {err && <div className="ag-alert bad" role="alert"><Icon name="alert" size={18} /><div>{err}</div></div>}
       </form>
       <section className="kt-out" aria-label="Kết quả quiz" aria-live="polite">
-        {sections.length > 0 ? (
-          <QuestionSet sections={sections} docTitle={`Quiz ${lesson?.title ?? ''}`.trim()} />
+        {quiz ? (
+          <QuizView items={quiz.items} notes={quiz.notes} title={`Quiz ${lesson?.title ?? ''}`.trim()} />
         ) : (
           <div className="kt-empty">
             <Icon name="quiz" size={28} />
@@ -219,6 +225,7 @@ function ExamTab() {
   const [bloom, setBloom] = useState<string[]>(['Nhớ', 'Hiểu', 'Vận dụng']);
   const [language, setLanguage] = useState('vi');
   const [examDate, setExamDate] = useState('');
+  const [perCell, setPerCell] = useState(2);
   const [reviewers, setReviewers] = useState('');
   const [reviewer, setReviewer] = useState('');
   const [note, setNote] = useState('');
@@ -250,7 +257,7 @@ function ExamTab() {
 
   const create = () => guard(async () => {
     const ids = lessons.map((l) => l.id);
-    const body = { atomIds: ids, bloomLevels: bloom, language, createdBy: actor.trim(), ...(examDate ? { examDate } : {}) };
+    const body = { atomIds: ids, bloomLevels: bloom, language, createdBy: actor.trim(), perCell, ...(examDate ? { examDate } : {}) };
     const r = await api<{ exam: { examId: string } }>('/api/assessment/exam', post('/api/assessment/exam', body));
     await load(r.exam.examId, actor.trim());
     setMsg(`Đã tạo đề ${r.exam.examId} ở trạng thái nháp.`);
@@ -283,6 +290,7 @@ function ExamTab() {
             <div>
               Đề chỉ người soạn và tổ chuyên môn được xem, mọi lần xem đều được ghi lại.
               Câu đã dùng trong đề được duyệt không bị rút lại trong 3 năm.
+              Lưu ý trung thực: hệ thống chưa có đăng nhập thật, tên người soạn chỉ là tên khai báo nên chưa chống được người cố tình mạo danh.
             </div>
           </div>
           <div className="ag-field-row kt-row">
@@ -297,7 +305,13 @@ function ExamTab() {
           </div>
           <LessonMultiField value={lessons} onChange={setLessons} />
           <BloomChips value={bloom} onChange={setBloom} />
-          <LangSelect id="e-lang" value={language} onChange={setLanguage} />
+          <div className="ag-field-row kt-row">
+            <LangSelect id="e-lang" value={language} onChange={setLanguage} />
+            <div>
+              <label htmlFor="e-per" className="ag-field-label">Số câu mỗi ô ma trận (1 đến 10)</label>
+              <input id="e-per" type="number" min={1} max={10} className="ag-field" value={perCell} onChange={(e) => setPerCell(Math.max(1, Math.min(10, Number(e.target.value) || 2)))} />
+            </div>
+          </div>
           <button type="submit" className="ag-btn primary kt-go" disabled={busy || !actor.trim() || lessons.length === 0}>
             {busy ? (<><span className="ag-spin" aria-hidden="true" /> Đang xử lý…</>) : (<><Icon name="exam" size={18} /> Lập ma trận và sinh đề nháp</>)}
           </button>
@@ -403,7 +417,19 @@ function ExamTab() {
                 <div>Nội dung đề đang được khoá. {exam.lockedReason}</div>
               </div>
             ) : exam.sections ? (
-              <QuestionSet sections={exam.sections} docTitle={`De ${exam.examId}`} />
+              <>
+                {exam.items && (
+                  <ExamExport
+                    key={exam.examId}
+                    examId={exam.examId}
+                    examDate={exam.examDate}
+                    items={exam.items}
+                    rows={exam.matrix.rows}
+                    shortfall={exam.matrix.shortfall}
+                  />
+                )}
+                <QuestionSet sections={exam.sections} docTitle={`De ${exam.examId}`} showTools={false} />
+              </>
             ) : null}
 
             {exam.accessLog && (
@@ -424,8 +450,8 @@ function ExamTab() {
 }
 
 export default function KiemTraPage() {
-  const [tab, setTab] = useState<'A' | 'B'>('A');
-  const tabBtn = (id: 'A' | 'B', label: string, sub: string) => (
+  const [tab, setTab] = useState<'A' | 'B' | 'C'>('A');
+  const tabBtn = (id: 'A' | 'B' | 'C', label: string, sub: string) => (
     <button
       type="button"
       role="tab"
@@ -440,14 +466,15 @@ export default function KiemTraPage() {
     </button>
   );
   return (
-    <Shell title="Kiểm tra và đề thi" subtitle="Quiz nhanh trong giờ, hoặc đề định kỳ có tổ chuyên môn duyệt.">
+    <Shell title="Kiểm tra và đề thi" subtitle="Quiz nhanh trong giờ, đề định kỳ có tổ chuyên môn duyệt, và ngân hàng câu hỏi.">
       <div className="kt-page">
         <div role="tablist" aria-label="Loại bài kiểm tra" className="ag-tabs kt-tabs">
           {tabBtn('A', 'Quiz củng cố', 'Không cần duyệt')}
           {tabBtn('B', 'Đề định kỳ', 'Cần tổ chuyên môn duyệt')}
+          {tabBtn('C', 'Ngân hàng câu hỏi', 'Xem và lọc câu')}
         </div>
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-          {tab === 'A' ? <QuizTab /> : <ExamTab />}
+          {tab === 'A' ? <QuizTab /> : tab === 'B' ? <ExamTab /> : <BankTab />}
         </div>
       </div>
     </Shell>

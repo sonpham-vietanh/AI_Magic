@@ -25,21 +25,27 @@ import {
   saveHistoryItem,
 } from '@/lib/agent/history';
 import { matchLessons, parseIntent, pickConfident, type CommandId } from '@/lib/agent/intent';
-import { formatApiError, type BloomStart } from '@/lib/ui/soanBai';
-import type { WorkflowResult } from '@/lib/workflows/types';
+import { formatApiError, textToSections, type BloomStart } from '@/lib/ui/soanBai';
+import type { ResourceKind } from '@/lib/resources/types';
+import { acceptResult, loadVersion } from '@/lib/agent/accept';
+import { resultText, type AgentResult } from '@/lib/agent/result';
 import { getClassById } from '@/lib/classes';
+import { FORMAT_ITEMS } from '@/lib/agent/flow';
+
+const FORMAT_VALUES = FORMAT_ITEMS.map((f) => f.value);
 import { Shell } from '../Shell';
 import { Canvas } from './Canvas';
-import { BloomChoices, ConfirmCard, FormatChoices, LessonPicker, RunCard, StyleChoices } from './Cards';
+import { BloomChoices, ConfirmCard, FormatChoices, LessonPicker, ResourceChoices, RunCard, StyleChoices } from './Cards';
+import { TeacherName, useActor } from './TeacherName';
 import { subjectLabel, type AtomLite, type Msg, type ResultEntry, type RunState } from './types';
 
 type Standard = 'approved' | 'chua_duyet' | 'khong_co';
 
 const SUGGESTIONS: { format: FormatValue; icon: IconName; title: string; desc: string }[] = [
   { format: 'ke_hoach', icon: 'book', title: 'Soạn kế hoạch bài dạy', desc: 'Theo Công văn 5512, nâng cấp từ bản chuẩn của Kho' },
-  { format: 'quiz', icon: 'quiz', title: 'Tạo quiz củng cố', desc: 'Câu hỏi thật theo bậc tư duy, dùng ngay trong tiết' },
-  { format: 'de_kiem_tra', icon: 'exam', title: 'Soạn đề kiểm tra', desc: 'Có ma trận Thông tư 22, cần tổ chuyên môn duyệt' },
-  { format: 'slide', icon: 'slides', title: 'Soạn slide bài giảng', desc: 'Dàn ý trình chiếu từ gói kiến thức của bài' },
+  { format: 'quiz', icon: 'quiz', title: 'Quiz củng cố hoặc đề kiểm tra', desc: 'Quiz trong tiết; đề có ma trận nằm ở danh sách đầy đủ' },
+  { format: 'slide', icon: 'slides', title: 'Soạn slide bài giảng', desc: 'Bộ slide tải về PowerPoint (.pptx)' },
+  { format: 'worksheet', icon: 'file', title: 'Soạn phiếu học tập', desc: 'Phiếu cho học sinh, đáp án riêng cho giáo viên' },
 ];
 
 const COMMAND_LINKS: Partial<Record<CommandId, { href: string; label: string; desc: string }>> = {
@@ -60,6 +66,9 @@ export function AgentApp() {
   const [text, setText] = useState('');
   const [suggestions, setSuggestions] = useState<AtomLite[]>([]);
   const [standard, setStandard] = useState<Record<string, Standard>>({});
+  const [actor, saveActor, actorReady] = useActor();
+  const actorRef = useRef(actor);
+  actorRef.current = actor;
 
   const idRef = useRef(0);
   const nid = () => `m${++idRef.current}`;
@@ -131,6 +140,11 @@ export function AgentApp() {
     userSay(answerText('bai', next));
     advance(next);
   };
+  const pickResources = (v: ResourceKind[]) => {
+    const next = apply({ dangTaiNguyen: v });
+    userSay(answerText('dangTaiNguyen', next));
+    advance(next);
+  };
   const pickBloom = (v: BloomStart) => {
     const next = apply({ bloom: v });
     userSay(answerText('bloom', next));
@@ -146,7 +160,7 @@ export function AgentApp() {
     slotsRef.current = next;
     setSlots(next);
     const label =
-      step === 'format' ? 'sản phẩm' : step === 'bai' ? 'bài dạy' : step === 'bloom' ? 'mức tư duy' : 'phong cách';
+      step === 'format' ? 'sản phẩm' : step === 'dangTaiNguyen' ? 'các dạng tài nguyên' : step === 'bai' ? 'bài dạy' : step === 'bloom' ? 'mức tư duy' : 'phong cách';
     userSay(`Đổi ${label}`);
     advance(next);
   };
@@ -154,7 +168,8 @@ export function AgentApp() {
   /* ---------- chạy quy trình ---------- */
   const startRun = useCallback(
     async (s: AgentSlots, opts: { regenerationOf?: string } = {}) => {
-      const built = toParams(s, { regenerationOf: opts.regenerationOf });
+      const name = actorRef.current.trim();
+      const built = toParams(s, { regenerationOf: opts.regenerationOf, teacher: name ? { name } : undefined });
       if (!built.ok) {
         say(`Mình còn thiếu thông tin nên chưa soạn được (${built.error}). Cô/thầy kiểm tra lại giúp mình nhé.`);
         return;
@@ -179,7 +194,7 @@ export function AgentApp() {
           ok?: boolean;
           error?: string;
           reasons?: string[];
-          result?: WorkflowResult;
+          result?: AgentResult;
         };
         if (!res.ok || !j.ok || !j.result) {
           if (res.status === 422) fail(j.error || 'Sự kiện thời sự không đạt kiểm tra an toàn.', j.reasons);
@@ -188,9 +203,7 @@ export function AgentApp() {
         }
         const result = j.result;
         const title = `${formatLabel(s.format)}: ${s.baiTitle ?? result.standard.title ?? ''}`.trim();
-        const original = (result.content.sections.length
-          ? result.content.sections.map((x) => (x.heading ? `${x.heading}\n${x.body}` : x.body)).join('\n\n').trim()
-          : result.content.markdown) as string;
+        const original = resultText(result);
         const entry: ResultEntry = {
           id: result.runId,
           title,
@@ -240,19 +253,21 @@ export function AgentApp() {
   };
 
   const accept = async (entry: ResultEntry) => {
-    let diffRatio: number | undefined;
-    try {
-      const res = await fetch('/api/signals/final', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: entry.id, finalText: entry.text, accepted: true }),
-      });
-      const j = (await res.json().catch(() => ({}))) as { diffRatio?: number };
-      if (res.ok && typeof j.diffRatio === 'number') diffRatio = j.diffRatio;
-    } catch {
-      /* ghi tín hiệu là phụ, không chặn giáo viên */
-    }
-    setResults((r) => ({ ...r, [entry.id]: { ...r[entry.id], accepted: true, diffRatio } }));
+    const out = await acceptResult({
+      runId: entry.id,
+      title: entry.title,
+      format: entry.slots.format ?? '',
+      workflow: entry.result.workflow,
+      lessonKey: entry.slots.baiDayId ?? entry.result.standard?.atomId ?? '',
+      lessonTitle: entry.slots.baiTitle,
+      text: entry.text,
+      artifacts: entry.result.artifacts,
+      actor: actorRef.current,
+    });
+    setResults((r) => ({
+      ...r,
+      [entry.id]: { ...r[entry.id], accepted: true, diffRatio: out.diffRatio, version: out.version, versionFailed: out.versionFailed },
+    }));
     saveHistoryItem({
       id: entry.id,
       title: entry.title,
@@ -285,6 +300,11 @@ export function AgentApp() {
     userSay(formatLabel(format));
     say(`Được ạ. Mình sẽ hỏi vài điều ngắn để soạn đúng ${formatLabel(format).toLowerCase()}.`);
     advance(next);
+  };
+
+  const showAllFormats = () => {
+    say('Đây là đủ các sản phẩm mình làm được. Cô/thầy chọn một sản phẩm nhé.');
+    advance(slotsRef.current);
   };
 
   const followUp = (format: FormatValue) => {
@@ -328,6 +348,51 @@ export function AgentApp() {
     },
     [],
   );
+
+  /** Mở lại một phiên bản đã lưu (từ trang Lịch sử) để tiếp tục chỉnh trong khung bản soạn. */
+  const openVersion = useCallback(async (id: string) => {
+    const v = await loadVersion(id);
+    if (!v) {
+      setMsgs((p) => [
+        ...p,
+        { id: `m${++idRef.current}`, role: 'agent', kind: 'text', text: 'Mình chưa mở được phiên bản này. Cô/thầy thử lại từ trang Lịch sử nhé.' },
+      ]);
+      return;
+    }
+    const fmt = (FORMAT_VALUES as readonly string[]).includes(v.format) ? (v.format as FormatValue) : undefined;
+    const entryId = `${v.runId}-v${v.number}`;
+    const slotsV: AgentSlots = {
+      ...initialSlots(),
+      format: fmt,
+      baiDayId: v.lessonKey || undefined,
+      baiTitle: v.lessonTitle,
+    };
+    const result: AgentResult = {
+      runId: v.runId,
+      workflow: (v.workflow || 'khbd') as AgentResult['workflow'],
+      bloomLevels: [],
+      standard: { status: 'khong_co', atomId: v.lessonKey, title: v.lessonTitle },
+      warnings: [],
+      content: { sections: v.text ? textToSections(v.text) : [], markdown: v.text },
+      reflection: { scores: [], average: 0, issues: [], skipped: true },
+      requiresApproval: false,
+      artifacts: v.artifacts,
+    };
+    setResults((r) => ({
+      ...r,
+      [entryId]: { id: entryId, title: v.title, at: v.createdAt, slots: slotsV, result, text: v.text, fromVersion: v.number },
+    }));
+    setCanvasId(entryId);
+    setMsgs((p) => [
+      ...p,
+      {
+        id: `m${++idRef.current}`,
+        role: 'agent',
+        kind: 'text',
+        text: `Mình đã mở lại phiên bản ${v.number} của “${v.title}”. Cô/thầy xem ở khung bên phải, chỉnh tiếp nếu cần.`,
+      },
+    ]);
+  }, []);
 
   /* ---------- câu gõ tự do (luật từ khoá, không lập kế hoạch tự do) ---------- */
   const ensureLessons = async (subject: string, grade: string): Promise<AtomLite[]> => {
@@ -423,6 +488,7 @@ export function AgentApp() {
     try {
       const q = new URLSearchParams(window.location.search);
       const h = q.get('h');
+      const v = q.get('v');
       const fresh = q.get('new');
       const fmt = q.get('format') as FormatValue | null;
       // Tham số đến từ các trang khác: lớp (Lớp học), bài và bài liên kết (Sơ đồ liên môn).
@@ -443,9 +509,10 @@ export function AgentApp() {
       }
       if (lienKet && ID_RE.test(lienKet)) patch.lienKetId = lienKet;
       const hasPatch = Object.keys(patch).length > 0;
-      const validFmt = fmt && ['ke_hoach', 'slide', 'worksheet', 'quiz', 'de_kiem_tra', 'audio', 'video', 'tai_nguyen_6_dang'].includes(fmt);
+      const validFmt = fmt && ['ke_hoach', 'slide', 'worksheet', 'quiz', 'de_kiem_tra', 'infographic', 'mindmap', 'podcast', 'tranh_luan', 'video', 'tai_nguyen_6_dang'].includes(fmt);
 
-      if (h) openHistory(h);
+      if (v && ID_RE.test(v)) void openVersion(v);
+      else if (h) openHistory(h);
       else if (validFmt || hasPatch) {
         const next = apply({ ...patch, ...(validFmt ? { format: fmt as FormatValue } : {}) });
         if (validFmt) userSay(formatLabel(fmt as FormatValue));
@@ -465,7 +532,7 @@ export function AgentApp() {
             .catch(() => undefined);
         }
       } else if (fresh) resetChat();
-      if (h || fresh || validFmt || hasPatch) window.history.replaceState(null, '', '/');
+      if (h || v || fresh || validFmt || hasPatch) window.history.replaceState(null, '', '/');
     } catch {
       /* bỏ qua */
     }
@@ -505,6 +572,7 @@ export function AgentApp() {
           <>
             <p className="ag-text">{STEP_PROMPTS[m.step]}</p>
             {active && m.step === 'format' && <FormatChoices onPick={pickFormat} />}
+            {active && m.step === 'dangTaiNguyen' && <ResourceChoices onPick={pickResources} />}
             {active && m.step === 'bai' && (
               <LessonPicker
                 subject={slots.subject}
@@ -612,6 +680,8 @@ export function AgentApp() {
             </div>
           </div>
 
+          <TeacherName value={actor} onSave={saveActor} ready={actorReady} />
+
           <div className="ag-thread" ref={threadRef}>
             {msgs.length === 0 ? (
               <div className="ag-hero">
@@ -633,6 +703,12 @@ export function AgentApp() {
                     </button>
                   ))}
                 </div>
+                <p className="ag-hero-more">
+                  <button type="button" className="ag-btn" onClick={showAllFormats}>
+                    <Icon name="layers" size={18} />
+                    Xem đủ 11 sản phẩm (đề kiểm tra, infographic, mindmap, podcast, video…)
+                  </button>
+                </p>
               </div>
             ) : (
               <div className="ag-thread-inner" aria-live="polite">

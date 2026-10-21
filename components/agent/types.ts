@@ -1,5 +1,5 @@
 import type { AgentSlots, AskStep, FormatValue } from '@/lib/agent/flow';
-import type { WorkflowResult } from '@/lib/workflows/types';
+import type { AgentResult } from '@/lib/agent/result';
 
 export type Msg =
   | { id: string; role: 'user'; text: string }
@@ -24,11 +24,16 @@ export interface ResultEntry {
   title: string;
   at: string;
   slots: AgentSlots;
-  result: WorkflowResult;
+  result: AgentResult;
   /** Văn bản đang hiển thị/chỉnh sửa (ban đầu là bản AI soạn). */
   text: string;
   accepted?: boolean;
   diffRatio?: number;
+  /** Phiên bản đã lưu vào Lịch sử của tôi sau khi duyệt. */
+  version?: { id: string; number: number };
+  versionFailed?: boolean;
+  /** Bản mở lại từ một phiên bản đã lưu (không có dữ liệu tự soi/kiểm tra gốc). */
+  fromVersion?: number;
 }
 
 export interface AtomLite {
@@ -76,8 +81,12 @@ export function formatIcon(v: FormatValue): 'book' | 'slides' | 'file' | 'quiz' 
       return 'quiz';
     case 'de_kiem_tra':
       return 'exam';
-    case 'audio':
+    case 'podcast':
+    case 'tranh_luan':
       return 'podcast';
+    case 'infographic':
+    case 'mindmap':
+      return 'layers';
     case 'video':
       return 'video';
     default:

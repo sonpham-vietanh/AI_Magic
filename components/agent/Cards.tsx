@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { CLASS_PROFILES } from '@/lib/classes';
 import {
   BLOOM_CHOICES,
-  FORMAT_OPTIONS,
   NGON_NGU_OPTIONS,
   PHONG_CACH_OPTIONS,
   bloomPreview,
@@ -13,6 +12,8 @@ import {
   type NgonNgu,
 } from '@/lib/ui/soanBai';
 import {
+  ALL_RESOURCES,
+  FORMAT_GROUPS,
   needsStyle,
   summaryRows,
   type AgentSlots,
@@ -22,6 +23,9 @@ import {
   type StyleValue,
 } from '@/lib/agent/flow';
 import { Icon } from '@/components/ui/icons';
+import type { ResourceKind } from '@/lib/resources/types';
+import { getFromKho, getStructure, structureSummary } from '@/lib/agent/result';
+import { ResourceChecklist } from './ResourcePicker';
 import {
   GRADE_OPTIONS,
   SUBJECT_OPTIONS,
@@ -37,17 +41,37 @@ import {
 export function FormatChoices({ onPick }: { onPick: (v: FormatValue) => void }) {
   return (
     <div className="ag-card" role="group" aria-label="Chọn sản phẩm cần soạn">
-      <div className="ag-choices">
-        {FORMAT_OPTIONS.map((o) => (
-          <button key={o.value} type="button" className="ag-choice" onClick={() => onPick(o.value)}>
-            <span className="ag-choice-ico">
-              <Icon name={formatIcon(o.value)} />
-            </span>
-            <span>
-              <strong>{o.label}</strong>
-            </span>
-          </button>
-        ))}
+      {FORMAT_GROUPS.map((g) => (
+        <div className="ag-fgroup" key={g.title} role="group" aria-label={g.title}>
+          <h4 className="ag-fgroup-h">{g.title}</h4>
+          <div className="ag-choices">
+            {g.items.map((o) => (
+              <button key={o.value} type="button" className="ag-choice" onClick={() => onPick(o.value)}>
+                <span className="ag-choice-ico">
+                  <Icon name={formatIcon(o.value)} />
+                </span>
+                <span>
+                  <strong>{o.label}</strong>
+                  <small>{o.desc}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ResourceChoices({ onPick }: { onPick: (v: ResourceKind[]) => void }) {
+  const [value, setValue] = useState<ResourceKind[]>(ALL_RESOURCES);
+  return (
+    <div className="ag-card">
+      <ResourceChecklist value={value} onChange={setValue} idPrefix="ag-res" />
+      <div className="ag-actions">
+        <button type="button" className="ag-btn primary" onClick={() => onPick(value)} disabled={value.length < 1}>
+          Tiếp tục với {value.length} dạng
+        </button>
       </div>
     </div>
   );
@@ -478,6 +502,9 @@ export function RunCard({
   if (!r) return null;
   const std = r.standard.status;
   const refl = r.reflection;
+  const structure = getStructure(r);
+  const ss = structureSummary(structure);
+  const fromKho = getFromKho(r);
   return (
     <div className="ag-run">
       <div className="ag-run-head">
@@ -508,6 +535,13 @@ export function RunCard({
         )}
         <TraceLine state="ok" text={`Quy trình: ${WORKFLOW_LABELS[r.workflow] ?? r.workflow}`} />
         <TraceLine state="ok" text={`Các bậc tư duy: ${r.bloomLevels.join(' → ')}`} />
+        {fromKho.length > 0 && <TraceLine state="ok" text="Lấy trực tiếp từ bản chuẩn đã duyệt, không sinh lại" />}
+        {structure.length > 0 && (
+          <TraceLine
+            state={ss.missing.length === 0 ? 'ok' : 'warn'}
+            text={`Kiểm tra cấu trúc: đạt ${ss.ok}/${ss.total} mục${ss.missing.length ? ' (còn thiếu một số mục)' : ''}`}
+          />
+        )}
         <TraceLine
           state={refl.skipped ? 'warn' : 'ok'}
           text={

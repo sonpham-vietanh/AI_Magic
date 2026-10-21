@@ -11,6 +11,7 @@ const schema = z.object({
   language: z.enum(['vi', 'en', 'song_ngu']).default('vi'),
   examDate: z.string().max(10).optional(),
   createdBy: z.string().trim().min(1).max(100),
+  perCell: z.number().int().min(1).max(10).optional(),
 });
 
 export async function POST(request: Request) {

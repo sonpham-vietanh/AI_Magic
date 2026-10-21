@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Icon } from '@/components/ui/icons';
 import { buildDocxBlob, downloadBlob } from '@/lib/export/docx';
+import { MathText } from '@/components/MathText';
 import { classifyLine } from '@/components/agent/Canvas';
 
 export interface Section {
@@ -59,7 +60,7 @@ function Lines({ text }: { text: string }) {
         .map((l, i) =>
           l.trim() === '' ? null : (
             <p key={i} className={`ag-line ${classifyLine(l) === 'li' ? 'li' : ''}`}>
-              {l.trim()}
+              <MathText text={l.trim()} />
             </p>
           ),
         )}

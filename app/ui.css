@@ -1195,3 +1195,192 @@ textarea.ag-field {
     overflow: visible;
   }
 }
+
+/* ===== Sơ đồ v2.1: nhóm sản phẩm, dạng tài nguyên, kiểm tra cấu trúc, tên giáo viên ===== */
+.ag-fgroup + .ag-fgroup {
+  margin-top: 16px;
+}
+.ag-fgroup-h {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ag-hero-more {
+  margin-top: 16px;
+}
+.ag-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.ag-who strong {
+  color: var(--navy);
+}
+.ag-who-form {
+  flex-wrap: wrap;
+}
+.ag-who-form label {
+  font-weight: 700;
+  color: var(--navy);
+}
+.ag-who-form .ag-field {
+  width: auto;
+  flex: 1 1 160px;
+  max-width: 280px;
+}
+.sb-form .ag-who {
+  padding: 0 0 8px;
+}
+.ag-reslist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.ag-reslist legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--navy);
+}
+.ag-reslist .ag-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.ag-res {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--navy);
+  cursor: pointer;
+}
+.ag-res input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--navy);
+}
+.ag-res.on {
+  border-color: var(--navy);
+  background: var(--gold-soft);
+}
+.ag-res:focus-within {
+  box-shadow: var(--ag-focus);
+}
+.ag-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.ag-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.ag-tab {
+  flex: none;
+  white-space: nowrap;
+}
+.ag-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+.ag-kinds .ag-chip[aria-pressed='true'] {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.ag-art {
+  min-width: 0;
+}
+.ag-inline-link {
+  color: var(--navy);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ag-st-sum {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.ag-st-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ag-st-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.ag-st-list li.bad {
+  border-color: var(--danger);
+}
+.ag-st-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--success);
+}
+.ag-st-list li.bad .ag-st-ico {
+  background: var(--danger);
+}
+.ag-st-list strong {
+  font-size: 16px;
+  color: var(--navy);
+  line-height: 1.4;
+}
+.ag-st-tag {
+  margin-left: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--success);
+}
+.ag-st-list li.bad .ag-st-tag {
+  color: var(--danger);
+}
+.ag-st-list small {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+@media (max-width: 900px) {
+  .ag-who {
+    padding: 0 16px 6px;
+  }
+}

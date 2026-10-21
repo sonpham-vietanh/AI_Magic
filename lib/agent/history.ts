@@ -1,6 +1,6 @@
 // Lịch sử các bản soạn gần đây, lưu trong trình duyệt của giáo viên (không gửi đi đâu).
 // Mọi truy cập localStorage đều bọc try/catch: chế độ riêng tư hoặc bị chặn vẫn chạy bình thường.
-import type { WorkflowResult } from '../workflows/types';
+import type { AgentResult } from './result';
 import type { AgentSlots } from './flow';
 
 export interface HistoryItem {
@@ -8,7 +8,7 @@ export interface HistoryItem {
   title: string;
   at: string;
   slots: AgentSlots;
-  result: WorkflowResult;
+  result: AgentResult;
   /** Văn bản giáo viên đã chỉnh (nếu có), mặc định là bản AI soạn. */
   text: string;
   accepted?: boolean;

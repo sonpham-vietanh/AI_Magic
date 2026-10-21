@@ -1,50 +1,37 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
 import { GRADES, SUBJECTS } from '@/lib/catalog';
 import { RUBRIC_6 } from '@/lib/eval/rubric';
 import { approveHint, evaluateReview, formatScore, MIN_CRITERION } from '@/lib/ui/review';
+import { PhaAStepper, type PhaAStep } from '@/components/kho/PhaAStepper';
+import { ResourceGenerator } from '@/components/kho/ResourceGenerator';
+import {
+  FIELD_LABELS,
+  FIELD_ORDER,
+  whenText,
+  type AssetView,
+  type KhoReviewView as Review,
+  type KhoStatus,
+  type LessonView as Lesson,
+} from '@/components/kho/types';
 import '../ui-du.css';
+import '../ui-kho.css';
 
-type KhoStatus = 'approved' | 'chua_duyet' | 'khong_co';
 type Filter = 'chua_duyet' | 'approved' | 'khong_co';
-
-interface Review {
-  reviewer: string;
-  reviewedAt: string;
-  scores: Record<string, number>;
-  average: number;
-  note?: string;
-  decision: 'approve' | 'reject';
-}
 
 interface QueueItem {
   atomId: string;
   code: string;
   title: string;
+  chapter?: string;
+  lesson?: string;
   status: KhoStatus;
   hasPackage: boolean;
   assetCount: number;
-  review?: Review;
-}
-
-interface PackageView {
-  id?: string;
-  level?: number;
-  bloom?: string;
-  status?: string;
-  fields?: Record<string, string | undefined>;
-}
-
-interface Lesson {
-  status: KhoStatus;
-  atomId: string;
-  atomCode?: string;
-  title?: string;
-  packages: PackageView[];
-  assets: unknown[];
   review?: Review;
 }
 
@@ -60,27 +47,11 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'khong_co', label: 'Không có gói' },
 ];
 
-const FIELD_ORDER = ['objective', 'explanation', 'example', 'counterExample', 'commonMistake', 'strategy', 'questions'];
-const FIELD_LABELS: Record<string, string> = {
-  objective: 'Mục tiêu',
-  explanation: 'Giải thích',
-  example: 'Ví dụ',
-  counterExample: 'Phản ví dụ',
-  commonMistake: 'Lỗi thường gặp',
-  strategy: 'Chiến lược dạy',
-  questions: 'Câu hỏi',
-};
-
 const NAME_KEY = 'va-reviewer-name';
 
 function StatusPill({ status }: { status: KhoStatus }) {
   const m = STATUS_META[status];
   return <span className={`ag-status ${m.cls}`}>{m.label}</span>;
-}
-
-function whenText(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('vi-VN');
 }
 
 export default function DuyetPage() {
@@ -98,6 +69,7 @@ export default function DuyetPage() {
   const [reviewer, setReviewer] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [assets, setAssets] = useState<AssetView[]>([]);
   const [message, setMessage] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
 
   useEffect(() => {
@@ -141,6 +113,7 @@ export default function DuyetPage() {
   const openItem = async (atomId: string, keepMessage = false) => {
     setSelectedId(atomId);
     setLesson(null);
+    setAssets([]);
     if (!keepMessage) setMessage(null);
     setScores({});
     setNote('');
@@ -164,6 +137,27 @@ export default function DuyetPage() {
   }, [items]);
   const visible = items.filter((it) => it.status === filter);
 
+  const steps = useMemo<PhaAStep[]>(() => {
+    if (!lesson) return [];
+    const sel = items.find((i) => i.atomId === lesson.atomId);
+    const chapter = lesson.atom?.chapter || sel?.chapter || '';
+    const sub = lesson.atom?.lesson || sel?.lesson || '';
+    const siblings = items.filter((i) => i.chapter === chapter && i.lesson === sub && i.atomId !== lesson.atomId).length;
+    const hasReq = !!lesson.atom?.yeu_cau;
+    const nAssets = assets.length;
+    const draftN = assets.filter((a) => a.status === 'draft').length;
+    const rv = lesson.review;
+    const s4: PhaAStep['state'] = rv?.decision === 'reject' ? 'bad' : rv?.decision === 'approve' && draftN === 0 ? 'done' : rv?.decision === 'approve' ? 'doing' : 'todo';
+    return [
+      { n: 1, title: 'Phân rã tri thức', state: hasReq ? 'done' : 'todo', detail: hasReq ? `Có yêu cầu cần đạt, ${lesson.edges.length} liên kết` : 'Thiếu yêu cầu cần đạt', target: 'kh-sec-1' },
+      { n: 2, title: 'Sinh 6 dạng', state: nAssets >= 6 ? 'done' : nAssets > 0 ? 'doing' : 'todo', detail: `${nAssets}/6 dạng${draftN ? `, ${draftN} nháp` : ''}`, target: 'kh-sec-2' },
+      { n: 3, title: 'Ghép theo chương', state: chapter ? 'done' : 'todo', detail: chapter ? `${siblings + 1} nguyên tử cùng mục` : 'Chưa rõ chương/bài', target: 'kh-sec-3' },
+      { n: 4, title: 'Người duyệt', state: s4, detail: rv ? (rv.decision === 'approve' ? (draftN ? 'Có nháp mới, cần duyệt lại' : 'Đã duyệt') : 'Đã từ chối') : 'Chưa duyệt', target: 'kh-sec-4' },
+      { n: 5, title: 'Nhập kho', state: lesson.version ? (draftN ? 'doing' : 'done') : 'todo', detail: lesson.version ? `Bản chuẩn v${lesson.version}` : 'Chưa có phiên bản', target: 'kh-sec-5' },
+      { n: 6, title: 'Ngân hàng câu hỏi', state: lesson.questions.length > 0 ? 'done' : 'todo', detail: `${lesson.questions.length} câu hỏi`, target: 'kh-sec-6' },
+    ];
+  }, [lesson, assets, items]);
+
   const ev = useMemo(() => evaluateReview(scores), [scores]);
   const nameOk = reviewer.trim().length > 0;
   const canApprove = ev.canApprove && nameOk && !submitting;
@@ -184,13 +178,14 @@ export default function DuyetPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ atomId: selectedId, reviewer, scores, decision, note: note.trim() || undefined }),
       });
-      const data = (await res.json()) as { ok?: boolean; review?: Review; error?: string };
+      const data = (await res.json()) as { ok?: boolean; review?: Review & { version?: number }; error?: string };
       if (!res.ok || !data.ok) {
         setMessage({ kind: 'bad', text: data.error || `Lỗi HTTP ${res.status}` });
         return;
       }
       const text =
-        decision === 'approve' ? 'Đã duyệt. Bài này đã vào Kho học liệu chuẩn.' : 'Đã ghi nhận từ chối. Bài chưa vào Kho.';
+        decision === 'approve'
+          ? `Đã duyệt. Bộ tài nguyên đã đóng băng thành bản chuẩn${data.review?.version ? ` v${data.review.version}` : ''} trong Kho.` : 'Đã ghi nhận từ chối. Bài chưa vào Kho.';
       await Promise.all([loadQueue(), openItem(selectedId, true)]);
       setMessage({ kind: 'ok', text });
     } catch (e) {
@@ -203,7 +198,7 @@ export default function DuyetPage() {
   const showSkeleton = loading && !loaded;
 
   return (
-    <Shell title="Duyệt bản chuẩn" subtitle="Không qua cổng thì không vào Kho.">
+    <Shell title="Dựng kho (Pha A)" subtitle="Phân rã, sinh 6 dạng tài nguyên, ghép, người duyệt, nhập kho, ngân hàng câu hỏi.">
       <div className="ag-alert info du-rule" role="note">
         <Icon name="shield" size={20} />
         <div>
@@ -349,6 +344,58 @@ export default function DuyetPage() {
                   <StatusPill status={lesson.status} />
                 </div>
 
+                <PhaAStepper steps={steps} />
+
+                <div className="kh-card" id="kh-sec-1">
+                  <h3 className="du-h3" style={{ margin: 0 }}>Bước 1. Phân rã tri thức</h3>
+                  <p className="ag-note" style={{ margin: '6px 0 0' }}>
+                    {lesson.atom?.yeu_cau
+                      ? `Yêu cầu cần đạt: ${lesson.atom.yeu_cau}`
+                      : 'Bài này chưa có yêu cầu cần đạt trong đồ thị tri thức.'}
+                  </p>
+                  <p className="ag-note" style={{ margin: '4px 0 0' }}>
+                    {lesson.edges.length} liên kết trong đồ thị tri thức, {lesson.packages.length} gói kiến thức
+                    {lesson.atom?.bloom ? `, bậc Bloom: ${lesson.atom.bloom}` : ''}. Phân rã được làm ở Supabase, trang này chỉ đọc.
+                  </p>
+                </div>
+
+                <ResourceGenerator
+                  key={`${lesson.atomId}-${lesson.version ?? 0}`}
+                  atomId={lesson.atomId}
+                  canGenerate={lesson.packages.length > 0}
+                  onAssets={setAssets}
+                />
+
+                <div className="kh-card" id="kh-sec-3">
+                  <h3 className="du-h3" style={{ margin: 0 }}>Bước 3. Ghép theo phân phối chương trình</h3>
+                  {(() => {
+                    const sel = items.find((i) => i.atomId === lesson.atomId);
+                    const chapter = lesson.atom?.chapter || sel?.chapter;
+                    const sub = lesson.atom?.lesson || sel?.lesson;
+                    const sibs = items.filter((i) => i.chapter === chapter && i.lesson === sub);
+                    return (
+                      <>
+                        <p className="ag-note" style={{ margin: '6px 0 0' }}>
+                          {chapter ? `Chương: ${chapter}. Mục: ${sub || '(chưa rõ)'}.` : 'Chưa rõ bài thuộc chương nào.'}
+                        </p>
+                        <p className="ag-note" style={{ margin: '4px 0 0' }}>
+                          Trường chưa có phân phối chương trình chính thức, nên ghép theo chương/bài trong cây chương trình: các bài cùng mục là các
+                          nguyên tử của cùng một tiết.
+                        </p>
+                        {sibs.length > 1 && (
+                          <ul className="kh-sibs">
+                            {sibs.map((x) => (
+                              <li key={x.atomId} className={x.atomId === lesson.atomId ? 'cur' : ''}>
+                                {x.title}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+
                 {lesson.review && (
                   <div className="du-history">
                     <strong>Lần duyệt gần nhất: {lesson.review.decision === 'approve' ? 'Duyệt' : 'Từ chối'}</strong>
@@ -395,8 +442,12 @@ export default function DuyetPage() {
                       );
                     })}
 
-                    <form aria-label="Phiếu chấm 6 tiêu chí" onSubmit={(e) => e.preventDefault()}>
-                      <h3 className="du-h3">Chấm 6 tiêu chí</h3>
+                    <form id="kh-sec-4" aria-label="Phiếu chấm 6 tiêu chí" onSubmit={(e) => e.preventDefault()}>
+                      <h3 className="du-h3">Bước 4. Người duyệt: chấm 6 tiêu chí</h3>
+                      <p className="ag-note">
+                        Duyệt là duyệt cả BỘ: gói kiến thức và {assets.length} tài nguyên đang có
+                        {assets.some((a) => a.status === 'draft') ? ' (gồm bản nháp)' : ''}. Sau khi duyệt, bộ này đóng băng thành một phiên bản.
+                      </p>
                       {RUBRIC_6.map((c) => {
                         const v = scores[c.id];
                         return (
@@ -484,6 +535,35 @@ export default function DuyetPage() {
                     </form>
                   </>
                 )}
+
+                <div className="kh-card" id="kh-sec-5">
+                  <h3 className="du-h3" style={{ margin: 0 }}>Bước 5. Nhập kho</h3>
+                  <p className="ag-note" style={{ margin: '6px 0 0' }}>
+                    {lesson.version
+                      ? `Bản chuẩn hiện hành: v${lesson.version}. Bản đã duyệt không sửa được; sinh lại hoặc chỉnh sau đó tạo bản nháp mới và phải duyệt lại mới thành v${lesson.version + 1}.`
+                      : 'Chưa có phiên bản nào. Khi người duyệt bấm "Duyệt vào Kho", bộ được đóng băng thành v1 và gắn mã tổ chức (org_id).'}
+                  </p>
+                </div>
+
+                <div className="kh-card" id="kh-sec-6">
+                  <h3 className="du-h3" style={{ margin: 0 }}>Bước 6. Ngân hàng câu hỏi</h3>
+                  <p className="ag-note" style={{ margin: '6px 0 0' }}>
+                    {lesson.questions.length} câu hỏi của bài này trong ngân hàng
+                    {lesson.atom?.bloom ? `; bậc Bloom của bài: ${lesson.atom.bloom}` : ''}.
+                    {(() => {
+                      const by = new Map<string, number>();
+                      for (const q of lesson.questions) {
+                        const k = q.do_kho || q.tier;
+                        if (k) by.set(k, (by.get(k) || 0) + 1);
+                      }
+                      return by.size ? ` Theo mức: ${[...by].map(([k, n]) => `${k} (${n})`).join(', ')}.` : '';
+                    })()}
+                  </p>
+                  <p className="ag-note" style={{ margin: '4px 0 0' }}>
+                    Chưa có ánh xạ chính thức sang các mức của TT 22/2021; thẻ hiển thị là thẻ có sẵn trong ngân hàng.
+                  </p>
+                  <Link className="ag-link kh-tap" href="/kiem-tra">Mở trang Kiểm tra và Đề thi</Link>
+                </div>
               </>
             )}
 

@@ -98,10 +98,35 @@ export const withLlmDeltaSink = <T>(
 
 type LlmOpts = { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal };
 
+/**
+ * Hạn chót CỨNG: bỏ chờ ngay khi tín hiệu huỷ phát ra, KHÔNG phụ thuộc việc fetch/stream có tự ngắt hay không.
+ * Từng gặp: nhà cung cấp ngừng gửi dữ liệu sau khi đã trả phần đầu, `reader.read()` treo hàng trăm giây
+ * dù đã đặt timeoutMs.
+ */
+function abortable<T>(p: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return p;
+  return new Promise<T>((resolve, reject) => {
+    const fail = () => reject(new Error('LLM timeout (đã quá thời gian chờ)'));
+    if (signal.aborted) return fail();
+    signal.addEventListener('abort', fail, { once: true });
+    p.then(
+      (v) => {
+        signal.removeEventListener('abort', fail);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener('abort', fail);
+        reject(e);
+      },
+    );
+  });
+}
+
 /** Đọc SSE tăng dần từ body; hỗ trợ CRLF và dòng bị cắt giữa các chunk. */
 async function readOpenAiStream(
   response: Response,
   onDelta: DeltaHandler,
+  signal?: AbortSignal,
 ): Promise<string> {
   const pieces: string[] = [];
   const handleLine = (line: string) => {
@@ -141,7 +166,15 @@ async function readOpenAiStream(
   let buffer = '';
   let raw = '';
   for (;;) {
-    const { done, value } = await reader.read();
+    let step: ReadableStreamReadResult<Uint8Array>;
+    try {
+      step = await abortable(reader.read(), signal);
+    } catch (e) {
+      // Giải phóng kết nối đang treo rồi báo lỗi lên trên.
+      reader.cancel().catch(() => undefined);
+      throw e;
+    }
+    const { done, value } = step;
     if (done) break;
     const chunk = decoder.decode(value, { stream: true });
     if (pieces.length === 0) raw += chunk;
@@ -258,26 +291,29 @@ export const callLiveLlmStream = async (
       // NOTE: `stream: true` is REQUIRED by the proxy/tunnel in use; it rejects
       // non-streaming requests. Do not change to false. The SSE body is read
       // incrementally and each delta is forwarded to onDelta.
-      const response = await fetch(baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openAiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.45,
-          max_tokens: maxTokens,
-          stream: true,
+      const response = await abortable(
+        fetch(baseUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            temperature: 0.45,
+            max_tokens: maxTokens,
+            stream: true,
+          }),
+          signal: controller.signal,
         }),
-        signal: controller.signal,
-      });
+        controller.signal,
+      );
       if (response.ok) {
-        const text = await readOpenAiStream(response, onDelta);
+        const text = await readOpenAiStream(response, onDelta, controller.signal);
         if (text) {
           return {
             ok: true,

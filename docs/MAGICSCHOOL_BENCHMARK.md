@@ -1,3 +1,5 @@
+> Ghi chú: phần mô tả kiến trúc trong tài liệu này đã được thay thế bởi [KIEN_TRUC_V2_1.md](KIEN_TRUC_V2_1.md). Giữ lại để tham khảo.
+
 # ĐỐI CHIẾU & MỔ XẺ MAGICSCHOOL AI vs. MAGICSTUDIO VIỆT ANH
 
 Tài liệu này tổng hợp cấu trúc sản phẩm của **MagicSchool AI** (`app.magicschool.ai`) và cách **MagicStudio Việt Anh** kế thừa toàn bộ ưu điểm UX/UI, đồng thời nâng cấp 4 trụ cột riêng của Trường Việt Anh.

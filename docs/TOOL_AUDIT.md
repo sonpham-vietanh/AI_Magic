@@ -1,3 +1,5 @@
+> Ghi chú: phần mô tả kiến trúc trong tài liệu này đã được thay thế bởi [KIEN_TRUC_V2_1.md](KIEN_TRUC_V2_1.md). Giữ lại để tham khảo.
+
 # Kiểm định 82 công cụ sư phạm (TOOL_AUDIT)
 
 Ngày kiểm: 2026-10-20. Phạm vi: lib/catalog (82 công cụ), luồng lib/engine và app/api/generate/route.ts. Trường mới trong lib/types.ts: dataSource, maturity, maturityNote (đã gán cho cả 82 công cụ).

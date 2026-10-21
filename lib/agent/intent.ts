@@ -26,14 +26,18 @@ export interface Intent {
 
 // Thứ tự quan trọng: cụm dài/cụ thể đứng trước ("de kiem tra" trước "kiem tra").
 const FORMAT_RULES: [RegExp, FormatValue][] = [
-  [/\b(de kiem tra|de thi|ma tran)\b/, 'de_kiem_tra'],
+  [/\b(tron bo|6 dang|sau dang|bo tai nguyen|du 6)\b/, 'tai_nguyen_6_dang'],
+  [/\b(de kiem tra|kiem tra dinh ky|de thi|ma tran)\b/, 'de_kiem_tra'],
   [/\b(quiz|trac nghiem|cung co)\b/, 'quiz'],
-  [/\b(slide|trinh chieu|powerpoint|ppt)\b/, 'slide'],
+  [/\b(slide|slides|trinh chieu|powerpoint|ppt|pptx)\b/, 'slide'],
   [/\b(phieu hoc tap|phieu bai tap|worksheet|phieu)\b/, 'worksheet'],
-  [/\b(podcast|audio)\b/, 'audio'],
-  [/\b(video)\b/, 'video'],
-  [/\b(6 dang|sau dang|tai nguyen)\b/, 'tai_nguyen_6_dang'],
+  [/\b(tranh luan|hai chuyen gia|2 chuyen gia|debate)\b/, 'tranh_luan'],
+  [/\b(podcast|audio)\b/, 'podcast'],
+  [/\b(infographic|info graphic|do hoa thong tin)\b/, 'infographic'],
+  [/\b(mindmap|mind map|so do tu duy)\b/, 'mindmap'],
+  [/\b(video|clip)\b/, 'video'],
   [/\b(ke hoach bai day|ke hoach|giao an|khbd)\b/, 'ke_hoach'],
+  [/\b(tai nguyen)\b/, 'tai_nguyen_6_dang'],
 ];
 
 const STYLE_RULES: [RegExp, StyleValue][] = [

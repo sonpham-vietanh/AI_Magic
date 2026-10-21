@@ -1,4 +1,5 @@
 import { fetchSupabaseAtomDetail, type SupabaseQuestion } from '@/lib/supabase';
+import { isLetterOnly, parseInlineChoices } from './choices';
 import { bloomToTt22, type Bloom } from './tt22';
 import { mutateOrg, readOrg } from './store';
 import type { BankItem, OrgData } from './types';
@@ -42,6 +43,18 @@ export function normalizeQuestion(
   const options = Array.isArray(q.nhieu)
     ? q.nhieu.map((d) => (d?.noiDung || '').trim()).filter(Boolean)
     : [];
+  let noiDung = q.noi_dung || '';
+  let finalOptions = options;
+  // Dữ liệu thật: phương án nằm trong noi_dung, cột "nhieu" chỉ có nhãn chữ cái -> tách từ nội dung.
+  if (finalOptions.length < 2 || isLetterOnly(finalOptions)) {
+    const parsed = parseInlineChoices(noiDung);
+    if (parsed) {
+      noiDung = parsed.stem || noiDung;
+      finalOptions = parsed.options;
+    } else {
+      finalOptions = [];
+    }
+  }
   return {
     id: String(q.id),
     atomId,
@@ -52,10 +65,10 @@ export function normalizeQuestion(
     lastUsedAt: lastUsedOf(org, String(q.id)),
     doKho: q.do_kho,
     dok: q.dok,
-    noiDung: q.noi_dung || '',
+    noiDung,
     dapAn: q.dap_an || '',
     loiGiai: q.loi_giai || '',
-    options,
+    options: finalOptions,
   };
 }
 
@@ -86,16 +99,19 @@ export function recordResult(orgId: string, questionId: string, correct: boolean
 }
 
 /** Bản rút gọn để trả danh sách: KHÔNG kèm đáp án/lời giải, chỉ xem trước đề. */
-export function toPublicBankItem(i: BankItem) {
+export function toPublicBankItem(i: BankItem, extra: { blocked?: boolean; atomTitle?: string } = {}) {
   return {
     id: i.id,
     atomId: i.atomId,
     atomCode: i.atomCode,
+    ...(extra.atomTitle ? { atomTitle: extra.atomTitle } : {}),
     bloom: i.bloom,
     tt22Level: i.tt22Level,
     difficultyMeasured: i.difficultyMeasured,
     lastUsedAt: i.lastUsedAt,
     dok: i.dok,
-    preview: i.noiDung.length > 80 ? `${i.noiDung.slice(0, 80)}…` : i.noiDung,
+    kind: i.options.length >= 2 ? ('trac_nghiem' as const) : ('tu_luan' as const),
+    blocked: !!extra.blocked,
+    preview: i.noiDung.length > 140 ? `${i.noiDung.slice(0, 140)}…` : i.noiDung,
   };
 }

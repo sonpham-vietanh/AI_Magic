@@ -18,6 +18,7 @@ import { checkNewsEvent } from '@/lib/guardrails/news';
 import { bloomLevelsFor, WorkflowParamsSchema } from '@/lib/workflows/types';
 import { routeWorkflow } from '@/lib/workflows/router';
 import { parseReflection } from '@/lib/workflows/reflection';
+import { FULL_KHBD } from './helpers/khbdFixture';
 import { POST } from '@/app/api/workflows/run/route';
 
 const baseParams = {
@@ -72,7 +73,7 @@ describe('routeWorkflow', () => {
     expect(routeWorkflow('worksheet')).toBe('worksheet');
     expect(routeWorkflow('quiz')).toBe('quiz');
     expect(routeWorkflow('de_kiem_tra')).toBe('de_kiem_tra');
-    for (const f of ['audio', 'video', 'tai_nguyen_6_dang'] as const) {
+    for (const f of ['infographic', 'mindmap', 'podcast', 'tranh_luan', 'video', 'tai_nguyen_6_dang'] as const) {
       expect(routeWorkflow(f)).toBe('tai_nguyen_6_dang');
     }
   });
@@ -153,7 +154,7 @@ describe('POST /api/workflows/run', () => {
   it('chua_duyet: cảnh báo + requiresApproval; có reflection', async () => {
     vi.mocked(getStandardLesson).mockResolvedValue(std('chua_duyet') as never);
     vi.mocked(callLiveLlm)
-      .mockResolvedValueOnce({ ok: true, content: '## KẾ HOẠCH BÀI DẠY\nnội dung', modelUsed: 'm' })
+      .mockResolvedValueOnce({ ok: true, content: FULL_KHBD, modelUsed: 'm' })
       .mockResolvedValueOnce({ ok: true, content: reflJson, modelUsed: 'm' });
     const res = await call(baseParams);
     const j = await res.json();
@@ -193,6 +194,8 @@ describe('POST /api/workflows/run', () => {
       sections: [{ heading: 'Q', body: 'b' }],
       markdown: '## Q\nb',
       questionIds: ['q1'],
+      items: [],
+      notes: [],
     });
     vi.mocked(callLiveLlm).mockResolvedValue({ ok: false, modelUsed: 'm' });
     const j = await (await call({ ...baseParams, formatDauRa: 'quiz' })).json();

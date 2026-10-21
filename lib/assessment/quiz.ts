@@ -77,7 +77,13 @@ export async function generateQuiz(p: {
   language: Language;
   style: string;
   count?: number;
-}): Promise<{ sections: { heading: string; body: string }[]; markdown: string; questionIds: string[] }> {
+}): Promise<{
+  sections: { heading: string; body: string }[];
+  markdown: string;
+  questionIds: string[];
+  items: { n: number; id: string; bloom: string; noiDung: string; options: string[]; dapAn: string; loiGiai: string }[];
+  notes: string[];
+}> {
   const count = Math.max(1, Math.min(10, Math.floor(p.count ?? 5)));
   const levels = p.bloomLevels.map(normalizeBloom).filter((b): b is Bloom => !!b);
   const effective: Bloom[] = levels.length ? [...new Set(levels)] : ['Nhớ', 'Hiểu', 'Vận dụng'];
@@ -117,5 +123,14 @@ export async function generateQuiz(p: {
     `# Quiz củng cố trong tiết — ${bank.atomCode}\n` +
     `> Bậc Bloom: ${effective.join(', ')} · Không cần duyệt · Dùng ngay trong giờ, không lưu.\n\n` +
     sections.map((s) => `## ${s.heading}\n${s.body}`).join('\n\n');
-  return { sections, markdown, questionIds: picked.map((q) => q.id) };
+  const items = picked.map((q, i) => ({
+    n: i + 1,
+    id: q.id,
+    bloom: q.bloom,
+    noiDung: q.noiDung,
+    options: q.options,
+    dapAn: q.dapAn,
+    loiGiai: q.loiGiai,
+  }));
+  return { sections, markdown, questionIds: picked.map((q) => q.id), items, notes };
 }

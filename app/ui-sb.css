@@ -62,3 +62,9 @@
   .sb-form, .sb-actions, .sb-tabs { display: none !important; }
   .sb-root { display: block; }
 }
+
+/* Ruột dùng chung ResultPanel trong thẻ kết quả của biểu mẫu */
+.sb-doc .ag-panel { display: block; }
+.sb-doc .ag-canvas-body { overflow: visible; padding: 14px 0 0; }
+.sb-doc .ag-canvas-foot { margin-top: 16px; padding: 14px 0 0; background: transparent; }
+.sb-doc .ag-tabs { padding: 8px 0 0; margin-top: 12px; }

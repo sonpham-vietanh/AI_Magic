@@ -35,7 +35,7 @@ cp .env.example .env.local
 - Thiếu cấu hình Supabase thì các API lưu trữ trả lỗi rõ ràng. `MAJOR_OS_API_KEY` là bắt buộc cho `/api/major-os/usage` (thiếu => 503). `APP_API_TOKEN` là tùy chọn cho caller bên ngoài.
 - Nếu để trống, hệ thống tự động sử dụng **Smart Pedagogical Generator** tích hợp sẵn để dựng học liệu mẫu chi tiết theo đúng lớp học và nút kiến thức liên môn được chọn.
 
-### 3. Chạy môi trường phát triển (Port 3080)
+### 3. Chạy môi trường phát triển (cổng 3080 theo `npm run dev`)
 ```bash
 npm run dev
 ```
@@ -52,16 +52,25 @@ npm run build
 
 ## 📂 Cấu trúc Thư mục
 
-- `app/` — Các trang giao diện (Kho 82 công cụ `/`, Sơ đồ liên môn `/so-do-lien-mon`, Hồ sơ lớp học `/ho-so-lop-hoc`, Thư viện `/thu-vien`) và các API routes (`/api/generate`, `/api/assistant`, `/api/resources`, `/api/major-os/usage`).
-- `components/` — Giao diện Brand Việt Anh v2.0 (`Shell.tsx`, `DashboardClient.tsx`, `ToolStudioModal.tsx`, `AssistantDrawer.tsx`).
-- `lib/catalog/` — Danh mục **82 công cụ sư phạm** chia theo 8 nhóm chuyên môn.
-- `lib/knowledge-graph/` — Đồ thị tri thức GDPT 2018 (`nodes.ts`, `edges.ts`) kết nối các môn học.
-- `lib/classes/` — Hồ sơ đặc điểm học sinh 12 lớp mẫu thuộc Cơ sở AHT & BT (`profiles.ts`).
-- `lib/engine/` — Bộ tạo Prompt sư phạm, kết nối LLM và bộ sinh học liệu thông minh.
-- `supabase/migrations/` — Schema cơ sở dữ liệu PostgreSQL/Supabase.
-- `ops/major-os-mo-ta.md` — Tài liệu mô tả tích hợp chuẩn Major OS v2.
-- `docs/` — Bộ tài liệu [PRD.md](docs/PRD.md), [MAGICSCHOOL_BENCHMARK.md](docs/MAGICSCHOOL_BENCHMARK.md), [ARCHITECTURE_AND_KNOWLEDGE_GRAPH.md](docs/ARCHITECTURE_AND_KNOWLEDGE_GRAPH.md).
+Cấu trúc bám sơ đồ kiến trúc v2.1 của anh Nguyễn Mạnh Dương. Nguồn sự thật và bảng truy vết (sơ đồ → mã → trạng thái trung thực): [docs/KIEN_TRUC_V2_1.md](docs/KIEN_TRUC_V2_1.md).
 
+**Các trang (menu bên trái):**
+- Soạn và dùng: Trợ lý soạn bài `/`, Thư viện tiết học `/kho`, Kiểm tra & Đề thi `/kiem-tra`, Lịch sử của tôi `/lich-su`.
+- Dựng kho và chất lượng: Dựng kho — Pha A (trang duyệt) `/duyet`, Chất lượng & Tín hiệu `/chat-luong`.
+- Công cụ phụ (thu gọn, ngoài phạm vi sơ đồ v1): Kho 82 công cụ `/cong-cu`, Thư viện cũ `/thu-vien`, Sơ đồ liên môn `/so-do-lien-mon`, Lớp học & chương trình `/ho-so-lop-hoc`, Soạn bài bằng biểu mẫu `/soan-bai`, Kết nối dịch vụ ngoài `/ket-noi`.
+
+**Thư mục:**
+- `app/` — các trang trên và API routes (`/api/workflows/run`, `/api/kho/*`, `/api/assessment/*`, `/api/signals/*`, `/api/eval/*`, `/api/versions`, `/api/integrations/status`, `/api/major-os/usage`, …).
+- `components/` — giao diện (`Shell.tsx`, `agent/`, `resources/`, `kho/`, …).
+- `lib/workflows/` — 7 tham số, router xác định, 6 workflow, Reflection. `lib/resources/` — 6 dạng tài nguyên. `lib/kho/` — Kho bản chuẩn và duyệt. `lib/guardrails/` — guardrail thời sự.
+- `lib/versions/` — lịch sử & phiên bản cá nhân (`.data/versions.json`). `lib/integrations/` — danh bạ dịch vụ ngoài.
+- `lib/catalog/`, `lib/knowledge-graph/`, `lib/classes/`, `lib/engine/` — danh mục 82 công cụ, đồ thị tri thức GDPT 2018, hồ sơ lớp, bộ sinh học liệu.
+- `supabase/migrations/` — schema PostgreSQL/Supabase. `ops/major-os-mo-ta.md` — tích hợp Major OS v2.
+- `docs/` — [KIEN_TRUC_V2_1.md](docs/KIEN_TRUC_V2_1.md) (hiện hành); các file cũ (PRD, ARCHITECTURE_AND_KNOWLEDGE_GRAPH, MAGICSCHOOL_BENCHMARK, TOOL_AUDIT) chỉ còn giá trị tham khảo.
+
+**Khác biệt hạ tầng so với sơ đồ:** sơ đồ ghi FastAPI + PostgreSQL pgvector + Docker; thực tế là Next.js + Supabase + file JSON cục bộ trong `.data/` (có `Dockerfile`). Chưa có SSO Google Workspace. Chi tiết ở mục 4 của tài liệu kiến trúc.
+
+**Dịch vụ ngoài:** chỉ LLM và guardrail nguồn tin chạy thật. Gamma, Canva, Gemini Notebook, TTS/STT **chưa tích hợp** (chưa có khoá/license); hệ thống tự dựng PPTX/DOCX/SVG và dùng giọng đọc của trình duyệt. Xem `/ket-noi`.
 
 ---
 
@@ -71,4 +80,6 @@ npm run build
 - API nội bộ mới `/api/usage`; caller ngoài dùng `APP_API_TOKEN`; có same-origin guard (chỉ là rào chắn, **không phải xác thực người dùng thật** — việc cần làm tiếp) và rate limit (vượt ngưỡng => 429).
 - Rotate mọi khóa từng bị commit/chia sẻ; chỉ lưu khóa trong `.env.local` (đã ignore).
 - Không import `lib/supabase.ts` từ client component.
+- Phiên bản cá nhân (`/api/versions`) lưu trong `.data/versions.json` (ghi nguyên tử, sao lưu file hỏng). Tên người dùng chỉ là khai báo, **chưa có đăng nhập thật**; ai biết id phiên bản đều đọc được. Khi deploy cần gắn volume bền cho `.data/`.
+- `GET /api/integrations/status` chỉ trả đúng/sai về việc đã có biến môi trường, không bao giờ trả giá trị khoá.
 - `npm run test:smoke` quét bí mật trong mã nguồn và tài liệu, fail nếu phát hiện.

@@ -3,44 +3,29 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CLASS_PROFILES } from '@/lib/classes/profiles';
-import { buildDocxBlob, downloadBlob } from '@/lib/export/docx';
 import { Icon } from '@/components/ui/icons';
 import { LessonField } from '@/components/agent/LessonField';
-import { classifyLine } from '@/components/agent/Canvas';
+import { ResultPanel } from '@/components/agent/ResultPanel';
+import { ResourceChecklist } from '@/components/agent/ResourcePicker';
+import { TeacherName, useActor } from '@/components/agent/TeacherName';
+import { ALL_RESOURCES, FORMAT_GROUPS, attachResources, formatDesc, formatLabel, needsResourceChoice } from '@/lib/agent/flow';
+import { acceptResult } from '@/lib/agent/accept';
+import { resultText, type AgentResult } from '@/lib/agent/result';
+import type { ResourceKind } from '@/lib/resources/types';
 import type { AtomLite } from '@/components/agent/types';
 import {
   BLOOM_CHOICES,
-  FORMAT_OPTIONS,
   NGON_NGU_OPTIONS,
   PHONG_CACH_OPTIONS,
   bloomPreview,
-  buildFinalText,
   buildParams,
   formatApiError,
   formatGuardrail,
-  textToSections,
   validateForm,
   type NgonNgu,
   type SoanBaiForm,
 } from '@/lib/ui/soanBai';
 import '@/app/ui-sb.css';
-
-interface RunResult {
-  runId: string;
-  workflow?: string;
-  bloomLevels: string[];
-  standard: { status: 'approved' | 'chua_duyet' | 'khong_co'; atomId?: string; title?: string; reviewedBy?: string };
-  warnings: string[];
-  content: { sections: { heading: string; body: string }[]; markdown: string };
-  reflection: {
-    scores: { id: string; name: string; score: number; note: string }[];
-    average: number;
-    issues: string[];
-    skipped?: boolean;
-  };
-  guardrail?: { ok: boolean; reasons: string[] };
-  requiresApproval: boolean;
-}
 
 const LS_KEY = 'soanBai.params.v1';
 
@@ -74,17 +59,6 @@ function Err({ msg }: { msg?: string }) {
   return msg ? <p className="sb-err" role="alert">{msg}</p> : null;
 }
 
-function DocText({ text }: { text: string }) {
-  return (
-    <>
-      {text
-        .replace(/\r\n?/g, '\n')
-        .split('\n')
-        .map((l, i) => (l.trim() === '' ? null : <p key={i} className={`ag-line ${classifyLine(l)}`}>{l.trim()}</p>))}
-    </>
-  );
-}
-
 export function SoanBaiView() {
   const [form, setForm] = useState<SoanBaiForm>(initialForm);
   const [lesson, setLesson] = useState<AtomLite | null>(null);
@@ -93,10 +67,11 @@ export function SoanBaiView() {
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [apiError, setApiError] = useState('');
-  const [result, setResult] = useState<RunResult | null>(null);
+  const [result, setResult] = useState<AgentResult | null>(null);
+  const [dang, setDang] = useState<ResourceKind[]>(ALL_RESOURCES);
+  const [actor, saveActor, actorReady] = useActor();
+  const [outcome, setOutcome] = useState<{ accepted: boolean; diffRatio?: number; version?: { id: string; number: number }; versionFailed?: boolean }>({ accepted: false });
   const [text, setText] = useState('');
-  const [approved, setApproved] = useState('');
-  const [tab, setTab] = useState<'doc' | 'edit' | 'soi'>('doc');
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -157,16 +132,24 @@ export function SoanBaiView() {
       /* bỏ qua */
     }
     const cls = CLASS_PROFILES.find((c) => c.id === form.classId);
-    const params = buildParams(form, {
-      regenerationOf,
-      teacher: cls ? { name: cls.homeroomTeacher.name, email: cls.homeroomTeacher.email } : undefined,
-    });
+    const teacher = actor.trim()
+      ? { name: actor.trim() }
+      : cls
+        ? { name: cls.homeroomTeacher.name, email: cls.homeroomTeacher.email }
+        : undefined;
+    const base = buildParams(form, { regenerationOf, teacher });
+    const withRes = attachResources(base, form.formatDauRa, dang);
+    if (!withRes.ok) {
+      setApiError('Cần chọn ít nhất 1 dạng tài nguyên.');
+      return;
+    }
+    const params = withRes.params;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
     setElapsed(0);
     setApiError('');
-    setApproved('');
+    setOutcome({ accepted: false });
     if (!regenerationOf) setResult(null);
     const started = Date.now();
     timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
@@ -177,7 +160,7 @@ export function SoanBaiView() {
         body: JSON.stringify({ params }),
         signal: ctrl.signal,
       });
-      let data: { ok?: boolean; result?: RunResult; error?: string } = {};
+      let data: { ok?: boolean; result?: AgentResult; error?: string } = {};
       try {
         data = await res.json();
       } catch {
@@ -187,8 +170,7 @@ export function SoanBaiView() {
         setApiError(formatApiError(res.status, data.error));
       } else {
         setResult(data.result);
-        setText(buildFinalText(data.result.content.sections, data.result.content.markdown));
-        setTab('doc');
+        setText(resultText(data.result));
       }
     } catch (e) {
       if (ctrl.signal.aborted) setApiError('Đã hủy yêu cầu.');
@@ -202,33 +184,18 @@ export function SoanBaiView() {
 
   async function approve() {
     if (!result) return;
-    setApproved('Đã ghi nhận: bạn duyệt bản này để dạy.');
-    try {
-      const r = await fetch('/api/signals/final', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: result.runId, finalText: text, accepted: true }),
-      });
-      const d = (await r.json()) as { ok?: boolean; diffRatio?: number };
-      if (d.ok && typeof d.diffRatio === 'number') {
-        setApproved(
-          `Đã duyệt. Bạn đã chỉnh khoảng ${Math.round(d.diffRatio * 100)}% so với bản AI (tín hiệu đã được ghi lại).`,
-        );
-      }
-    } catch {
-      /* best effort */
-    }
-  }
-
-  async function exportDocx() {
-    if (!result) return;
-    const secs = textToSections(text, result.content.sections.map((s) => s.heading));
-    const blob = await buildDocxBlob({
-      title: (lesson?.title || 'Học liệu bài dạy').toUpperCase(),
-      subtitle: [`Ngày dạy: ${form.ngayDay}`, `Bậc Bloom: ${result.bloomLevels.join(' → ')}`],
-      sections: secs,
+    const out = await acceptResult({
+      runId: result.runId,
+      title: `${formatLabel(form.formatDauRa)}: ${lesson?.title ?? result.standard?.title ?? ''}`.trim(),
+      format: form.formatDauRa,
+      workflow: result.workflow,
+      lessonKey: form.baiDayId || result.standard?.atomId || '',
+      lessonTitle: lesson?.title,
+      text,
+      artifacts: result.artifacts,
+      actor,
     });
-    downloadBlob(blob, `soan-bai-${form.ngayDay}.docx`);
+    setOutcome({ accepted: true, diffRatio: out.diffRatio, version: out.version, versionFailed: out.versionFailed });
   }
 
   const std = result?.standard.status ?? (stdStatus as 'approved' | 'chua_duyet' | 'khong_co' | '');
@@ -249,6 +216,7 @@ export function SoanBaiView() {
           void run();
         }}
       >
+        <TeacherName value={actor} onSave={saveActor} ready={actorReady} />
         <p className="sb-try">
           <Link href="/" className="ag-link">Thử trợ lý trò chuyện</Link>
           <span> để soạn bằng cách hỏi đáp.</span>
@@ -318,8 +286,12 @@ export function SoanBaiView() {
             </div>
             <div>
               <label className="ag-field-label" htmlFor="sb-fmt">Sản phẩm *</label>
-              <select id="sb-fmt" className="ag-field" value={form.formatDauRa} onChange={(e) => set('formatDauRa', e.target.value)}>
-                {FORMAT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              <select id="sb-fmt" className="ag-field" value={form.formatDauRa} onChange={(e) => set('formatDauRa', e.target.value)} aria-describedby="sb-fmt-desc">
+                {FORMAT_GROUPS.map((g) => (
+                  <optgroup key={g.title} label={g.title}>
+                    {g.items.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div>
@@ -331,6 +303,8 @@ export function SoanBaiView() {
             </div>
           </div>
           <Err msg={errors.formatDauRa} />
+          <p className="ag-note" id="sb-fmt-desc">Đầu ra: {formatDesc(form.formatDauRa)}</p>
+          {needsResourceChoice(form.formatDauRa) && <ResourceChecklist value={dang} onChange={setDang} idPrefix="sb-res" />}
         </Group>
 
         <Group n={5} title="Thời sự (tuỳ chọn)">
@@ -404,62 +378,25 @@ export function SoanBaiView() {
             {std === 'khong_co' && (
               <div className="ag-alert bad"><Icon name="alert" size={18} /><div>Kho chưa có bản chuẩn cho bài này. Nội dung do AI tự sinh, cần kiểm tra kỹ.</div></div>
             )}
-            {result.requiresApproval && (
-              <div className="ag-alert warn"><Icon name="alert" size={18} /><div><strong>Cần người duyệt trước khi dùng</strong> (tiết có gắn thời sự).</div></div>
-            )}
             {result.guardrail && !result.guardrail.ok && (
               <div className="ag-alert bad" role="alert"><Icon name="alert" size={18} /><div>{formatGuardrail(result.guardrail.reasons).map((l, i) => <div key={i}>{l}</div>)}</div></div>
             )}
-            {result.warnings.length > 0 && (
-              <div className="ag-alert warn" aria-label="Cảnh báo">
-                <Icon name="alert" size={18} />
-                <ul>{result.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
-              </div>
-            )}
-
-            <div role="tablist" aria-label="Cách xem bản soạn" className="ag-tabs sb-tabs">
-              {([['doc', 'Bản soạn'], ['edit', 'Chỉnh sửa'], ['soi', 'AI tự soi']] as const).map(([k, l]) => (
-                <button key={k} type="button" role="tab" id={`sb-tab-${k}`} aria-selected={tab === k} aria-controls="sb-panel" className="ag-tab" onClick={() => setTab(k)}>{l}</button>
-              ))}
-            </div>
-            <div role="tabpanel" id="sb-panel" aria-labelledby={`sb-tab-${tab}`} className="sb-panel">
-              {tab === 'doc' && <DocText text={text} />}
-              {tab === 'edit' && (
-                <>
-                  <label className="ag-field-label" htmlFor="sb-edit">Chỉnh toàn văn trước khi duyệt</label>
-                  <textarea id="sb-edit" className="ag-field sb-edit" rows={18} value={text} onChange={(e) => setText(e.target.value)} />
-                </>
-              )}
-              {tab === 'soi' &&
-                (result.reflection.skipped ? (
-                  <p className="ag-note">AI chưa tự soi được. Cô/thầy hãy đọc kỹ trước khi duyệt.</p>
-                ) : (
-                  <div>
-                    {result.reflection.scores.map((s) => (
-                      <div key={s.id} className="ag-score">
-                        <span className="ag-score-name">{s.name}</span>
-                        <span className="ag-score-val">{s.score}/10</span>
-                        <div className="ag-bar" role="img" aria-label={`${s.name}: ${s.score} trên 10`}>
-                          <i style={{ width: `${Math.max(0, Math.min(10, s.score)) * 10}%` }} />
-                        </div>
-                        {s.note && <span className="ag-score-note">{s.note}</span>}
-                      </div>
-                    ))}
-                    <p><strong>Điểm trung bình: {result.reflection.average}</strong></p>
-                    {result.reflection.issues.length > 0 && (
-                      <div className="ag-alert warn"><Icon name="alert" size={18} /><ul>{result.reflection.issues.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-                    )}
-                  </div>
-                ))}
-            </div>
-
-            <div className="sb-actions">
-              <button type="button" className="ag-btn primary" onClick={() => void approve()}><Icon name="check" size={18} /> Duyệt và dùng</button>
-              <button type="button" className="ag-btn" onClick={() => void run(result.runId)} disabled={loading}><Icon name="refresh" size={18} /> Sinh lại</button>
-              <button type="button" className="ag-btn" onClick={() => void exportDocx()}><Icon name="download" size={18} /> Tải .docx</button>
-              <button type="button" className="ag-btn" onClick={() => window.print()}><Icon name="print" size={18} /> In</button>
-            </div>
-            {approved && <div className="ag-alert ok" role="status"><Icon name="check" size={18} /><div>{approved}</div></div>}
+            <ResultPanel
+              key={result.runId}
+              title={lesson?.title || 'Bản soạn'}
+              formatText={formatLabel(form.formatDauRa)}
+              result={result}
+              text={text}
+              onText={setText}
+              busy={loading}
+              accepted={outcome.accepted}
+              diffRatio={outcome.diffRatio}
+              version={outcome.version}
+              versionFailed={outcome.versionFailed}
+              lessonTitle={lesson?.title}
+              onRegenerate={() => void run(result.runId)}
+              onAccept={approve}
+            />
           </div>
         )}
       </section>

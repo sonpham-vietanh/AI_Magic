@@ -1,3 +1,5 @@
+> Ghi chú: phần mô tả kiến trúc trong tài liệu này đã được thay thế bởi [KIEN_TRUC_V2_1.md](KIEN_TRUC_V2_1.md). Giữ lại để tham khảo.
+
 # KIẾN TRÚC KỸ THUẬT & KẾ THỪA KNOWLEDGE GRAPH LIÊN MÔN
 
 Tài liệu này mô tả kiến trúc hệ thống **MagicStudio Việt Anh (`cong-cu-day-hoc`)** và cách kết nối **Cây kiến thức (Knowledge Graph)** từ *AI Personal Tutor* (anh Hùng) với **Hồ sơ Lớp học (Class DNA)** để sinh học liệu tích hợp liên môn.

@@ -51,7 +51,7 @@ const zeroCells = (): Record<Tt22Level, MatrixCell> => ({
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-function usedRecently(org: OrgData, at: Date): Set<string> {
+export function usedRecently(org: OrgData, at: Date): Set<string> {
   const cutoff = dedupCutoff(at);
   const s = new Set<string>();
   for (const u of org.usage) if (u.usedAt > cutoff) s.add(u.questionId);
@@ -357,7 +357,7 @@ export async function getExam(p: { orgId: string; examId: string; actor: string 
       lockedReason: allowed
         ? null
         : 'Nội dung đề được bảo mật đến ngày thi; chỉ người soạn và tổ chuyên môn duyệt đề được xem.',
-      ...(allowed ? renderExamContent(e) : {}),
+      ...(allowed ? { ...renderExamContent(e), items: e.items } : {}),
       accessLog: canSeeLog ? e.accessLog : undefined,
     };
   });
