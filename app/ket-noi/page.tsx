@@ -11,8 +11,19 @@ const BADGE: Record<ServiceStatus['state'], { cls: string; text: string }> = {
   chua_cau_hinh: { cls: 'off', text: 'Chưa cấu hình' },
 };
 
+interface CloudStoreInfo {
+  configured: boolean;
+  backend: 'dedicated_table' | 'isolated_kv' | 'disabled';
+  tableName: string;
+  isolatedCollection: string;
+  keys: { key: string; updatedAt?: string }[];
+}
+
 export default function KetNoiPage() {
   const [services, setServices] = useState<ServiceStatus[] | null>(null);
+  const [cloud, setCloud] = useState<CloudStoreInfo | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -25,10 +36,39 @@ export default function KetNoiPage() {
         else setError(j.error || 'Không thể kiểm tra trạng thái dịch vụ.');
       })
       .catch(() => alive && setError('Không thể kết nối máy chủ để kiểm tra trạng thái.'));
+
+    fetch('/api/supabase/app-store')
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j.ok && j.status) setCloud(j.status as CloudStoreInfo);
+      })
+      .catch(() => undefined);
+
     return () => {
       alive = false;
     };
   }, []);
+
+  async function handleSyncCloud() {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const r = await fetch('/api/supabase/app-store', { method: 'POST' });
+      const j = await r.json();
+      if (j.status) setCloud(j.status as CloudStoreInfo);
+      if (j.ok) {
+        const count = Array.isArray(j.sync?.synced) ? j.sync.synced.length : 0;
+        setSyncMsg(`Đã đồng bộ ${count} kho dữ liệu lên Supabase an toàn (không chạm dữ liệu gốc).`);
+      } else {
+        setSyncMsg(j.error || 'Chưa đồng bộ được toàn bộ kho dữ liệu.');
+      }
+    } catch {
+      setSyncMsg('Lỗi kết nối khi đồng bộ lên Supabase.');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   return (
     <Shell
@@ -41,6 +81,34 @@ export default function KetNoiPage() {
             Khi dịch vụ bên thứ ba chưa gắn khoá license riêng, hệ thống tự động sử dụng bộ dựng học liệu nội bộ (PowerPoint .pptx, SVG/PNG Infographic &amp; Sơ đồ tư duy, giọng đọc trình duyệt) để giáo viên luôn soạn bài liền mạch.
           </span>
         </div>
+        {cloud && (
+          <div className="ls-svc" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Đồng bộ Đám mây Supabase (Cô lập an toàn)</h2>
+                <p className="ls-svc-sub" style={{ marginTop: 4 }}>
+                  Phân vùng đích:{' '}
+                  <code>{cloud.backend === 'dedicated_table' ? `public.${cloud.tableName}` : `studio_kv (${cloud.isolatedCollection})`}</code>
+                  {' · '}Đã lưu <strong>{cloud.keys.length}</strong> kho vận hành mà không tác động bảng dữ liệu gốc.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ag-btn primary small"
+                disabled={syncing || !cloud.configured}
+                onClick={handleSyncCloud}
+              >
+                {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay lên Supabase'}
+              </button>
+            </div>
+            {cloud.keys.length > 0 && (
+              <p className="ls-svc-sub" style={{ marginTop: 8 }}>
+                Các kho đã đồng bộ: {cloud.keys.map((k) => <code key={k.key} style={{ marginRight: 6 }}>{k.key}</code>)}
+              </p>
+            )}
+            {syncMsg && <p className="ls-svc-sub" style={{ marginTop: 8, fontWeight: 600 }}>{syncMsg}</p>}
+          </div>
+        )}
         {error && <p className="ls-error" role="alert">{error}</p>}
         {!services && !error && <p>Đang kiểm tra…</p>}
         {services && (

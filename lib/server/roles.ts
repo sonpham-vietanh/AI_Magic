@@ -4,6 +4,7 @@
 // (an toàn mặc định): người quản trị phải chủ động đặt mã trên máy chủ thì mới duyệt được.
 // Đây vẫn chỉ là mã dùng chung, chưa phải danh tính từng người; không thay thế đăng nhập thật.
 import { timingSafeEqualStr } from './guard';
+import { readSessionFromRequest } from './auth';
 
 export const REVIEWER_HEADER = 'x-reviewer-key';
 
@@ -17,10 +18,14 @@ export function requireReviewer(request: Request): Response | null {
     );
   }
   const got = request.headers.get(REVIEWER_HEADER)?.trim() ?? '';
-  if (!got || !timingSafeEqualStr(got, key)) {
-    return Response.json({ ok: false, error: 'Cần mã người duyệt hợp lệ để thực hiện thao tác này.' }, { status: 403 });
+  if (got && timingSafeEqualStr(got, key)) {
+    return null;
   }
-  return null;
+  const session = readSessionFromRequest(request);
+  if (session && session.role === 'reviewer') {
+    return null;
+  }
+  return Response.json({ ok: false, error: 'Cần mã người duyệt hợp lệ để thực hiện thao tác này.' }, { status: 403 });
 }
 
 /** Chuẩn hoá tên người thao tác để so sánh (NFC, bỏ khoảng trắng thừa, không phân biệt hoa/thường). */

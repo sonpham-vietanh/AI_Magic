@@ -201,25 +201,7 @@ export function AgentApp() {
       const fail = (error: string, details?: string[]) =>
         setRuns((r) => ({ ...r, [runKey]: { ...r[runKey], status: 'error', error, details } }));
 
-      try {
-        const res = await fetch('/api/workflows/run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ params: built.params }),
-          signal: ctrl.signal,
-        });
-        const j = (await res.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-          reasons?: string[];
-          result?: AgentResult;
-        };
-        if (!res.ok || !j.ok || !j.result) {
-          if (res.status === 422) fail(j.error || 'Sự kiện thời sự không đạt kiểm tra an toàn.', j.reasons);
-          else fail(formatApiError(res.status, j.error));
-          return;
-        }
-        const result = j.result;
+      const finishSuccess = (result: AgentResult) => {
         const title = `${formatLabel(s.format)}: ${s.baiTitle ?? result.standard.title ?? ''}`.trim();
         const original = resultText(result);
         const entry: ResultEntry = {
@@ -244,6 +226,105 @@ export function AgentApp() {
             ' Cô/thầy xem ở khung bên phải, chỉnh nếu cần rồi bấm “Duyệt & dùng”.',
         );
         push({ id: nid(), role: 'agent', kind: 'followups', resultId: entry.id });
+      };
+
+      try {
+        const res = await fetch('/api/workflows/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream, application/json',
+          },
+          body: JSON.stringify({ params: built.params }),
+          signal: ctrl.signal,
+        });
+
+        const contentType = res.headers.get('content-type') ?? '';
+        if (res.ok && contentType.includes('text/event-stream') && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let previewAcc = '';
+          let handledTerminal = false;
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split('\n\n');
+            buffer = blocks.pop() ?? '';
+
+            for (const block of blocks) {
+              const line = block
+                .split('\n')
+                .map((l) => l.trim())
+                .find((l) => l.startsWith('data:'));
+              if (!line) continue;
+              const rawJson = line.slice(5).trim();
+              if (!rawJson) continue;
+              try {
+                const evt = JSON.parse(rawJson) as {
+                  type?: 'stage' | 'delta' | 'done' | 'error';
+                  stage?: 'kho' | 'guardrail' | 'route' | 'generate' | 'reflect';
+                  message?: string;
+                  delta?: string;
+                  result?: AgentResult;
+                  status?: number;
+                  error?: string;
+                  reasons?: string[];
+                };
+                if (evt.type === 'stage' && evt.stage) {
+                  setRuns((r) => ({
+                    ...r,
+                    [runKey]: {
+                      ...r[runKey],
+                      currentStage: evt.stage,
+                      stageMessage: evt.message,
+                    },
+                  }));
+                } else if (evt.type === 'delta' && evt.delta) {
+                  previewAcc = (previewAcc + evt.delta).slice(-600);
+                  setRuns((r) => ({
+                    ...r,
+                    [runKey]: {
+                      ...r[runKey],
+                      streamPreview: previewAcc,
+                    },
+                  }));
+                } else if (evt.type === 'done' && evt.result) {
+                  handledTerminal = true;
+                  finishSuccess(evt.result);
+                } else if (evt.type === 'error') {
+                  handledTerminal = true;
+                  if (evt.status === 422) {
+                    fail(evt.error || 'Sự kiện thời sự không đạt kiểm tra an toàn.', evt.reasons);
+                  } else {
+                    fail(formatApiError(evt.status ?? 502, evt.error));
+                  }
+                }
+              } catch {
+                // bỏ qua dòng SSE lỗi
+              }
+            }
+          }
+          if (!handledTerminal) {
+            fail('Luồng phản hồi bị ngắt giữa chừng. Cô/thầy thử lại giúp mình nhé.');
+          }
+          return;
+        }
+
+        const j = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          reasons?: string[];
+          result?: AgentResult;
+        };
+        if (!res.ok || !j.ok || !j.result) {
+          if (res.status === 422) fail(j.error || 'Sự kiện thời sự không đạt kiểm tra an toàn.', j.reasons);
+          else fail(formatApiError(res.status, j.error));
+          return;
+        }
+        finishSuccess(j.result);
       } catch (e) {
         if (ctrl.signal.aborted) fail('Đã dừng theo yêu cầu của cô/thầy.');
         else fail('Không kết nối được máy chủ. Cô/thầy kiểm tra mạng rồi thử lại.');

@@ -9,6 +9,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
+import { readCloudStore, resolveCloudStoreKey, writeCloudStore } from './supabaseStore';
 
 export class StoreReadError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -29,6 +30,14 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Đọc tệp JSON. `fallback` chỉ được dùng khi tệp chưa có hoặc JSON hỏng đã được sao lưu. */
 export async function readJsonStrict<T>(file: string, fallback: () => T): Promise<T> {
+  const cloudKey = resolveCloudStoreKey(file);
+  if (cloudKey) {
+    const cloud = await readCloudStore<T>(cloudKey);
+    if (cloud.found && cloud.data !== undefined) {
+      return cloud.data;
+    }
+  }
+
   let raw: string;
   try {
     raw = await readFile(file, 'utf8');
@@ -39,7 +48,12 @@ export async function readJsonStrict<T>(file: string, fallback: () => T): Promis
     });
   }
   try {
-    return JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw) as T;
+    // Tự động đồng bộ lần đầu từ đĩa cục bộ lên bảng mới trên Supabase nếu đám mây chưa có bản ghi này.
+    if (cloudKey) {
+      void writeCloudStore(cloudKey, parsed).catch(() => undefined);
+    }
+    return parsed;
   } catch {
     const backup = `${file}.corrupt-${Date.now()}`;
     try {
@@ -54,9 +68,13 @@ export async function readJsonStrict<T>(file: string, fallback: () => T): Promis
   }
 }
 
-/** Ghi nguyên tử (tệp tạm rồi đổi tên). Ném StoreWriteError khi thất bại. */
+/** Ghi nguyên tử (tệp tạm rồi đổi tên) kết hợp đồng bộ bảng mới trên Supabase. Ném StoreWriteError khi thất bại. */
 export async function writeJsonAtomic(file: string, data: unknown): Promise<void> {
+  const cloudKey = resolveCloudStoreKey(file);
+  const cloudPromise = cloudKey ? writeCloudStore(cloudKey, data) : Promise.resolve(null);
+
   const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  let localErr: unknown = null;
   try {
     const text = JSON.stringify(data);
     await mkdir(dirname(file), { recursive: true });
@@ -64,7 +82,7 @@ export async function writeJsonAtomic(file: string, data: unknown): Promise<void
     for (let i = 0; ; i++) {
       try {
         await rename(tmp, file);
-        return;
+        break;
       } catch (err) {
         const c = codeOf(err);
         if (i < 4 && (c === 'EPERM' || c === 'EBUSY' || c === 'EACCES')) {
@@ -76,7 +94,16 @@ export async function writeJsonAtomic(file: string, data: unknown): Promise<void
     }
   } catch (err) {
     await rm(tmp, { force: true }).catch(() => undefined);
-    throw new StoreWriteError(`Không ghi được kho dữ liệu (${codeOf(err)}).`, { cause: err });
+    localErr = err;
+  }
+
+  const cloudRes = await cloudPromise;
+  if (localErr) {
+    // Trên môi trường serverless chỉ đọc (EROFS), nếu đã ghi thành công lên Supabase thì vẫn hoàn tất.
+    if (cloudRes?.ok && codeOf(localErr) === 'EROFS') {
+      return;
+    }
+    throw new StoreWriteError(`Không ghi được kho dữ liệu (${codeOf(localErr)}).`, { cause: localErr });
   }
 }
 

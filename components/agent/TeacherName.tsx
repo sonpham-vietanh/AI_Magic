@@ -1,25 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { readActor, writeActor } from '@/lib/agent/actor';
+import { readActor, writeActor, writeReviewerKey } from '@/lib/agent/actor';
 
-/** Tên cô/thầy lưu ở localStorage 'va.actor'. `ready` là false cho tới khi đọc xong (tránh nhấp nháy). */
+/** Tên cô/thầy lưu ở localStorage 'va.actor' kết hợp phiên chữ ký số `/api/auth/session`. */
 export function useActor(): [string, (v: string) => void, boolean] {
   const [name, setName] = useState('');
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    setName(readActor());
+    const local = readActor();
+    setName(local);
     setReady(true);
+    fetch('/api/auth/session')
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && j.session?.name && !local) {
+          setName(j.session.name);
+          writeActor(j.session.name);
+        }
+      })
+      .catch(() => undefined);
   }, []);
   const save = (v: string) => {
     const clean = v.trim().slice(0, 100);
     setName(clean);
     writeActor(clean);
+    if (clean) {
+      void fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: clean }),
+      }).catch(() => undefined);
+    }
   };
   return [name, save, ready];
 }
 
-/** Ô nhỏ hỏi một lần "Tên cô/thầy"; đã có tên thì hiện gọn kèm nút Sửa. */
+/** Ô nhỏ hỏi một lần "Tên cô/thầy"; hỗ trợ xác thực quyền Tổ trưởng/Người duyệt (cookie chữ ký số). */
 export function TeacherName({
   value,
   onSave,
@@ -33,7 +50,57 @@ export function TeacherName({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [reviewerKey, setReviewerKey] = useState('');
+  const [role, setRole] = useState<'teacher' | 'reviewer'>('teacher');
+  const [authMsg, setAuthMsg] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/auth/session')
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j?.ok && j.session?.role === 'reviewer') {
+          setRole('reviewer');
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+
   if (!ready) return null;
+
+  async function submitProfile(e: React.FormEvent) {
+    e.preventDefault();
+    const clean = draft.trim();
+    if (!clean) return;
+    setAuthMsg('');
+    const keyTrim = reviewerKey.trim();
+    if (keyTrim) {
+      try {
+        const res = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: clean, reviewerKey: keyTrim }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.ok) {
+          setAuthMsg(j.error || 'Mã người duyệt chưa khớp.');
+          return;
+        }
+        writeReviewerKey(keyTrim);
+        setRole('reviewer');
+      } catch {
+        setAuthMsg('Không kết nối được máy chủ xác thực.');
+        return;
+      }
+    }
+    onSave(clean);
+    setReviewerKey('');
+    setEditing(false);
+  }
 
   if (inline) {
     if (!editing) {
@@ -44,24 +111,20 @@ export function TeacherName({
           aria-label={value ? `Đổi tên giáo viên (${value})` : 'Nhập tên giáo viên'}
           onClick={() => {
             setDraft(value);
+            setAuthMsg('');
             setEditing(true);
           }}
         >
           <span className="ag-who-dot" aria-hidden="true" />
-          <span>{value ? `GV: ${value}` : 'Nhập tên cô/thầy'}</span>
+          <span>
+            {value ? `GV: ${value}` : 'Nhập tên cô/thầy'}
+            {role === 'reviewer' ? ' · Người duyệt' : ''}
+          </span>
         </button>
       );
     }
     return (
-      <form
-        className="ag-who-inline-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!draft.trim()) return;
-          onSave(draft);
-          setEditing(false);
-        }}
-      >
+      <form className="ag-who-inline-form" onSubmit={submitProfile}>
         <input
           id="ag-who-input"
           className="ag-who-inline-input"
@@ -73,12 +136,23 @@ export function TeacherName({
           aria-label="Tên cô/thầy"
           onChange={(e) => setDraft(e.target.value)}
         />
+        <input
+          className="ag-who-inline-input"
+          type="password"
+          value={reviewerKey}
+          maxLength={120}
+          placeholder="Mã người duyệt (tuỳ chọn)"
+          aria-label="Mã người duyệt (tuỳ chọn)"
+          style={{ width: 155 }}
+          onChange={(e) => setReviewerKey(e.target.value)}
+        />
         <button type="submit" className="ag-btn small primary" disabled={!draft.trim()}>
           Lưu
         </button>
         <button type="button" className="ag-btn small ghost" onClick={() => setEditing(false)}>
           Đóng
         </button>
+        {authMsg && <small style={{ color: '#b91c1c', fontSize: 11 }}>{authMsg}</small>}
       </form>
     );
   }
@@ -88,6 +162,11 @@ export function TeacherName({
       <div className="ag-who">
         <span>
           Cô/thầy: <strong>{value}</strong>
+          {role === 'reviewer' && (
+            <span className="ls-badge ok" style={{ marginLeft: 6, fontSize: 11 }}>
+              Người duyệt đã xác thực
+            </span>
+          )}
         </span>
         <button
           type="button"
@@ -95,6 +174,7 @@ export function TeacherName({
           aria-label="Sửa tên cô/thầy"
           onClick={() => {
             setDraft(value);
+            setAuthMsg('');
             setEditing(true);
           }}
         >
@@ -105,15 +185,7 @@ export function TeacherName({
   }
 
   return (
-    <form
-      className="ag-who ag-who-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!draft.trim()) return;
-        onSave(draft);
-        setEditing(false);
-      }}
-    >
+    <form className="ag-who ag-who-form" onSubmit={submitProfile}>
       <label htmlFor="ag-who-input">Tên cô/thầy</label>
       <input
         id="ag-who-input"

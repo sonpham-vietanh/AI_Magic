@@ -71,6 +71,16 @@ export const SERVICES: ServiceDef[] = [
     note: 'Chưa có khoá nên CHƯA tích hợp. Biến dự kiến: TTS_API_KEY, STT_API_KEY.',
   },
   {
+    id: 'supabase-store',
+    name: 'Kho đám mây Supabase (Bảng độc lập va_app_store)',
+    purpose: 'Đồng bộ thời gian thực các kho dữ liệu vận hành (.data/*.json: duyệt bài, đề kiểm tra, ghi chú lớp, phiên bản, tín hiệu đánh giá) lên đám mây mà không ảnh hưởng dữ liệu gốc.',
+    products: ['Kho chuẩn đã duyệt', 'Đề kiểm tra & ma trận', 'Lịch sử phiên bản', 'Ghi chú lớp học', 'Số liệu tự cải thiện'],
+    envAny: [['NEXT_PUBLIC_SUPABASE_URL'], ['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY']],
+    wired: true,
+    fallback: 'Khi không có kết nối mạng hoặc biến môi trường Supabase, hệ thống lưu trữ nguyên tử trực tiếp trên đĩa cục bộ (.data/*.json).',
+    note: 'Sử dụng bảng độc lập va_app_store (hoặc phân vùng cô lập va_app_store_v2), tuyệt đối không ghi đè các bảng dữ liệu gốc.',
+  },
+  {
     id: 'news-whitelist',
     name: 'Nguồn tin danh sách trắng',
     purpose: 'Sự kiện thời sự tuỳ chọn cho bài dạy, qua guardrail thời sự.',

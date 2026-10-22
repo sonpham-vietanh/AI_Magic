@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { callLiveLlm } from '@/lib/engine/llmClient';
+import { callLiveLlm, callLiveLlmStream } from '@/lib/engine/llmClient';
 import { cleanPedagogicalText } from '@/lib/text/clean';
 import { getClassById, buildClassPedagogicalContext } from '@/lib/classes';
 import { requireAccess } from '@/lib/server/guard';
@@ -35,24 +35,22 @@ const bodySchema = z.object({ params: WorkflowParamsSchema });
 const fail = (status: number, error: string, extra?: Record<string, unknown>) =>
   NextResponse.json({ ok: false, error, ...extra }, { status });
 
-export async function POST(request: Request) {
-  const denied = await requireAccess(request);
-  if (denied) return denied;
-  const limited = await rateLimit(request, 'workflows', 30, 60_000);
-  if (limited) return limited;
+export type RunStageId = 'kho' | 'guardrail' | 'route' | 'generate' | 'reflect';
 
-  let json: unknown;
-  try {
-    json = await request.json();
-  } catch {
-    return fail(400, 'Dữ liệu JSON không hợp lệ.');
-  }
-  const parsed = bodySchema.safeParse(json);
-  if (!parsed.success) {
-    return fail(400, `Tham số không hợp lệ: ${parsed.error.issues[0]?.message ?? 'sai định dạng'}`);
-  }
-  const params = parsed.data.params;
-  const orgId = getOrgId(request);
+interface RunHooks {
+  onStage?: (stage: RunStageId, message: string) => void;
+  onDelta?: (delta: string) => void;
+}
+
+type RunOutcome =
+  | { ok: true; result: WorkflowResult }
+  | { ok: false; status: number; error: string; extra?: Record<string, unknown> };
+
+async function executeWorkflow(
+  params: z.infer<typeof WorkflowParamsSchema>,
+  orgId: string,
+  hooks?: RunHooks,
+): Promise<RunOutcome> {
   const warnings: string[] = [];
   let requiresApproval = false;
   const approvalReasons: string[] = [];
@@ -60,8 +58,9 @@ export async function POST(request: Request) {
   const teacherName = params.teacher?.name ?? 'Giáo viên';
 
   try {
+    hooks?.onStage?.('kho', 'Đang tra bản chuẩn trong Kho học liệu…');
     const std = await getStandardLesson(orgId, params.baiDayId);
-    if (std.status === 'khong_co') return fail(404, 'Không tìm thấy bài dạy trong Kho.');
+    if (std.status === 'khong_co') return { ok: false, status: 404, error: 'Không tìm thấy bài dạy trong Kho.' };
     if (std.status === 'chua_duyet') {
       warnings.push('Bản chuẩn chưa qua người duyệt: nội dung chỉ là bản nháp');
       requiresApproval = true;
@@ -91,14 +90,23 @@ export async function POST(request: Request) {
 
     let guardrail: { ok: boolean; reasons: string[] } | undefined;
     if (params.suKienThoiSu) {
+      hooks?.onStage?.('guardrail', 'Đang kiểm tra an toàn sự kiện thời sự…');
       const g = checkNewsEvent(params.suKienThoiSu);
       guardrail = { ok: g.ok, reasons: g.reasons };
-      if (!g.ok) return fail(422, 'Sự kiện thời sự không đạt kiểm tra an toàn.', { reasons: g.reasons });
+      if (!g.ok) {
+        return {
+          ok: false,
+          status: 422,
+          error: 'Sự kiện thời sự không đạt kiểm tra an toàn.',
+          extra: { reasons: g.reasons },
+        };
+      }
       requiresApproval = true;
       approvalReasons.push('Tiết có gắn sự kiện thời sự.');
       warnings.push('Tiết có gắn thời sự → bắt buộc người duyệt');
     }
 
+    hooks?.onStage?.('route', 'Đang chọn quy trình soạn và khung tư duy Bloom…');
     const workflow = routeWorkflow(params.formatDauRa);
     const bloomLevels = bloomLevelsFor(params.bloomThapNhat);
     const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -112,6 +120,7 @@ export async function POST(request: Request) {
     let fromKho: ArtifactKind[] = [];
     let allFromKho = false;
 
+    hooks?.onStage?.('generate', 'Đang soạn nội dung theo các bậc tư duy…');
     if (workflow === 'quiz') {
       const q = await generateQuiz({
         orgId,
@@ -152,7 +161,9 @@ export async function POST(request: Request) {
           news: params.suKienThoiSu,
           linked: linkedStd as unknown as Record<string, unknown> | undefined,
         });
-        const llm = await callLiveLlm(system, user, undefined, { maxTokens: 6000, timeoutMs: 90_000 });
+        const llm = hooks?.onDelta
+          ? await callLiveLlmStream(system, user, undefined, { maxTokens: 6000, timeoutMs: 90_000 }, hooks.onDelta)
+          : await callLiveLlm(system, user, undefined, { maxTokens: 6000, timeoutMs: 90_000 });
         if (llm.ok && llm.content) {
           markdown = cleanPedagogicalText(llm.content);
           const fix = await ensureKhbdStructure(markdown, bloomLevels);
@@ -172,7 +183,7 @@ export async function POST(request: Request) {
         } else {
           warnings.push('AI không phản hồi, hiển thị bản chuẩn gốc');
           const pkgs = (std.packages ?? []) as unknown[];
-          if (!pkgs.length && !hasRichFactorySource(std)) return fail(502, 'AI không phản hồi');
+          if (!pkgs.length && !hasRichFactorySource(std)) return { ok: false, status: 502, error: 'AI không phản hồi' };
           markdown = buildKhbdFromStandard(std, bloomLevels, classContext);
           sections = markdownToSections(markdown);
           structure = checkKhbdStructure(markdown, bloomLevels);
@@ -264,10 +275,11 @@ export async function POST(request: Request) {
         }
         artifacts = kinds.filter((k) => got.has(k)).map((k) => got.get(k)!);
         if (!artifacts.length) {
-          return fail(
-            502,
-            `Không sinh được sản phẩm: ${errors.map((e) => `${ARTIFACT_LABELS[e.kind]} (${e.error})`).join('; ') || 'AI không phản hồi'}`,
-          );
+          return {
+            ok: false,
+            status: 502,
+            error: `Không sinh được sản phẩm: ${errors.map((e) => `${ARTIFACT_LABELS[e.kind]} (${e.error})`).join('; ') || 'AI không phản hồi'}`,
+          };
         }
         structure = artifacts.flatMap((a) =>
           checkArtifact(a).map((c) =>
@@ -283,6 +295,7 @@ export async function POST(request: Request) {
       }
     }
 
+    hooks?.onStage?.('reflect', 'Đang tự soi chất lượng theo 6 tiêu chí sư phạm…');
     // Mọi sản phẩm lấy thẳng từ bản chuẩn đã duyệt thì không tự chấm lại (đã qua người duyệt).
     const reflection: Reflection = allFromKho
       ? { scores: [], average: 0, issues: [], skipped: true }
@@ -336,9 +349,83 @@ export async function POST(request: Request) {
       structure,
       ...(fromKho.length ? { fromKho } : {}),
     };
-    return NextResponse.json({ ok: true, result });
+    return { ok: true, result };
   } catch (e) {
     console.error('workflows/run failed', e);
-    return fail(502, 'Không xử lý được yêu cầu, vui lòng thử lại.');
+    return { ok: false, status: 502, error: 'Không xử lý được yêu cầu, vui lòng thử lại.' };
   }
+}
+
+export async function POST(request: Request) {
+  const denied = await requireAccess(request);
+  if (denied) return denied;
+  const limited = await rateLimit(request, 'workflows', 30, 60_000);
+  if (limited) return limited;
+
+  let json: unknown;
+  try {
+    json = await request.json();
+  } catch {
+    return fail(400, 'Dữ liệu JSON không hợp lệ.');
+  }
+  const parsed = bodySchema.safeParse(json);
+  if (!parsed.success) {
+    return fail(400, `Tham số không hợp lệ: ${parsed.error.issues[0]?.message ?? 'sai định dạng'}`);
+  }
+  const params = parsed.data.params;
+  const orgId = getOrgId(request);
+  const wantsStream = (request.headers.get('accept') ?? '').includes('text/event-stream');
+
+  if (!wantsStream) {
+    const out = await executeWorkflow(params, orgId);
+    if (!out.ok) return fail(out.status, out.error, out.extra);
+    return NextResponse.json({ ok: true, result: out.result });
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: Record<string, unknown>) => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+        } catch {
+          // client đã đóng kết nối
+        }
+      };
+
+      const out = await executeWorkflow(params, orgId, {
+        onStage(stage, message) {
+          send({ type: 'stage', stage, message });
+        },
+        onDelta(delta) {
+          if (delta) send({ type: 'delta', delta });
+        },
+      });
+
+      if (out.ok) {
+        send({ type: 'done', ok: true, result: out.result });
+      } else {
+        send({
+          type: 'error',
+          ok: false,
+          status: out.status,
+          error: out.error,
+          ...(out.extra || {}),
+        });
+      }
+      try {
+        controller.close();
+      } catch {
+        // đã đóng
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+    },
+  });
 }

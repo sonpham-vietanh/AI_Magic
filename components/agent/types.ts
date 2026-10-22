@@ -17,6 +17,9 @@ export interface RunState {
   error?: string;
   details?: string[];
   hasNews: boolean;
+  currentStage?: 'kho' | 'guardrail' | 'route' | 'generate' | 'reflect';
+  stageMessage?: string;
+  streamPreview?: string;
 }
 
 export interface ResultEntry {

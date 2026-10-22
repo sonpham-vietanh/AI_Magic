@@ -471,23 +471,49 @@ export function RunCard({
   }
 
   if (run.status === 'running') {
-    const stepState = (idx: number): 'ok' | 'wait' => (secs >= (idx + 1) * 2 ? 'ok' : 'wait');
+    const stageOrder = ['kho', 'guardrail', 'route', 'generate', 'reflect'] as const;
+    const liveIdx = run.currentStage ? stageOrder.indexOf(run.currentStage) : -1;
+    const stepState = (stage: (typeof stageOrder)[number], fallbackIdx: number): 'ok' | 'wait' => {
+      if (liveIdx >= 0) {
+        return stageOrder.indexOf(stage) < liveIdx ? 'ok' : 'wait';
+      }
+      return secs >= (fallbackIdx + 1) * 2 ? 'ok' : 'wait';
+    };
     return (
       <div className="ag-run" role="status" aria-live="polite">
         <div className="ag-run-head">
           <div className="ag-run-title">
             <span className="ag-spin" aria-hidden="true" />
-            Mình đang làm việc…
+            {run.stageMessage || 'Mình đang làm việc…'}
           </div>
           <span className="ag-timer">{secs} giây</span>
         </div>
         <ul className="ag-trace">
-          <TraceLine state={stepState(0)} text="Tra bản chuẩn trong Kho học liệu" />
-          {run.hasNews && <TraceLine state={stepState(1)} text="Kiểm tra sự kiện thời sự" />}
-          <TraceLine state={stepState(run.hasNews ? 2 : 1)} text="Chọn quy trình soạn phù hợp" />
-          <TraceLine state={stepState(run.hasNews ? 3 : 2)} text="Soạn nội dung theo các bậc tư duy" />
-          <TraceLine state="wait" text="Tự soi lại theo 6 tiêu chí" />
+          <TraceLine state={stepState('kho', 0)} text="Tra bản chuẩn trong Kho học liệu" />
+          {run.hasNews && <TraceLine state={stepState('guardrail', 1)} text="Kiểm tra sự kiện thời sự" />}
+          <TraceLine state={stepState('route', run.hasNews ? 2 : 1)} text="Chọn quy trình soạn phù hợp" />
+          <TraceLine state={stepState('generate', run.hasNews ? 3 : 2)} text="Soạn nội dung theo các bậc tư duy" />
+          <TraceLine state={stepState('reflect', 99)} text="Tự soi lại theo 6 tiêu chí" />
         </ul>
+        {run.streamPreview && (
+          <div
+            className="ag-note"
+            style={{
+              marginTop: 8,
+              padding: '8px 10px',
+              background: 'var(--bg-soft, #f8fafc)',
+              borderRadius: 8,
+              border: '1px solid var(--line, #e2e8f0)',
+              fontFamily: 'inherit',
+              fontSize: 12,
+              maxHeight: 96,
+              overflow: 'hidden',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {run.streamPreview}
+          </div>
+        )}
         <div className="ag-actions">
           <button type="button" className="ag-btn small" onClick={onCancel}>
             <Icon name="stop" size={16} />
