@@ -19,14 +19,14 @@ export interface ServiceDef {
 export const SERVICES: ServiceDef[] = [
   {
     id: 'llm',
-    name: 'Mô hình ngôn ngữ (Claude / GPT / Gemini)',
+    name: 'Mô hình ngôn ngữ (Gemini Free / Groq / OpenRouter / Claude)',
     purpose: 'Sinh kế hoạch bài dạy, slide, worksheet, quiz, đề kiểm tra và 6 dạng tài nguyên.',
     products: ['Kế hoạch bài dạy', 'Slide', 'Worksheet', 'Quiz', 'Đề kiểm tra + ma trận', '6 dạng tài nguyên'],
-    envAny: [['OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY']],
+    envAny: [['GEMINI_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'OPENAI_API_KEY']],
     wired: true,
     fallback:
-      'Chưa có khoá thì chỉ chạy bộ dựng mẫu cục bộ (smart template) và các bước kiểm tra xác định; không sinh nội dung mới bằng AI.',
-    note: 'Đã nối thật qua OpenAI-tương thích, OpenRouter hoặc Gemini; khoá chỉ nằm ở máy chủ.',
+      'Chưa có khoá thì chạy bộ chế biến tài nguyên gốc Factory (0 token) và mẫu dựng sẵn cục bộ; không gọi AI ngoài.',
+    note: 'Tự động định tuyến ưu tiên tầng miễn phí/tiết kiệm (Gemini -> Groq -> OpenRouter -> Proxy) kèm bộ nhớ đệm LRU.',
   },
   {
     id: 'gamma',

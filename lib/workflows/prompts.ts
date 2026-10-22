@@ -3,26 +3,102 @@ import { PHONG_CACH, type WorkflowId, type WorkflowParams } from './types';
 const TAG_RE = /<\/?\s*(?:du_lieu_chuan|bai_lien_ket|su_kien|system|assistant|user|noi_dung|script)[^>]*>/gi;
 const strip = (s: string) => s.replace(TAG_RE, ' ');
 
-/** Chuỗi hoá dữ liệu Kho thành khối DATA có giới hạn, gỡ thẻ có thể gây injection. */
-export function groundingBlock(std: Record<string, unknown>, maxChars = 14000): string {
-  const cap = (v: unknown, n: number) => (Array.isArray(v) ? v.slice(0, n) : undefined);
-  const pick = {
-    title: std.title,
-    grade: std.grade,
-    subject: std.subject,
-    packages: cap(std.packages, 8),
-    assets: cap(std.assets, 12),
-    questions: cap(std.questions, 20),
-    socratic: cap(std.socratic, 12),
-    edges: cap(std.edges, 20),
-  };
-  let text = '';
-  try {
-    text = JSON.stringify(pick);
-  } catch {
-    text = '';
+const clip = (v: unknown, max = 500): string =>
+  strip(String(v ?? '')).replace(/\s+/g, ' ').trim().slice(0, max);
+
+/** Chuỗi hoá dữ liệu Kho thành khối DATA tinh gọn (tiết kiệm 70-80% token), gỡ thẻ có thể gây injection. */
+export function groundingBlock(std: Record<string, unknown>, maxChars = 6000): string {
+  const lines: string[] = [];
+  const head = [
+    std.title ? `Bài: ${clip(std.title, 200)}` : '',
+    std.subject ? `Môn: ${clip(std.subject, 60)}` : '',
+    std.grade ? `Khối: ${clip(std.grade, 20)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
+  if (head) lines.push(head);
+
+  const pkgs = Array.isArray(std.packages) ? std.packages.slice(0, 4) : [];
+  for (const p of pkgs) {
+    if (typeof p === 'string') {
+      lines.push(`Gói: ${clip(p, 800)}`);
+    } else if (p && typeof p === 'object') {
+      const rec = p as Record<string, unknown>;
+      const f = (rec.fields && typeof rec.fields === 'object' ? rec.fields : null) as Record<string, unknown> | null;
+      if (f) {
+        const parts = [
+          rec.level ? `Mức L${rec.level}${rec.bloom ? ` (${clip(rec.bloom, 40)})` : ''}` : '',
+          f.objective ? `Mục tiêu: ${clip(f.objective, 350)}` : '',
+          f.explanation ? `Giải thích: ${clip(f.explanation, 650)}` : '',
+          f.example ? `Ví dụ: ${clip(f.example, 450)}` : '',
+          f.counterExample ? `Phản ví dụ: ${clip(f.counterExample, 350)}` : '',
+          f.commonMistake ? `Lỗi sai: ${clip(f.commonMistake, 300)}` : '',
+          f.strategy ? `Chiến lược Socratic: ${clip(f.strategy, 350)}` : '',
+        ].filter(Boolean);
+        if (parts.length) lines.push(parts.join(' | '));
+      } else {
+        lines.push(`Gói: ${clip(JSON.stringify(rec), 600)}`);
+      }
+    }
   }
-  return strip(text).slice(0, maxChars);
+
+  const assets = Array.isArray(std.assets) ? std.assets.slice(0, 4) : [];
+  for (const a of assets) {
+    if (a && typeof a === 'object') {
+      const rec = a as Record<string, unknown>;
+      const secs = Array.isArray(rec.sections)
+        ? (rec.sections as { heading?: unknown; body?: unknown }[])
+            .slice(0, 3)
+            .map((s) => `${clip(s.heading, 80)}: ${clip(s.body, 220)}`)
+            .join('; ')
+        : '';
+      if (secs || rec.summary) {
+        lines.push(`Tài nguyên (${clip(rec.format || 'text', 30)}): ${secs || clip(rec.summary, 300)}`);
+      }
+    }
+  }
+
+  const qs = Array.isArray(std.questions) ? std.questions.slice(0, 6) : [];
+  for (let i = 0; i < qs.length; i++) {
+    const q = qs[i] as Record<string, unknown> | null;
+    if (q && typeof q === 'object' && q.noi_dung) {
+      lines.push(
+        `Câu hỏi ${i + 1}${q.do_kho ? ` (${clip(q.do_kho, 30)})` : ''}: ${clip(q.noi_dung, 280)} -> Đáp án: ${clip(q.dap_an, 140)}${q.loi_giai ? ` (${clip(q.loi_giai, 200)})` : ''}`,
+      );
+    }
+  }
+
+  const socs = Array.isArray(std.socratic) ? std.socratic.slice(0, 3) : [];
+  for (let i = 0; i < socs.length; i++) {
+    const s = socs[i] as Record<string, unknown> | null;
+    if (s && typeof s === 'object' && (s.wrong_answer || s.bac_1)) {
+      lines.push(
+        `Socratic ${i + 1} (Khi sai "${clip(s.wrong_answer, 120)}" - ${clip(s.misconception, 150)}): B1 ${clip(s.bac_1, 140)} | B2 ${clip(s.bac_2, 140)} | B3 ${clip(s.bac_3, 140)} | B4 ${clip(s.bac_4, 140)}`,
+      );
+    }
+  }
+
+  const edges = Array.isArray(std.edges) ? std.edges.slice(0, 4) : [];
+  for (const e of edges) {
+    if (e && typeof e === 'object') {
+      const rec = e as Record<string, unknown>;
+      const la = (rec.linkedAtom && typeof rec.linkedAtom === 'object' ? rec.linkedAtom : null) as Record<string, unknown> | null;
+      if (la || rec.remediation_hint) {
+        lines.push(
+          `Liên kết (${clip(rec.relation || 'liên môn', 30)}): ${la ? `[${clip(la.code, 30)}] ${clip(la.title, 120)} (${clip(la.subject, 40)})` : ''} ${clip(rec.remediation_hint, 160)}`.trim(),
+        );
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    try {
+      return strip(JSON.stringify(std)).slice(0, maxChars);
+    } catch {
+      return '';
+    }
+  }
+  return strip(lines.join('\n')).slice(0, maxChars);
 }
 
 const LANG: Record<WorkflowParams['ngonNgu'], string> = {

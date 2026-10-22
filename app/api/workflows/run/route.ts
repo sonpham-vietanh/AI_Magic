@@ -12,8 +12,9 @@ import { checkNewsEvent } from '@/lib/guardrails/news';
 import { recordGeneration } from '@/lib/signals';
 import { routeWorkflow, resourceKindsFor } from '@/lib/workflows/router';
 import { generateArtifact, generateAllResources, artifactToText, checkArtifact, type GenContext } from '@/lib/resources';
+import { buildKhbdFromStandard, hasRichFactorySource } from '@/lib/resources/factoryTransform';
 import { ARTIFACT_LABELS, type Artifact, type ArtifactKind, type ResourceKind, type StructureCheck } from '@/lib/resources/types';
-import { approvedArtifacts, canUseStandardAsIs, baseForUpgrade } from '@/lib/workflows/khoFirst';
+import { approvedArtifacts, canUseStandardAsIs, baseForUpgrade, factoryFallbackArtifacts } from '@/lib/workflows/khoFirst';
 import { ensureKhbdStructure } from '@/lib/workflows/khbdFix';
 import { checkKhbdStructure, checkExamStructure, checkQuizStructure } from '@/lib/workflows/validators';
 import { reflect } from '@/lib/workflows/reflection';
@@ -171,12 +172,9 @@ export async function POST(request: Request) {
         } else {
           warnings.push('AI không phản hồi, hiển thị bản chuẩn gốc');
           const pkgs = (std.packages ?? []) as unknown[];
-          markdown = pkgs
-            .map((p) => (typeof p === 'string' ? p : JSON.stringify(p, null, 2)))
-            .join('\n\n')
-            .trim();
-          if (!markdown) return fail(502, 'AI không phản hồi');
-          sections = [{ heading: std.title ?? 'Bản chuẩn', body: markdown }];
+          if (!pkgs.length && !hasRichFactorySource(std)) return fail(502, 'AI không phản hồi');
+          markdown = buildKhbdFromStandard(std, bloomLevels, classContext);
+          sections = markdownToSections(markdown);
           structure = checkKhbdStructure(markdown, bloomLevels);
         }
       } else {
@@ -234,6 +232,31 @@ export async function POST(request: Request) {
             const r = await generateArtifact(kind, ctx);
             if (r.ok) got.set(kind, r.value as Artifact);
             else errors.push({ kind, error: r.error });
+          }
+
+          // Nếu AI lỗi ở một số dạng nhưng bài có sẵn gói tài nguyên gốc Factory, tự động chế biến từ Factory (0 token)
+          if (errors.length && hasRichFactorySource(std)) {
+            const fb = factoryFallbackArtifacts(
+              std,
+              errors.map((e) => e.kind),
+            );
+            if (fb.size > 0) {
+              const rescued: ArtifactKind[] = [];
+              for (let idx = errors.length - 1; idx >= 0; idx--) {
+                const k = errors[idx].kind;
+                const a = fb.get(k);
+                if (a) {
+                  got.set(k, a);
+                  rescued.unshift(k);
+                  errors.splice(idx, 1);
+                }
+              }
+              if (rescued.length) {
+                warnings.push(
+                  `Chế biến trực tiếp từ gói tài nguyên gốc Factory (không tốn token AI): ${rescued.map((k) => ARTIFACT_LABELS[k]).join(', ')}`,
+                );
+              }
+            }
           }
         }
         for (const e of errors) {

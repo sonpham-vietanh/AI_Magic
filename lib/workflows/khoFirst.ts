@@ -1,5 +1,10 @@
 // Kho-trước: lấy bản chuẩn đã duyệt của Kho, không sinh lại từ đầu (sơ đồ v2.1, Pha B bước 2).
 import { artifactToText } from '@/lib/resources';
+import {
+  hasRichFactorySource,
+  transformFactoryToArtifact,
+  type FactorySource,
+} from '@/lib/resources/factoryTransform';
 import { ARTIFACT_LABELS, type Artifact, type ArtifactKind } from '@/lib/resources/types';
 import type { WorkflowParams } from './types';
 
@@ -9,6 +14,20 @@ export function approvedArtifacts(std: { artifacts?: unknown }, kinds: ArtifactK
   const list = Array.isArray(std.artifacts) ? (std.artifacts as Artifact[]) : [];
   for (const k of kinds) {
     const a = list.find((x) => x && x.kind === k && x.data);
+    if (a) out.set(k, a);
+  }
+  return out;
+}
+
+/** Chế biến trực tiếp từ gói tài nguyên gốc Factory (packages / assets / questions / socratic) không tốn token AI. */
+export function factoryFallbackArtifacts(
+  std: FactorySource,
+  kinds: ArtifactKind[],
+): Map<ArtifactKind, Artifact> {
+  const out = new Map<ArtifactKind, Artifact>();
+  if (!hasRichFactorySource(std)) return out;
+  for (const k of kinds) {
+    const a = transformFactoryToArtifact(k, std);
     if (a) out.set(k, a);
   }
   return out;

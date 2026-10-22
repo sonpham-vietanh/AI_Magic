@@ -10,17 +10,20 @@
   gap: 12px;
 }
 .cl-tile {
-  padding: 16px 18px;
+  padding: 18px 20px;
   border: 1px solid var(--line);
+  border-top: 3px solid var(--navy);
   border-radius: var(--ag-radius);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
   min-width: 0;
 }
 .cl-tile.star {
-  background: var(--navy);
+  background: linear-gradient(165deg, #14153A 0%, #1C1D4A 100%);
   border-color: var(--navy);
+  border-top: 3px solid var(--cta);
   color: #fff;
+  box-shadow: var(--shadow-sm);
 }
 .cl-tile-label {
   font-size: 14.5px;

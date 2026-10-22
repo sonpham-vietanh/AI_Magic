@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { callLiveLlm } from '@/lib/engine/llmClient';
+import { callLiveLlm, clearLlmCache, getLlmCacheSize } from '@/lib/engine/llmClient';
 
 const KEYS = [
   'GEMINI_API_KEY',
+  'GEMINI_API_KEYS',
+  'GROQ_API_KEY',
+  'GROQ_API_KEYS',
+  'GROQ_MODEL',
   'OPENAI_API_KEY',
+  'OPENAI_API_KEYS',
   'OPENROUTER_API_KEY',
+  'OPENROUTER_API_KEYS',
   'OPENAI_BASE_URL',
   'OPENAI_MODEL',
   'OPENROUTER_MODEL',
@@ -14,11 +20,13 @@ const KEYS = [
 describe('callLiveLlm', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => {
+    clearLlmCache();
     for (const k of KEYS) vi.stubEnv(k, '');
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
   });
   afterEach(() => {
+    clearLlmCache();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -50,5 +58,39 @@ describe('callLiveLlm', () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 500 }));
     const r = await callLiveLlm('sys', 'user');
     expect(r.ok).toBe(false);
+  });
+
+  it('serves identical prompt from LRU cache when useCache is true (0 token on 2nd call)', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    const body = 'data: {"choices":[{"delta":{"content":"Kết quả chuẩn"}}]}\n\ndata: [DONE]\n\n';
+    fetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }));
+
+    const r1 = await callLiveLlm('sys-cache', 'user-cache', undefined, { useCache: true });
+    expect(r1.ok).toBe(true);
+    expect(r1.content).toBe('Kết quả chuẩn');
+    expect(getLlmCacheSize()).toBe(1);
+
+    const r2 = await callLiveLlm('sys-cache', 'user-cache', undefined, { useCache: true });
+    expect(r2.ok).toBe(true);
+    expect(r2.content).toBe('Kết quả chuẩn');
+    expect(r2.modelUsed).toContain('Cache 0 token');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('prioritizes free tiers (Groq before OpenAI proxy) and rotates keys on failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubEnv('GROQ_API_KEYS', 'gsk-fail,gsk-ok');
+    vi.stubEnv('OPENAI_API_KEY', 'sk-fallback');
+    const body = 'data: {"choices":[{"delta":{"content":"Từ Groq"}}]}\n\ndata: [DONE]\n\n';
+    fetchMock
+      .mockResolvedValueOnce(new Response('rate limit', { status: 429 }))
+      .mockResolvedValueOnce(new Response(body, { status: 200 }));
+
+    const r = await callLiveLlm('sys', 'user');
+    expect(r.ok).toBe(true);
+    expect(r.content).toBe('Từ Groq');
+    expect(r.modelUsed).toContain('Groq Free AI');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('api.groq.com');
   });
 });

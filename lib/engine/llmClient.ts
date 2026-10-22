@@ -96,7 +96,42 @@ export const withLlmDeltaSink = <T>(
   fn: () => Promise<T>,
 ): Promise<T> => deltaStore.run(onDelta, fn);
 
-type LlmOpts = { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal };
+type LlmOpts = {
+  maxTokens?: number;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  useCache?: boolean;
+};
+
+const LLM_CACHE_MAX = 250;
+const LLM_CACHE_TTL_MS = 30 * 60 * 1000;
+const llmCache = new Map<
+  string,
+  { content: string; modelUsed: string; at: number }
+>();
+let rrCounter = 0;
+
+export function clearLlmCache(): void {
+  llmCache.clear();
+}
+
+export function getLlmCacheSize(): number {
+  return llmCache.size;
+}
+
+function parseKeyPool(...rawValues: (string | undefined)[]): string[] {
+  const keys: string[] = [];
+  for (const raw of rawValues) {
+    if (!raw) continue;
+    for (const part of raw.split(/[,;\n]+/)) {
+      const k = part.trim();
+      if (k && !keys.includes(k)) keys.push(k);
+    }
+  }
+  if (keys.length <= 1) return keys;
+  const start = rrCounter++ % keys.length;
+  return [...keys.slice(start), ...keys.slice(0, start)];
+}
 
 /**
  * Hạn chót CỨNG: bỏ chờ ngay khi tín hiệu huỷ phát ra, KHÔNG phụ thuộc việc fetch/stream có tự ngắt hay không.
@@ -210,128 +245,200 @@ export const callLiveLlmStream = async (
     preferredModel && SAFE_MODEL_RE.test(preferredModel.trim())
       ? preferredModel.trim()
       : undefined;
-  let lastError: string | undefined;
 
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  if (geminiKey) {
-    const rawModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
-    const model = SAFE_MODEL_RE.test(rawModel) ? rawModel : 'gemini-2.5-flash';
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs ?? 45000);
-    opts?.signal?.addEventListener('abort', () => controller.abort(), {
-      once: true,
-    });
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': geminiKey,
-          },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-            generationConfig: { temperature: 0.45, maxOutputTokens: maxTokens },
-          }),
-          signal: controller.signal,
-        },
-      );
-      if (response.ok) {
-        const data = (await response.json()) as {
-          candidates?: { content?: { parts?: { text?: string }[] } }[];
-        };
-        const text = data.candidates?.[0]?.content?.parts
-          ?.map((p) => p.text ?? '')
-          .join('\n')
-          ?.trim();
-        if (text) {
-          // Gemini: không streaming, phát toàn bộ text như một delta.
-          onDelta(text);
-          return {
-            ok: true,
-            content: text,
-            modelUsed: `Google Gemini (${model})`,
-          };
-        }
-        lastError = 'Gemini returned empty content';
-      } else {
-        lastError = `Gemini HTTP ${response.status}`;
-        console.error(`[llmClient] ${lastError}`);
-      }
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : 'Gemini call failed';
-      console.error(`[llmClient] Gemini error: ${lastError}`);
-    } finally {
-      clearTimeout(timer);
+  const cacheEnabled =
+    opts?.useCache ?? (!process.env.VITEST && process.env.NODE_ENV !== 'test');
+  const cacheKey = cacheEnabled
+    ? `${safePreferred ?? ''}\u0000${systemPrompt}\u0000${userPrompt}`
+    : '';
+
+  if (cacheEnabled) {
+    const hit = llmCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < LLM_CACHE_TTL_MS) {
+      onDelta(hit.content);
+      return {
+        ok: true,
+        content: hit.content,
+        modelUsed: `${hit.modelUsed} (Cache 0 token)`,
+      };
     }
   }
 
-  const openAiKey =
-    process.env.OPENAI_API_KEY?.trim() || process.env.OPENROUTER_API_KEY?.trim();
-  if (openAiKey) {
-    const model =
-      safePreferred ||
-      process.env.OPENAI_MODEL?.trim() ||
-      process.env.OPENROUTER_MODEL?.trim() ||
-      DEFAULT_OPENAI_MODEL;
-    const rawBase =
-      process.env.OPENAI_BASE_URL?.trim() ||
-      (process.env.OPENAI_API_KEY?.trim()
-        ? 'https://api.openai.com/v1'
-        : 'https://openrouter.ai/api/v1');
-    const baseUrl = normalizeChatCompletionsUrl(rawBase);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs ?? 90000);
-    opts?.signal?.addEventListener('abort', () => controller.abort(), {
-      once: true,
-    });
-    try {
-      // NOTE: `stream: true` is REQUIRED by the proxy/tunnel in use; it rejects
-      // non-streaming requests. Do not change to false. The SSE body is read
-      // incrementally and each delta is forwarded to onDelta.
-      const response = await abortable(
-        fetch(baseUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${openAiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt },
-            ],
-            temperature: 0.45,
-            max_tokens: maxTokens,
-            stream: true,
-          }),
-          signal: controller.signal,
-        }),
-        controller.signal,
-      );
-      if (response.ok) {
-        const text = await readOpenAiStream(response, onDelta, controller.signal);
-        if (text) {
-          return {
-            ok: true,
-            content: text,
-            modelUsed: `Live AI (${model})`,
-          };
-        }
-        lastError = 'LLM returned empty content';
-      } else {
-        lastError = `LLM HTTP ${response.status}`;
-        console.error(`[llmClient] ${lastError}`);
-      }
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : 'OpenAI call failed';
-      console.error(`[llmClient] OpenAI-compatible error: ${lastError}`);
-    } finally {
-      clearTimeout(timer);
+  const saveCache = (content: string, modelUsed: string) => {
+    if (!cacheEnabled) return;
+    if (llmCache.size >= LLM_CACHE_MAX) {
+      const oldest = llmCache.keys().next().value;
+      if (oldest !== undefined) llmCache.delete(oldest);
     }
+    llmCache.set(cacheKey, { content, modelUsed, at: Date.now() });
+  };
+
+  let lastError: string | undefined;
+
+  // TẦNG 1: Google Gemini Free Tier (hỗ trợ xoay vòng nhiều khóa GEMINI_API_KEY / GEMINI_API_KEYS)
+  const geminiKeys = parseKeyPool(
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEYS,
+  );
+  if (geminiKeys.length > 0) {
+    const rawModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+    const model = SAFE_MODEL_RE.test(rawModel) ? rawModel : 'gemini-2.5-flash';
+    for (const geminiKey of geminiKeys) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs ?? 45000);
+      opts?.signal?.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': geminiKey,
+            },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+              generationConfig: { temperature: 0.45, maxOutputTokens: maxTokens },
+            }),
+            signal: controller.signal,
+          },
+        );
+        if (response.ok) {
+          const data = (await response.json()) as {
+            candidates?: { content?: { parts?: { text?: string }[] } }[];
+          };
+          const text = data.candidates?.[0]?.content?.parts
+            ?.map((p) => p.text ?? '')
+            .join('\n')
+            ?.trim();
+          if (text) {
+            onDelta(text);
+            const modelUsed = `Google Gemini (${model})`;
+            saveCache(text, modelUsed);
+            return { ok: true, content: text, modelUsed };
+          }
+          lastError = 'Gemini returned empty content';
+        } else {
+          lastError = `Gemini HTTP ${response.status}`;
+          console.error(`[llmClient] ${lastError}`);
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'Gemini call failed';
+        console.error(`[llmClient] Gemini error: ${lastError}`);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  // Hàm dùng chung cho các cổng tương thích OpenAI (Groq, OpenRouter, OpenAI/Proxy)
+  const tryOpenAiCompatible = async (
+    keys: string[],
+    baseUrl: string,
+    model: string,
+    labelPrefix: string,
+  ): Promise<LlmCallResult | null> => {
+    for (const apiKey of keys) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs ?? 90000);
+      opts?.signal?.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
+      try {
+        const response = await abortable(
+          fetch(baseUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+              ],
+              temperature: 0.45,
+              max_tokens: maxTokens,
+              stream: true,
+            }),
+            signal: controller.signal,
+          }),
+          controller.signal,
+        );
+        if (response.ok) {
+          const text = await readOpenAiStream(response, onDelta, controller.signal);
+          if (text) {
+            const modelUsed = `${labelPrefix} (${model})`;
+            saveCache(text, modelUsed);
+            return { ok: true, content: text, modelUsed };
+          }
+          lastError = 'LLM returned empty content';
+        } else {
+          lastError = `LLM HTTP ${response.status}`;
+          console.error(`[llmClient] ${lastError}`);
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'OpenAI call failed';
+        console.error(`[llmClient] OpenAI-compatible error: ${lastError}`);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    return null;
+  };
+
+  // TẦNG 2: Groq Free Tier (tốc độ cao, miễn phí)
+  const groqKeys = parseKeyPool(process.env.GROQ_API_KEY, process.env.GROQ_API_KEYS);
+  if (groqKeys.length > 0) {
+    const rawGroqModel = process.env.GROQ_MODEL?.trim() || 'llama-3.3-70b-versatile';
+    const groqModel = SAFE_MODEL_RE.test(rawGroqModel)
+      ? rawGroqModel
+      : 'llama-3.3-70b-versatile';
+    const groqBase = normalizeChatCompletionsUrl(
+      process.env.GROQ_BASE_URL?.trim() || 'https://api.groq.com/openai/v1',
+    );
+    const groqRes = await tryOpenAiCompatible(groqKeys, groqBase, groqModel, 'Groq Free AI');
+    if (groqRes) return groqRes;
+  }
+
+  // TẦNG 3: OpenRouter (ưu tiên model miễn phí / Flash trước khi chạm vào tunnel chính)
+  const openRouterKeys = parseKeyPool(
+    process.env.OPENROUTER_API_KEY,
+    process.env.OPENROUTER_API_KEYS,
+  );
+  if (openRouterKeys.length > 0) {
+    const rawOrModel =
+      safePreferred ||
+      process.env.OPENROUTER_MODEL?.trim() ||
+      'google/gemini-2.5-flash';
+    const orModel = SAFE_MODEL_RE.test(rawOrModel)
+      ? rawOrModel
+      : 'google/gemini-2.5-flash';
+    const orBase = normalizeChatCompletionsUrl(
+      process.env.OPENROUTER_BASE_URL?.trim() || 'https://openrouter.ai/api/v1',
+    );
+    const orRes = await tryOpenAiCompatible(openRouterKeys, orBase, orModel, 'Live AI');
+    if (orRes) return orRes;
+  }
+
+  // TẦNG 4: OpenAI / Proxy Tunnel dự phòng cuối cùng
+  const openAiKeys = parseKeyPool(
+    process.env.OPENAI_API_KEY,
+    process.env.OPENAI_API_KEYS,
+  );
+  if (openAiKeys.length > 0) {
+    const rawModel =
+      safePreferred || process.env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
+    const model = SAFE_MODEL_RE.test(rawModel) ? rawModel : DEFAULT_OPENAI_MODEL;
+    const baseUrl = normalizeChatCompletionsUrl(
+      process.env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1',
+    );
+    const oaRes = await tryOpenAiCompatible(openAiKeys, baseUrl, model, 'Live AI');
+    if (oaRes) return oaRes;
   }
 
   return { ok: false, modelUsed: TEMPLATE_LABEL, error: lastError };
@@ -382,7 +489,7 @@ export const callLiveLlm = async (
   systemPrompt: string,
   userPrompt: string,
   preferredModel?: string,
-  opts?: { maxTokens?: number; timeoutMs?: number },
+  opts?: LlmOpts,
 ): Promise<LlmCallResult> => {
   const sink = deltaStore.getStore();
   return callLiveLlmStream(

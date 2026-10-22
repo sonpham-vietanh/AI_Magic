@@ -86,19 +86,20 @@
   width: 100%;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid var(--cta);
+  border: 1px solid #D4AE08;
   border-radius: 11px;
-  background: var(--cta);
+  background: linear-gradient(180deg, #F9DD0E 0%, #E8C40A 100%);
   color: var(--navy);
   font-weight: 800;
   font-size: 14.5px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(249, 221, 14, 0.22);
-  transition: background var(--ag-ease), border-color var(--ag-ease), transform var(--ag-ease);
+  box-shadow: 0 4px 14px rgba(249, 221, 14, 0.24);
+  transition: background var(--ag-ease), border-color var(--ag-ease), box-shadow var(--ag-ease);
 }
 .ag-new:hover {
-  background: var(--cta-hover);
-  border-color: var(--cta-hover);
+  background: linear-gradient(180deg, #FFE529 0%, #E5BF0E 100%);
+  border-color: var(--cta);
+  box-shadow: 0 6px 18px rgba(249, 221, 14, 0.34);
 }
 
 .ag-rail-scroll {
@@ -114,25 +115,25 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.52);
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .ag-nav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 .ag-nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 12px;
-  border-radius: 9px;
-  color: rgba(255, 255, 255, 0.84);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.86);
   font-weight: 600;
   font-size: 14.5px;
-  transition: background var(--ag-ease), color var(--ag-ease);
+  transition: background var(--ag-ease), color var(--ag-ease), box-shadow var(--ag-ease);
 }
 .ag-nav-item:hover {
   background: rgba(255, 255, 255, 0.09);
@@ -250,20 +251,25 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 28px 32px 8px;
+  padding: 24px 32px 18px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(250, 249, 244, 0.35) 100%);
 }
 .ag-pagehead h1 {
   font-size: 26px;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy);
 }
 .ag-pagehead p {
-  margin-top: 4px;
-  max-width: 70ch;
-  color: var(--muted);
-  font-size: 15px;
+  margin-top: 6px;
+  max-width: 72ch;
+  color: var(--ink-secondary);
+  font-size: 15.5px;
+  line-height: 1.5;
 }
 .ag-page .va-workspace {
-  padding: 16px 32px 48px;
+  padding: 20px 32px 48px;
 }
 
 /* ---------- Nút ---------- */
@@ -281,24 +287,29 @@
   font-weight: 700;
   font-size: 15px;
   cursor: pointer;
-  transition: background var(--ag-ease), border-color var(--ag-ease), transform var(--ag-ease);
+  box-shadow: var(--shadow-xs);
+  transition: background var(--ag-ease), border-color var(--ag-ease), box-shadow var(--ag-ease), color var(--ag-ease);
 }
 .ag-btn:hover:not(:disabled) {
   background: var(--navy-50);
+  border-color: var(--navy);
 }
 .ag-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
 }
 .ag-btn.primary {
-  background: var(--cta);
-  border-color: var(--cta);
+  background: linear-gradient(180deg, #F9DD0E 0%, #E8C40A 100%);
+  border-color: #D4AE08;
   color: var(--navy);
   box-shadow: var(--shadow-cta);
+  font-weight: 800;
 }
 .ag-btn.primary:hover:not(:disabled) {
-  background: var(--cta-hover);
-  border-color: var(--cta-hover);
+  background: linear-gradient(180deg, #FFE529 0%, #E5BF0E 100%);
+  border-color: var(--navy);
+  box-shadow: 0 6px 20px rgba(224, 185, 12, 0.36);
 }
 .ag-btn.dark {
   background: var(--navy);
@@ -311,12 +322,13 @@
 .ag-btn.ghost {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .ag-btn.small {
-  min-height: 36px;
-  padding: 0 12px;
-  font-size: 14px;
-  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 14.5px;
+  border-radius: 11px;
 }
 .ag-iconbtn {
   display: inline-flex;
@@ -364,10 +376,11 @@
   gap: 12px;
   flex-wrap: wrap;
   padding: 10px 28px;
-  min-height: 60px;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(8px);
+  min-height: 64px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(20, 21, 58, 0.03);
 }
 .ag-chat-top-left,
 .ag-chat-top-right {
@@ -378,17 +391,18 @@
 }
 .ag-top-select {
   width: auto;
-  min-width: 118px;
-  min-height: 36px;
-  padding: 0 30px 0 12px;
+  min-width: 124px;
+  min-height: 44px;
+  padding: 0 32px 0 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 11px;
   background-color: var(--surface);
   color: var(--navy);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 14.5px;
   cursor: pointer;
-  transition: border-color var(--ag-ease), background-color var(--ag-ease);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--ag-ease), background-color var(--ag-ease), box-shadow var(--ag-ease);
 }
 .ag-top-select:hover {
   border-color: var(--navy);
@@ -397,16 +411,18 @@
 .ag-who-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 0 12px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface);
   color: var(--navy);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 14.5px;
   cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--ag-ease), background-color var(--ag-ease), box-shadow var(--ag-ease);
 }
 .ag-who-pill:hover {
   border-color: var(--gold);
@@ -421,18 +437,18 @@
 .ag-who-inline-form {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .ag-who-inline-input {
-  min-height: 36px;
-  width: 190px;
-  padding: 0 10px;
+  min-height: 44px;
+  width: 196px;
+  padding: 0 12px;
   border: 1px solid var(--navy);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 14.5px;
 }
 .ag-chat-top-title {
   font-size: 14px;
@@ -506,22 +522,24 @@
   cursor: pointer;
   color: var(--ink);
   box-shadow: var(--shadow-xs);
-  transition: border-color var(--ag-ease), box-shadow var(--ag-ease), transform var(--ag-ease);
+  transition: border-color var(--ag-ease), box-shadow var(--ag-ease), background-color var(--ag-ease);
 }
 .ag-suggest-card:hover {
-  border-color: var(--gold);
+  border-color: var(--navy);
+  background: #ffffff;
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
 }
 .ag-suggest-ico {
   flex: none;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 12px;
   background: var(--navy);
   color: var(--cta);
+  border: 1px solid rgba(249, 221, 14, 0.35);
+  box-shadow: 0 4px 10px rgba(20, 21, 58, 0.12);
 }
 .ag-suggest-card strong {
   display: block;
@@ -541,7 +559,8 @@
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: var(--ag-radius);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-xs);
 }
 .ag-hero-more-head {
   display: flex;
@@ -805,12 +824,14 @@ textarea.ag-field {
   background: transparent;
   color: var(--navy);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 14.5px;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
-  min-height: 36px;
-  padding: 0 4px;
+  min-height: 44px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
 }
 .ag-more {
   margin-top: 12px;
@@ -821,7 +842,7 @@ textarea.ag-field {
   cursor: pointer;
   font-weight: 700;
   color: var(--navy);
-  min-height: 36px;
+  min-height: 44px;
   display: flex;
   align-items: center;
 }
@@ -956,8 +977,8 @@ textarea.ag-field {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 16px;
   border: 1px solid var(--line-strong);
   border-radius: 99px;
   background: var(--surface);
@@ -965,11 +986,12 @@ textarea.ag-field {
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
-  transition: background var(--ag-ease), border-color var(--ag-ease);
+  box-shadow: var(--shadow-xs);
+  transition: background var(--ag-ease), border-color var(--ag-ease), box-shadow var(--ag-ease);
 }
 .ag-chip:hover {
   background: var(--gold-soft);
-  border-color: var(--gold);
+  border-color: var(--navy);
 }
 
 /* ô nhập tin nhắn */
@@ -977,19 +999,21 @@ textarea.ag-field {
   padding: 8px 24px 20px;
 }
 .ag-composer {
-  max-width: 760px;
+  max-width: 780px;
   margin: 0 auto;
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  padding: 8px 8px 8px 18px;
-  border: 1px solid var(--line-strong);
-  border-radius: 24px;
+  gap: 10px;
+  padding: 8px 10px 8px 18px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 22px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  transition: border-color var(--ag-ease), box-shadow var(--ag-ease);
 }
 .ag-composer:focus-within {
   border-color: var(--navy);
+  box-shadow: var(--shadow-md);
 }
 .ag-composer textarea {
   flex: 1;
@@ -1079,8 +1103,8 @@ textarea.ag-field {
   border-bottom: 1px solid var(--line);
 }
 .ag-tab {
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 16px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
@@ -1088,6 +1112,10 @@ textarea.ag-field {
   font-weight: 700;
   font-size: 15px;
   cursor: pointer;
+  transition: color var(--ag-ease), border-color var(--ag-ease);
+}
+.ag-tab:hover {
+  color: var(--navy);
 }
 .ag-tab[aria-selected='true'] {
   color: var(--navy);

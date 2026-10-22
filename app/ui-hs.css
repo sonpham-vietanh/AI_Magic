@@ -38,8 +38,8 @@
   gap: 6px;
 }
 .hs-pill {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 16px;
   border: 1px solid var(--line-strong);
   border-radius: 99px;
   background: var(--surface);
@@ -47,9 +47,11 @@
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--ag-ease), border-color var(--ag-ease), color var(--ag-ease);
 }
 .hs-pill:hover {
   background: var(--navy-50);
+  border-color: var(--navy);
 }
 .hs-pill[aria-pressed='true'] {
   background: var(--navy);
@@ -234,7 +236,7 @@
 }
 .hs-tier summary {
   cursor: pointer;
-  min-height: 36px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   font-weight: 700;

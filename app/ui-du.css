@@ -41,8 +41,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 44px;
+  padding: 0 14px;
   border: 1px solid var(--line-strong);
   border-radius: 99px;
   background: var(--surface);
@@ -50,9 +50,11 @@
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--ag-ease), border-color var(--ag-ease), color var(--ag-ease);
 }
 .du-chip:hover {
   background: var(--navy-50);
+  border-color: var(--navy);
 }
 .du-chip[aria-pressed='true'] {
   background: var(--navy);

@@ -395,32 +395,26 @@ export async function POST(request: Request) {
     emit({ type: 'stage', id: 'giao_an', status: 'start' });
     emit({ type: 'stage', id: 'phieu_hoc_tap', status: 'start' });
 
-    const live = await withLlmDeltaSink(
-      (text) => emit({ type: 'delta', text }),
-      () => callLiveLlm(systemPrompt, userPrompt, undefined),
-    );
-    emit({ type: 'stage', id: 'giao_an', status: 'done' });
-    emit({ type: 'stage', id: 'phieu_hoc_tap', status: 'done' });
+    const hasRichFactory =
+      packages.some((p) => Boolean(p.fields?.explanation || p.fields?.example)) &&
+      process.env.FORCE_LLM_ON_PACK !== '1';
 
     let giaoAnContent = '';
     let phieuHocTapContent = '';
+    let modelUsedLabel = 'Factory Direct Remix (0 token)';
 
-    if (live.ok && live.content) {
-      const parts = live.content.split('===PHIEU_HOC_TAP===');
-      giaoAnContent = cleanPedagogicalText(parts[0] || live.content);
-      phieuHocTapContent = cleanPedagogicalText(
-        parts[1] || buildFallbackWorksheet(atomCode, atomTitle, subjectName, className, questions),
-      );
-    } else {
+    if (hasRichFactory) {
       giaoAnContent = buildFallbackLessonPlan(
         atomCode,
         atomTitle,
         subjectName,
         gradeStr,
         className,
-        atom?.yeu_cau || atomTitle,
-        atom?.quan_niem_sai || '',
+        atom?.yeu_cau || packages[0]?.fields.objective || atomTitle,
+        atom?.quan_niem_sai || packages[0]?.fields.commonMistake || '',
         supportCodes,
+        packages,
+        factoryTextAsset,
       );
       phieuHocTapContent = buildFallbackWorksheet(
         atomCode,
@@ -428,7 +422,62 @@ export async function POST(request: Request) {
         subjectName,
         className,
         questions,
+        packages,
+        factoryWorksheetAsset,
       );
+      emit({
+        type: 'delta',
+        text: `${giaoAnContent}\n===PHIEU_HOC_TAP===\n${phieuHocTapContent}`,
+      });
+      emit({ type: 'stage', id: 'giao_an', status: 'done' });
+      emit({ type: 'stage', id: 'phieu_hoc_tap', status: 'done' });
+    } else {
+      const live = await withLlmDeltaSink(
+        (text) => emit({ type: 'delta', text }),
+        () => callLiveLlm(systemPrompt, userPrompt, undefined),
+      );
+      emit({ type: 'stage', id: 'giao_an', status: 'done' });
+      emit({ type: 'stage', id: 'phieu_hoc_tap', status: 'done' });
+      modelUsedLabel = live.modelUsed;
+
+      if (live.ok && live.content) {
+        const parts = live.content.split('===PHIEU_HOC_TAP===');
+        giaoAnContent = cleanPedagogicalText(parts[0] || live.content);
+        phieuHocTapContent = cleanPedagogicalText(
+          parts[1] ||
+            buildFallbackWorksheet(
+              atomCode,
+              atomTitle,
+              subjectName,
+              className,
+              questions,
+              packages,
+              factoryWorksheetAsset,
+            ),
+        );
+      } else {
+        giaoAnContent = buildFallbackLessonPlan(
+          atomCode,
+          atomTitle,
+          subjectName,
+          gradeStr,
+          className,
+          atom?.yeu_cau || packages[0]?.fields.objective || atomTitle,
+          atom?.quan_niem_sai || packages[0]?.fields.commonMistake || '',
+          supportCodes,
+          packages,
+          factoryTextAsset,
+        );
+        phieuHocTapContent = buildFallbackWorksheet(
+          atomCode,
+          atomTitle,
+          subjectName,
+          className,
+          questions,
+          packages,
+          factoryWorksheetAsset,
+        );
+      }
     }
 
     // Phần 3: Đề kiểm tra nhanh 5 phút cuối tiết (Exit Ticket từ Ngân hàng câu hỏi thật Supabase)
@@ -505,7 +554,7 @@ export async function POST(request: Request) {
       grade: gradeStr,
       className,
       teacherName,
-      modelUsed: live.modelUsed,
+      modelUsed: modelUsedLabel,
       estimatedMinutesSaved: 95,
       sections: [
         {
@@ -611,14 +660,57 @@ function buildFallbackLessonPlan(
   yeuCau: string,
   quanNiemSai: string,
   supportCodes: string,
+  packages: {
+    level: number;
+    bloom: string;
+    fields: {
+      objective?: string;
+      explanation?: string;
+      example?: string;
+      counterExample?: string;
+      commonMistake?: string;
+      strategy?: string;
+    };
+  }[] = [],
+  textAsset?: { sections: { heading: string; body: string }[] },
 ): string {
+  const p1 = packages.find((p) => p.level === 1) ?? packages[0];
+  const p2 = packages.find((p) => p.level === 2) ?? packages[1] ?? p1;
+  const p3 = packages.find((p) => p.level === 3) ?? packages[2] ?? p2;
+  const explanation = cleanPedagogicalText(
+    p1?.fields.explanation ||
+      textAsset?.sections?.[0]?.body ||
+      `Trình bày khái niệm và quy tắc trọng tâm của bài [${code}] ${title}.`,
+  );
+  const example = cleanPedagogicalText(
+    p1?.fields.example ||
+      p2?.fields.example ||
+      `Áp dụng quy tắc bài ${title} vào bài toán chuẩn.`,
+  );
+  const counterExample = cleanPedagogicalText(
+    p1?.fields.counterExample ||
+      p2?.fields.counterExample ||
+      `Đối chiếu trường hợp không thỏa điều kiện áp dụng để học sinh không nhầm lẫn.`,
+  );
+  const strategy = cleanPedagogicalText(
+    p1?.fields.strategy ||
+      p2?.fields.strategy ||
+      `Giáo viên kèm sát học sinh mã ${supportCodes}, đặt câu hỏi Socratic dẫn dắt và chốt kiến thức trên bảng.`,
+  );
+
   return [
-    `I. MỤC TIÊU BÀI HỌC`,
+    `I. MỤC TIÊU BÀI HỌC (CÔNG VĂN 5512)`,
     `1. Kiến thức: Học sinh nắm vững bài [${code}] ${title} (${subject} Khối ${grade}).`,
     `2. Yêu cầu cần đạt: ${cleanPedagogicalText(yeuCau)}`,
+    p2?.fields.objective ? `   Mức Vận dụng: ${cleanPedagogicalText(p2.fields.objective)}` : '',
+    p3?.fields.objective ? `   Mức Phân tích & Mở rộng: ${cleanPedagogicalText(p3.fields.objective)}` : '',
     `3. Lưu ý khắc phục lỗi sai học sinh: ${cleanPedagogicalText(quanNiemSai || 'Phân biệt kỹ khái niệm và điều kiện áp dụng.')}`,
     '',
-    `II. TIẾN TRÌNH 4 HOẠT ĐỘNG LÊN LỚP (LỚP ${className})`,
+    `II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU`,
+    `1. Giáo viên: Gói kiến thức chuẩn Factory, Phiếu học tập phân hóa 3 mức, Bộ câu hỏi Socratic 4 bậc.`,
+    `2. Học sinh: Vở ghi, sách giáo khoa, bảng nhóm.`,
+    '',
+    `III. TIẾN TRÌNH 4 HOẠT ĐỘNG LÊN LỚP (LỚP ${className})`,
     `1. Hoạt động 1: Mở đầu và Khởi động (5 phút)`,
     `   a) Mục tiêu: Kích hoạt kiến thức nền và tạo hứng thú đầu giờ.`,
     `   b) Nội dung: Học sinh giải quyết nhanh Nhiệm vụ 1 trong Phiếu học tập.`,
@@ -626,19 +718,28 @@ function buildFallbackLessonPlan(
     `   d) Tổ chức thực hiện: Làm cá nhân 2 phút, gọi 2 học sinh chia sẻ nhanh.`,
     '',
     `2. Hoạt động 2: Hình thành kiến thức mới (15 phút)`,
-    `   a) Mục tiêu: Nắm vững bản chất kiến thức bài ${title}.`,
-    `   b) Nội dung: Thảo luận cặp đôi hoàn thành Nhiệm vụ 2 trong Phiếu học tập.`,
-    `   c) Sản phẩm: Kết luận kiến thức trọng tâm ghi vở.`,
-    `   d) Tổ chức thực hiện: Giáo viên kèm sát học sinh mã ${supportCodes}, sau đó chốt kiến thức trên bảng và cảnh báo lỗi sai thường gặp.`,
+    `   a) Mục tiêu: Nắm vững bản chất kiến thức bài ${title} và phân biệt được ví dụ với phản ví dụ.`,
+    `   b) Nội dung:`,
+    `      Kiến thức cốt lõi: ${explanation}`,
+    `      Ví dụ chuẩn: ${example}`,
+    `      Phản ví dụ đối chiếu: ${counterExample}`,
+    `   c) Sản phẩm: Kết luận kiến thức trọng tâm ghi vở và câu trả lời thảo luận cặp đôi ở Nhiệm vụ 2.`,
+    `   d) Tổ chức thực hiện: ${strategy}`,
     '',
     `3. Hoạt động 3: Luyện tập phân hóa 3 mức (15 phút)`,
-    `   a) Mục tiêu: Rèn kỹ năng giải bài tập theo đúng năng lực từng nhóm học sinh.`,
+    `   a) Mục tiêu: Rèn kỹ năng giải bài tập theo đúng năng lực từng nhóm học sinh (Nhớ, Hiểu, Vận dụng, Phân tích).`,
     `   b) Nội dung: Học sinh hoàn thành Nhiệm vụ 3 (Cơ bản, Đạt chuẩn, Nâng cao) trên Phiếu học tập.`,
+    `   c) Sản phẩm: Lời giải chi tiết trên Phiếu học tập A4.`,
+    `   d) Tổ chức thực hiện: Học sinh làm cá nhân 10 phút, đổi vở chấm chéo theo đáp án chuẩn; giáo viên hỗ trợ thêm cho mã ${supportCodes}.`,
     '',
     `4. Hoạt động 4: Vận dụng và Kiểm tra nhanh Exit Ticket (10 phút)`,
     `   a) Mục tiêu: Đánh giá ngay mức độ hiểu bài của cả lớp trước khi hết giờ.`,
-    `   b) Tổ chức thực hiện: Học sinh làm nhanh bộ câu hỏi kiểm tra ở Phần III.`,
-  ].join('\n');
+    `   b) Nội dung: Bộ câu hỏi kiểm tra nhanh 5 phút cuối tiết (Phần III).`,
+    `   c) Sản phẩm: Kết quả làm bài Exit Ticket của học sinh.`,
+    `   d) Tổ chức thực hiện: Học sinh làm nhanh bộ câu hỏi kiểm tra ở Phần III, giáo viên nhận xét và chốt bài.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function buildFallbackWorksheet(
@@ -646,8 +747,35 @@ function buildFallbackWorksheet(
   title: string,
   subject: string,
   className: string,
-  questions: { noi_dung: string; do_kho: string }[],
+  questions: { noi_dung: string; do_kho: string; dap_an?: string; loi_giai?: string }[],
+  packages: {
+    level: number;
+    bloom: string;
+    fields: {
+      objective?: string;
+      explanation?: string;
+      example?: string;
+      counterExample?: string;
+      commonMistake?: string;
+    };
+  }[] = [],
+  worksheetAsset?: { sections: { heading: string; body: string }[] },
 ): string {
+  const p1 = packages.find((p) => p.level === 1) ?? packages[0];
+  const p2 = packages.find((p) => p.level === 2) ?? packages[1] ?? p1;
+  const p3 = packages.find((p) => p.level === 3) ?? packages[2] ?? p2;
+
+  const assetLines =
+    worksheetAsset && worksheetAsset.sections.length > 0
+      ? [
+          '',
+          `BÀI TẬP TỪ GÓI HỌC LIỆU GỐC FACTORY:`,
+          ...worksheetAsset.sections
+            .slice(0, 3)
+            .map((s) => `${cleanPedagogicalText(s.heading)}:\n${cleanPedagogicalText(s.body)}`),
+        ]
+      : [];
+
   return [
     `PHIẾU HỌC TẬP MÔN ${subject.toUpperCase()}`,
     `Bài học: [${code}] ${title}`,
@@ -656,16 +784,24 @@ function buildFallbackWorksheet(
     `NHIỆM VỤ 1: KHỞI ĐỘNG ĐẦU GIỜ (5 PHÚT)`,
     questions[0]
       ? `Câu hỏi mở đầu: ${cleanPedagogicalText(questions[0].noi_dung)}`
-      : `Câu hỏi mở đầu: Nêu ví dụ thực tế liên quan đến chủ đề "${title}".`,
+      : `Câu hỏi mở đầu: ${cleanPedagogicalText(p1?.fields.example || `Nêu ví dụ thực tế liên quan đến chủ đề "${title}".`)}`,
     `Trả lời của em: ..........................................................................................................`,
     '',
-    `NHIỆM VỤ 2: KHÁM PHÁ KIẾN THỨC MỚI (THẢO LUẬN CẶP ĐÔI - 10 PHÚT)`,
-    `Điền quy tắc hoặc kết luận trọng tâm của bài học và chỉ ra 1 lỗi sai cần tránh:`,
+    `NHIỆM VỤ 2: KHÁM PHÁ KIẾN THỨC & PHÂN TÍCH PHẢN VÍ DỤ (THẢO LUẬN CẶP ĐÔI - 10 PHÚT)`,
+    p1?.fields.counterExample
+      ? `Tình huống đối chiếu (Phản ví dụ): ${cleanPedagogicalText(p1.fields.counterExample)}`
+      : `Điền quy tắc hoặc kết luận trọng tâm của bài học và chỉ ra 1 lỗi sai cần tránh:`,
+    p1?.fields.commonMistake
+      ? `Giải thích vì sao cách hiểu sau đây là sai (${cleanPedagogicalText(p1.fields.commonMistake)}):`
+      : '',
     `.................................................................................................................................`,
     '',
     `NHIỆM VỤ 3: BÀI TẬP PHÂN HÓA THEO NĂNG LỰC (15 PHÚT)`,
-    `1. Dành cho Nhóm Cơ bản: ${questions[0] ? cleanPedagogicalText(questions[0].noi_dung) : `Áp dụng trực tiếp quy tắc bài ${title} vào ví dụ mẫu.`}`,
-    `2. Dành cho Nhóm Đạt chuẩn: ${questions[1] ? cleanPedagogicalText(questions[1].noi_dung) : `Giải bài tập trọng tâm và trình bày rõ từng bước.`}`,
-    `3. Dành cho Nhóm Nâng cao: ${questions[2] ? cleanPedagogicalText(questions[2].noi_dung) : `Vận dụng giải bài toán thực tế mở rộng và giải thích tại sao.`}`,
-  ].join('\n');
+    `1. Dành cho Nhóm Cơ bản (Mức L1 - Nhận biết & Thông hiểu): ${questions[0] ? cleanPedagogicalText(questions[0].noi_dung) : cleanPedagogicalText(p1?.fields.example || `Áp dụng trực tiếp quy tắc bài ${title} vào ví dụ mẫu.`)}`,
+    `2. Dành cho Nhóm Đạt chuẩn (Mức L2 - Vận dụng): ${questions[1] ? cleanPedagogicalText(questions[1].noi_dung) : cleanPedagogicalText(p2?.fields.example || p2?.fields.objective || `Giải bài tập trọng tâm và trình bày rõ từng bước.`)}`,
+    `3. Dành cho Nhóm Nâng cao (Mức L3 - Phân tích & Vận dụng cao): ${questions[2] ? cleanPedagogicalText(questions[2].noi_dung) : cleanPedagogicalText(p3?.fields.counterExample || p3?.fields.objective || `Vận dụng giải bài toán thực tế mở rộng và giải thích tại sao.`)}`,
+    ...assetLines,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }

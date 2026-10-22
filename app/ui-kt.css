@@ -27,8 +27,8 @@
 .kt-q { margin-top: 0; }
 .kt-q .ag-line { margin-bottom: 4px; }
 .kt-ans { margin-top: 10px; border-top: 1px dashed var(--line-strong); padding-top: 8px; }
-.kt-ans summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 36px; display: flex; align-items: center; }
-.kt-ans summary::before { content: "+"; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: var(--navy-50); }
+.kt-ans summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 44px; display: flex; align-items: center; }
+.kt-ans summary::before { content: "+"; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 50%; background: var(--navy-50); }
 .kt-ans[open] summary::before { content: "\2212"; }
 .kt-ans .ag-line { color: var(--success); }
 .kt-other h3 { font-size: 16px; margin-bottom: 6px; }
@@ -47,11 +47,12 @@
 .kt-step-name small { display: block; font-size: 13px; font-weight: 600; }
 
 /* ma trận */
-.kt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; -webkit-overflow-scrolling: touch; }
+.kt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; -webkit-overflow-scrolling: touch; box-shadow: var(--shadow-xs); }
 .kt-table { width: 100%; min-width: 640px; border-collapse: collapse; background: var(--surface); font-size: 15px; }
 .kt-cap { text-align: left; padding: 0 0 8px; font-weight: 700; color: var(--navy); caption-side: top; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.kt-table th, .kt-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.kt-table th, .kt-table td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .kt-table thead th { background: var(--navy); color: #fff; font-weight: 700; white-space: nowrap; }
+.kt-table tbody tr:hover { background: var(--navy-50); }
 .kt-table tbody th { font-weight: 600; color: var(--ink); }
 .kt-table th small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; }
 .kt-table td { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -83,7 +84,7 @@
 .kt-tl li::before { content: ''; position: absolute; left: -23px; top: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--navy); }
 .kt-tl small { display: block; color: var(--muted); font-size: 13px; }
 .kt-tl-note { display: block; color: var(--ink-secondary); }
-.kt-log summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 36px; display: flex; align-items: center; }
+.kt-log summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 44px; display: flex; align-items: center; }
 
 /* thẻ câu hỏi, nhãn, chiếu lớp */
 .kt-line { margin: 0 0 6px; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
