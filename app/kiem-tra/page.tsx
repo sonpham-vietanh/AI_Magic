@@ -1,6 +1,7 @@
 'use client';
 
 import { loadReviewerKey, reviewerErrorText, reviewerHeaders, saveReviewerKey } from '@/components/kho/reviewerKey';
+import { readActor, writeActor } from '@/lib/agent/actor';
 import { useCallback, useEffect, useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
@@ -249,6 +250,8 @@ function ExamTab() {
 
   useEffect(() => {
     setReviewerKey(loadReviewerKey());
+    const savedActor = readActor();
+    if (savedActor) setActor((cur) => cur || savedActor);
   }, []);
 
   const fetchList = useCallback(async () => {
@@ -302,7 +305,17 @@ function ExamTab() {
           <div className="ag-field-row kt-row">
             <div>
               <label htmlFor="e-actor" className="ag-field-label">Tên người soạn</label>
-              <input id="e-actor" className="ag-field" value={actor} onChange={(e) => setActor(e.target.value)} autoComplete="name" />
+              <input
+                id="e-actor"
+                className="ag-field"
+                value={actor}
+                onChange={(e) => {
+                  setActor(e.target.value);
+                  writeActor(e.target.value);
+                }}
+                placeholder="Ví dụ: Cô Nguyễn Thị Lan"
+                autoComplete="name"
+              />
             </div>
             <div>
               <label htmlFor="e-date" className="ag-field-label">Ngày thi (tuỳ chọn)</label>

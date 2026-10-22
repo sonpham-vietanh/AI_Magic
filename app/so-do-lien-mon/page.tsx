@@ -487,17 +487,29 @@ export default function KnowledgeGraphPage() {
                       Soạn từ bài đang xem
                     </div>
                     <div className="sd-tools">
-                      <Link href={`/?nodeId=${center.id}&tool=khbd-5512`} className="ag-btn dark">
+                      <Link
+                        href={`/?format=ke_hoach&bai=${encodeURIComponent(center.id)}&baiTitle=${encodeURIComponent(center.title)}`}
+                        className="ag-btn primary"
+                      >
                         Soạn giáo án
                       </Link>
                       <Link
-                        href={`/?nodeId=${center.id}&tool=ktdg-trac-nghiem-4-lua-chon`}
+                        href={`/?format=de_kiem_tra&bai=${encodeURIComponent(center.id)}&baiTitle=${encodeURIComponent(center.title)}`}
                         className="ag-btn"
                       >
                         Tạo đề kiểm tra
                       </Link>
-                      <Link href={`/?nodeId=${center.id}&tool=pht-tram-hoc-tap`} className="ag-btn">
+                      <Link
+                        href={`/?format=worksheet&bai=${encodeURIComponent(center.id)}&baiTitle=${encodeURIComponent(center.title)}`}
+                        className="ag-btn"
+                      >
                         Tạo phiếu học tập
+                      </Link>
+                      <Link
+                        href={`/cong-cu?nodeId=${encodeURIComponent(center.id)}&tool=khbd-5512`}
+                        className="ag-btn"
+                      >
+                        Mở trong Kho công cụ
                       </Link>
                     </div>
 

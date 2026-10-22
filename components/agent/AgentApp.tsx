@@ -509,10 +509,19 @@ export function AgentApp() {
       const h = q.get('h');
       const v = q.get('v');
       const fresh = q.get('new');
-      const fmt = q.get('format') as FormatValue | null;
+      const rawTool = q.get('tool');
+      const toolFmt: FormatValue | null =
+        rawTool === 'khbd-5512'
+          ? 'ke_hoach'
+          : rawTool?.startsWith('ktdg-')
+            ? 'de_kiem_tra'
+            : rawTool?.startsWith('pht-')
+              ? 'worksheet'
+              : null;
+      const fmt = (q.get('format') as FormatValue | null) || toolFmt;
       // Tham số đến từ các trang khác: lớp (Lớp học), bài và bài liên kết (Sơ đồ liên môn).
       const classId = q.get('classId');
-      const bai = q.get('bai');
+      const bai = q.get('bai') || q.get('nodeId');
       const baiTitle = q.get('baiTitle');
       const lienKet = q.get('lienKet');
       const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
@@ -541,6 +550,14 @@ export function AgentApp() {
         if (patch.lienKetId) bits.push('bài liên kết để tích hợp liên môn');
         if (bits.length) say(`Mình đã nhận sẵn: ${bits.join(', ')}.`);
         advance(next);
+        if (patch.baiDayId && (!baiTitle || !baiTitle.trim())) {
+          fetch(`/api/supabase/knowledge?atomId=${encodeURIComponent(patch.baiDayId)}`)
+            .then(async (res) => {
+              const j = (await res.json().catch(() => ({}))) as { ok?: boolean; atom?: { title?: string } };
+              if (res.ok && j.ok && j.atom?.title) apply({ baiTitle: j.atom.title });
+            })
+            .catch(() => undefined);
+        }
         if (patch.lienKetId) {
           // Lấy tên bài liên kết để hiển thị thân thiện (không bắt buộc).
           fetch(`/api/supabase/knowledge?atomId=${encodeURIComponent(patch.lienKetId)}`)
@@ -703,9 +720,34 @@ export function AgentApp() {
                   </option>
                 ))}
               </select>
+              {slots.baiTitle && (
+                <button
+                  type="button"
+                  className="ag-who-pill"
+                  title="Đổi bài dạy"
+                  onClick={() => editStep('bai')}
+                >
+                  <Icon name="book" size={15} />
+                  <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {slots.baiTitle}
+                  </span>
+                </button>
+              )}
             </div>
             <div className="ag-chat-top-right">
               <TeacherName value={actor} onSave={saveActor} ready={actorReady} inline />
+              {msgs.length > 0 && (
+                <button
+                  type="button"
+                  className="ag-btn small"
+                  onClick={resetChat}
+                  disabled={busy}
+                  title="Bắt đầu lại cuộc trò chuyện"
+                >
+                  <Icon name="refresh" size={16} />
+                  Làm mới
+                </button>
+              )}
               {hasResults && !canvasEntry && (
                 <button
                   type="button"
@@ -716,7 +758,18 @@ export function AgentApp() {
                   Mở bản soạn
                 </button>
               )}
-              <Link href="/soan-bai" className="ag-btn small">
+              <Link
+                href={(() => {
+                  const p = new URLSearchParams();
+                  if (slots.format) p.set('format', slots.format);
+                  if (slots.baiDayId) p.set('bai', slots.baiDayId);
+                  if (slots.baiTitle) p.set('baiTitle', slots.baiTitle);
+                  if (slots.classId) p.set('classId', slots.classId);
+                  const qs = p.toString();
+                  return qs ? `/soan-bai?${qs}` : '/soan-bai';
+                })()}
+                className="ag-btn small"
+              >
                 <Icon name="clipboard" size={16} />
                 Dùng biểu mẫu
               </Link>

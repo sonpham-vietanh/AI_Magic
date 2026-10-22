@@ -38,7 +38,7 @@ const todayStr = () => {
 const initialForm = (): SoanBaiForm => ({
   ngayDay: todayStr(),
   baiDayId: '',
-  bloomThapNhat: '',
+  bloomThapNhat: 'hieu',
   ngonNgu: 'vi',
   phongCach: 'truyen_thong',
   formatDauRa: 'ke_hoach',
@@ -75,13 +75,36 @@ export function SoanBaiView() {
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Khôi phục tham số lần trước (bài dạy luôn chọn lại)
+  // Khôi phục tham số lần trước và nhận tham số từ URL (?bai=...&baiTitle=...&format=...&classId=...)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw) as Partial<SoanBaiForm>;
-        setForm((f) => ({ ...f, ...saved, baiDayId: '', ngayDay: f.ngayDay, suKien: { ...f.suKien, ...(saved.suKien || {}) } }));
+      const saved = raw ? (JSON.parse(raw) as Partial<SoanBaiForm>) : {};
+      const q = new URLSearchParams(window.location.search);
+      const bai = q.get('bai');
+      const baiTitle = q.get('baiTitle');
+      const fmt = q.get('format');
+      const classId = q.get('classId');
+      setForm((f) => ({
+        ...f,
+        ...saved,
+        bloomThapNhat: saved.bloomThapNhat || f.bloomThapNhat || 'hieu',
+        baiDayId: bai || '',
+        formatDauRa: fmt || saved.formatDauRa || f.formatDauRa,
+        classId: classId || saved.classId || '',
+        ngayDay: f.ngayDay,
+        suKien: { ...f.suKien, ...(saved.suKien || {}) },
+      }));
+      if (bai) {
+        setLesson({ id: bai, code: bai, title: baiTitle || bai });
+        if (!baiTitle) {
+          fetch(`/api/supabase/knowledge?atomId=${encodeURIComponent(bai)}`)
+            .then((r) => r.json())
+            .then((d: { ok?: boolean; atom?: AtomLite }) => {
+              if (d.ok && d.atom) setLesson(d.atom);
+            })
+            .catch(() => {});
+        }
       }
     } catch {
       /* bỏ qua */
@@ -119,7 +142,13 @@ export function SoanBaiView() {
   const setSk = (k: keyof SoanBaiForm['suKien'], v: string | boolean) =>
     setForm((f) => ({ ...f, suKien: { ...f.suKien, [k]: v } }));
 
-  const gradeClasses = useMemo(() => CLASS_PROFILES.filter((c) => String(c.grade) === '10'), []);
+  const classGroups = useMemo(() => {
+    const grades = Array.from(new Set(CLASS_PROFILES.map((c) => String(c.grade)))).sort((a, b) => Number(a) - Number(b));
+    return grades.map((g) => ({
+      grade: g,
+      classes: CLASS_PROFILES.filter((c) => String(c.grade) === g),
+    }));
+  }, []);
   const preview = bloomPreview(form.bloomThapNhat);
 
   async function run(regenerationOf?: string) {
@@ -298,7 +327,11 @@ export function SoanBaiView() {
               <label className="ag-field-label" htmlFor="sb-class">Lớp (tuỳ chọn)</label>
               <select id="sb-class" className="ag-field" value={form.classId} onChange={(e) => set('classId', e.target.value)}>
                 <option value="">Không chọn lớp</option>
-                {gradeClasses.map((c) => <option key={c.id} value={c.id}>{c.className} · {c.campus}</option>)}
+                {classGroups.map((grp) => (
+                  <optgroup key={grp.grade} label={`Khối ${grp.grade}`}>
+                    {grp.classes.map((c) => <option key={c.id} value={c.id}>{c.className} · {c.campus}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
           </div>

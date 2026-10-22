@@ -471,6 +471,7 @@ export function RunCard({
   }
 
   if (run.status === 'running') {
+    const stepState = (idx: number): 'ok' | 'wait' => (secs >= (idx + 1) * 2 ? 'ok' : 'wait');
     return (
       <div className="ag-run" role="status" aria-live="polite">
         <div className="ag-run-head">
@@ -481,10 +482,10 @@ export function RunCard({
           <span className="ag-timer">{secs} giây</span>
         </div>
         <ul className="ag-trace">
-          <TraceLine state="wait" text="Tra bản chuẩn trong Kho học liệu" />
-          {run.hasNews && <TraceLine state="wait" text="Kiểm tra sự kiện thời sự" />}
-          <TraceLine state="wait" text="Chọn quy trình soạn phù hợp" />
-          <TraceLine state="wait" text="Soạn nội dung theo các bậc tư duy" />
+          <TraceLine state={stepState(0)} text="Tra bản chuẩn trong Kho học liệu" />
+          {run.hasNews && <TraceLine state={stepState(1)} text="Kiểm tra sự kiện thời sự" />}
+          <TraceLine state={stepState(run.hasNews ? 2 : 1)} text="Chọn quy trình soạn phù hợp" />
+          <TraceLine state={stepState(run.hasNews ? 3 : 2)} text="Soạn nội dung theo các bậc tư duy" />
           <TraceLine state="wait" text="Tự soi lại theo 6 tiêu chí" />
         </ul>
         <div className="ag-actions">
@@ -493,7 +494,7 @@ export function RunCard({
             Dừng lại
           </button>
         </div>
-        <p className="ag-note">Thường mất khoảng một phút. Mình sẽ báo ngay khi xong.</p>
+        <p className="ag-note">Hệ thống tự động ưu tiên bản chuẩn trong Kho. Mình sẽ báo ngay khi xong.</p>
       </div>
     );
   }

@@ -8,6 +8,7 @@ import type {
 } from '@/app/api/generate-pack/route';
 import '@/app/ui-cc.css';
 import { ALL_TOOLS, getToolById } from '@/lib/catalog';
+import { readActor } from '@/lib/agent/actor';
 import { CLASS_PROFILES, getClassById } from '@/lib/classes';
 import type {
   SupabaseAtom,
@@ -116,7 +117,10 @@ export function DashboardClient({
             readApiJson<{ ok?: boolean; items?: SupabaseTainguyenMeta[] }>(r),
           ),
         ]);
-        if (ov.ok && ov.overview?.users?.[0]?.name) {
+        const savedActor = readActor();
+        if (savedActor) {
+          setSelectedTeacherName(savedActor);
+        } else if (ov.ok && ov.overview?.users?.[0]?.name) {
           setSelectedTeacherName(ov.overview.users[0].name as string);
         }
         if (tn.ok && tn.items) setFallbackSims(tn.items);

@@ -72,6 +72,7 @@ export function ResultPanel(p: ResultPanelProps) {
   const [editing, setEditing] = useState(false);
   const [exportError, setExportError] = useState('');
   const [accepting, setAccepting] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [sel, setSel] = useState(0);
 
   const artifacts = useMemo(() => getArtifacts(r), [r]);
@@ -117,6 +118,17 @@ export function ResultPanel(p: ResultPanelProps) {
       await p.onAccept();
     } finally {
       setAccepting(false);
+    }
+  };
+
+  const copyText = async () => {
+    if (!p.text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(p.text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setExportError('Trình duyệt không cho phép sao chép tự động. Cô/thầy bôi đen văn bản để chép.');
     }
   };
 
@@ -412,6 +424,12 @@ export function ResultPanel(p: ResultPanelProps) {
           <Icon name="refresh" />
           Sinh lại
         </button>
+        {p.text.trim().length > 0 && (
+          <button type="button" className="ag-btn" onClick={() => void copyText()}>
+            <Icon name={copied ? 'check' : 'clipboard'} />
+            {copied ? 'Đã chép' : 'Sao chép'}
+          </button>
+        )}
         {!cur && (
           <>
             <button type="button" className="ag-btn" onClick={download} disabled={blocked}>
