@@ -41,14 +41,19 @@ function getSupabaseCreds(): { url: string; key: string } | null {
   ) {
     return null;
   }
+  // Máy dev dùng chung `.env.local` với production nên mặc định KHÔNG đồng bộ lên kho đám mây thật.
+  // Chỉ bật khi chạy production, hoặc khi đặt VA_CLOUD_STORE=1 một cách chủ động.
+  if (process.env.NODE_ENV !== 'production' && process.env.VA_CLOUD_STORE !== '1') return null;
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
-  const key = (
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    ''
-  ).trim();
+  // Ghi dữ liệu vận hành chỉ bằng khóa secret của máy chủ, không dùng khóa publishable.
+  const key = (process.env.SUPABASE_SECRET_KEY || '').trim();
   if (!url || !key) return null;
   return { url, key };
+}
+
+/** Kho đám mây có đang bật không (đủ cấu hình và đúng môi trường). */
+export function isCloudStoreEnabled(): boolean {
+  return getSupabaseCreds() !== null;
 }
 
 /**
@@ -114,7 +119,7 @@ export function resetCloudStoreCache(): void {
  */
 export async function readCloudStore<T>(
   storeKey: string,
-): Promise<{ found: boolean; data?: T; backend: CloudBackendKind }> {
+): Promise<{ found: boolean; data?: T; backend: CloudBackendKind; failed?: boolean }> {
   const creds = getSupabaseCreds();
   if (!creds) return { found: false, backend: 'disabled' };
 
@@ -146,10 +151,12 @@ export async function readCloudStore<T>(
       const errText = await res.text().catch(() => '');
       if (isTableMissing(res.status, errText)) {
         detectedBackend = 'isolated_kv';
+      } else {
+        // Lỗi thật (401/403/5xx): KHÔNG coi là "chưa có dữ liệu", nếu không lần ghi sau sẽ đè mất dữ liệu đám mây.
+        return { found: false, backend: 'dedicated_table', failed: true };
       }
     } catch {
-      // Nếu lỗi mạng thoáng qua, trả về found: false để safeJson đọc từ đĩa cục bộ.
-      return { found: false, backend: 'disabled' };
+      return { found: false, backend: 'disabled', failed: true };
     }
   }
 
@@ -159,7 +166,7 @@ export async function readCloudStore<T>(
       creds,
       `/studio_kv?collection=eq.${encodeURIComponent(VA_ISOLATED_KV_COLLECTION)}&id=eq.${encodeURIComponent(storeKey)}&select=j&limit=1`,
     );
-    if (!res.ok) return { found: false, backend: 'isolated_kv' };
+    if (!res.ok) return { found: false, backend: 'isolated_kv', failed: true };
     const rows = (await res.json()) as { j?: T }[];
     if (Array.isArray(rows) && rows.length > 0 && rows[0].j !== undefined) {
       memoryCache.set(storeKey, {
@@ -171,7 +178,7 @@ export async function readCloudStore<T>(
     }
     return { found: false, backend: 'isolated_kv' };
   } catch {
-    return { found: false, backend: 'disabled' };
+    return { found: false, backend: 'disabled', failed: true };
   }
 }
 

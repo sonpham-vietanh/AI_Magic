@@ -34,12 +34,12 @@ function sessionStorePath(): string {
 }
 
 function getSigningSecret(): string {
-  return (
-    process.env.SESSION_SECRET?.trim() ||
-    process.env.REVIEWER_KEY?.trim() ||
-    process.env.SUPABASE_SECRET_KEY?.trim() ||
-    'va-teaching-studio-local-secret-key'
-  );
+  const fromEnv =
+    process.env.SESSION_SECRET?.trim() || process.env.REVIEWER_KEY?.trim() || process.env.SUPABASE_SECRET_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  // Khóa mặc định cứng chỉ dành cho dev/test; production mà thiếu cấu hình thì từ chối ký thay vì dùng khóa ai cũng biết.
+  if (process.env.NODE_ENV === 'production') throw new Error('Chưa cấu hình SESSION_SECRET để ký phiên đăng nhập.');
+  return 'va-teaching-studio-local-secret-key';
 }
 
 function base64UrlEncode(input: string): string {
@@ -80,7 +80,12 @@ export function verifySessionToken(token: string, nowMs?: number): TeacherSessio
   const [encoded, sig] = parts;
   if (!encoded || !sig) return null;
 
-  const expectedSig = signPayload(encoded);
+  let expectedSig: string;
+  try {
+    expectedSig = signPayload(encoded);
+  } catch {
+    return null;
+  }
   if (!timingSafeEqualStr(sig, expectedSig)) return null;
 
   try {
