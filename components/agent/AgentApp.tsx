@@ -743,6 +743,8 @@ export function AgentApp() {
             entry={run.resultId ? results[run.resultId] : undefined}
             onCancel={cancelRun}
             onOpen={(id) => setCanvasId(id)}
+            onRetry={() => void startRun(slotsRef.current)}
+            retryDisabled={busy}
           />
         );
       }
@@ -821,6 +823,7 @@ export function AgentApp() {
                   type="button"
                   className="ag-who-pill"
                   title="Đổi bài dạy"
+                  aria-label={`Đổi bài dạy, đang chọn: ${slots.baiTitle}`}
                   onClick={() => editStep('bai')}
                 >
                   <Icon name="book" size={15} />

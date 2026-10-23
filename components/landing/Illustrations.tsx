@@ -1,5 +1,5 @@
 // Minh hoạ SVG tự vẽ cho trang giới thiệu. Chỉ để trang trí (aria-hidden); nội dung chữ nằm ở thẻ cha.
-const N = '#14153A';
+const N = '#26275D';
 const G = '#F9DD0E';
 const L = '#E2E3F0';
 
@@ -21,7 +21,7 @@ export function IllPlan() {
       {[0, 1, 2, 3].map((i) => (
         <g key={i} transform={`translate(0 ${52 + i * 20})`}>
           <circle cx="82" cy="6" r="7" fill={i === 2 ? G : N} />
-          <text x="82" y="9.2" textAnchor="middle" fontSize="9" fontWeight="800" fill={i === 2 ? N : '#fff'} fontFamily="Manrope,sans-serif">{i + 1}</text>
+          <text x="82" y="9.2" textAnchor="middle" fontSize="9" fontWeight="800" fill={i === 2 ? N : '#fff'} fontFamily="Be Vietnam Pro,sans-serif">{i + 1}</text>
           <rect x="95" y="1" width={70 - i * 6} height="5" rx="2.5" fill={N} opacity=".75" />
           <rect x="95" y="9" width={52 - i * 4} height="4" rx="2" fill={L} />
         </g>
@@ -93,7 +93,7 @@ export function IllQuiz() {
           <g key={c}>
             <rect x={x} y={y} width="86" height="34" rx="8" fill={on ? G : '#fff'} stroke={on ? N : L} strokeWidth="2" />
             <circle cx={x + 16} cy={y + 17} r="9" fill={on ? N : L} />
-            <text x={x + 16} y={y + 20.5} textAnchor="middle" fontSize="10" fontWeight="800" fill={on ? '#fff' : N} fontFamily="Manrope,sans-serif">{c}</text>
+            <text x={x + 16} y={y + 20.5} textAnchor="middle" fontSize="10" fontWeight="800" fill={on ? '#fff' : N} fontFamily="Be Vietnam Pro,sans-serif">{c}</text>
             <rect x={x + 32} y={y + 14} width="40" height="5" rx="2.5" fill={N} opacity=".55" />
           </g>
         );
@@ -117,7 +117,7 @@ export function IllExam() {
       ))}
       <g transform="translate(108 30)">
         {['NB', 'TH', 'VD'].map((t, i) => (
-          <text key={t} x={26 + i * 36} y="-6" textAnchor="middle" fontSize="9" fontWeight="800" fill={N} fontFamily="Manrope,sans-serif">{t}</text>
+          <text key={t} x={26 + i * 36} y="-6" textAnchor="middle" fontSize="9" fontWeight="800" fill={N} fontFamily="Be Vietnam Pro,sans-serif">{t}</text>
         ))}
         {cells.map((row, r) =>
           row.map((v, c) => (

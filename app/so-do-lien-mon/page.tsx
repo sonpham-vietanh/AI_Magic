@@ -256,7 +256,7 @@ export default function KnowledgeGraphPage() {
                   </div>
                   <div>
                     <label className="ag-field-label" htmlFor="sb-grade">
-                      Lớp
+                      Khối
                     </label>
                     <select
                       id="sb-grade"
@@ -267,10 +267,10 @@ export default function KnowledgeGraphPage() {
                         setSbGrade(e.target.value);
                       }}
                     >
-                      <option value="all">Tất cả lớp</option>
+                      <option value="all">Tất cả khối</option>
                       {['6', '7', '8', '9', '10', '11', '12'].map((g) => (
                         <option key={g} value={g}>
-                          Lớp {g}
+                          Khối {g}
                         </option>
                       ))}
                     </select>
@@ -318,7 +318,7 @@ export default function KnowledgeGraphPage() {
                     >
                       <b>{cleanMath(a.title)}</b>
                       <small>
-                        {a.subject} · Lớp {a.grade}
+                        {a.subject} · Khối {a.grade}
                         {a.chapter ? ` · ${a.chapter}` : ''}
                       </small>
                     </button>
@@ -359,7 +359,7 @@ export default function KnowledgeGraphPage() {
                         <h2>{cleanMath(center.title)}</h2>
                         <div className="sd-meta">
                           <span className="sd-pill">
-                            {center.subject} · Lớp {center.grade}
+                            {center.subject} · Khối {center.grade}
                           </span>
                           {center.chapter && <span className="sd-pill gold">{center.chapter}</span>}
                           <span className="sd-pill">{links.length} liên kết</span>
@@ -403,7 +403,7 @@ export default function KnowledgeGraphPage() {
                                 <span className="sd-link-body">
                                   <b>{cleanMath(atom.title)}</b>
                                   <small>
-                                    {atom.subject} · Lớp {atom.grade} · {LINK_LABEL[kind]}
+                                    {atom.subject} · Khối {atom.grade} · {LINK_LABEL[kind]}
                                   </small>
                                 </span>
                               </button>
@@ -417,7 +417,7 @@ export default function KnowledgeGraphPage() {
 
                 {center && activeLink && (
                   <section className="sd-panel" aria-live="polite" aria-label="Chi tiết liên kết">
-                    <div className="ag-label" style={{ padding: 0 }}>
+                    <div className="sd-label">
                       Cặp liên kết đang chọn
                     </div>
                     <div className="sd-pair">
@@ -425,7 +425,7 @@ export default function KnowledgeGraphPage() {
                         <small>Bài đang xem</small>
                         <b>{cleanMath(center.title)}</b>
                         <span>
-                          {center.subject} · Lớp {center.grade}
+                          {center.subject} · Khối {center.grade}
                         </span>
                       </div>
                       <div className="sd-pair-mid" aria-hidden="true">
@@ -437,7 +437,7 @@ export default function KnowledgeGraphPage() {
                         <small>Bài liên kết</small>
                         <b>{cleanMath(activeLink.atom.title)}</b>
                         <span>
-                          {activeLink.atom.subject} · Lớp {activeLink.atom.grade}
+                          {activeLink.atom.subject} · Khối {activeLink.atom.grade}
                         </span>
                       </div>
                     </div>
@@ -476,7 +476,7 @@ export default function KnowledgeGraphPage() {
 
                 {center && (
                   <section className="sd-panel" aria-label="Về bài đang xem">
-                    <div className="ag-label" style={{ padding: 0 }}>
+                    <div className="sd-label">
                       Soạn từ bài đang xem
                     </div>
                     <div className="sd-tools">

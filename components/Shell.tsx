@@ -335,11 +335,11 @@ export function Shell({
           {recent.length > 0 && (
             <>
               <div className="ag-label">Gần đây</div>
-              <div className="ag-recent">
+              <div className="rail-hist">
                 {recent.slice(0, 5).map((h) => (
-                  <button key={h.id} type="button" className="ag-recent-item" onClick={() => openHistory(h.id)}>
-                    <span className="ag-recent-title">{h.title}</span>
-                    <span className="ag-recent-meta">{formatWhen(h.at)}</span>
+                  <button key={h.id} type="button" className="rail-hist-item" onClick={() => openHistory(h.id)}>
+                    <span className="rail-hist-title">{h.title}</span>
+                    <span className="rail-hist-meta">{formatWhen(h.at)}</span>
                   </button>
                 ))}
               </div>

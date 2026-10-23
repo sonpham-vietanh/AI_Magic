@@ -18,7 +18,7 @@ const ACTOR_KEY = 'va.actor';
 const CONTEXT = 2;
 
 function formatLabel(id: string): string {
-  return FORMAT_DAU_RA.find((f) => f.id === id)?.label ?? id;
+  return FORMAT_DAU_RA.find((f) => f.id === id)?.label ?? 'Học liệu khác';
 }
 function when(iso: string): string {
   const d = new Date(iso);

@@ -234,7 +234,7 @@ export function AdminUsers() {
   if (gate === 'error') {
     return (
       <div className="qt-gate" role="alert">
-        <span className="qt-gate-ico warn" aria-hidden="true">
+        <span className="qt-gate-ico qt-gate-ico-warn" aria-hidden="true">
           <Icon name="alert" size={28} />
         </span>
         <h2>Chưa tải được dữ liệu</h2>
@@ -257,7 +257,7 @@ export function AdminUsers() {
     <div className="qt-wrap">
       <div className="qt-tiles">
         {tiles.map((t) => (
-          <div key={t.label} className={`qt-tile${t.star ? ' star' : ''}`}>
+          <div key={t.label} className={`qt-tile${t.star ? " qt-tile-star" : ""}`}>
             <div className="qt-tile-label">{t.label}</div>
             <div className="qt-tile-num">{t.value}</div>
             <div className="qt-tile-hint">{t.hint}</div>
@@ -283,7 +283,7 @@ export function AdminUsers() {
       </div>
 
       <div className="qt-live" role="status" aria-live="polite">
-        {notice && <p className={`qt-toast ${notice.kind}`}>{notice.text}</p>}
+        {notice && <p className={`qt-toast qt-toast-${notice.kind}`}>{notice.text}</p>}
       </div>
 
       {tab === 'users' ? (
@@ -335,7 +335,7 @@ export function AdminUsers() {
                   {users.map((u) => {
                     const locked = busy === u.email;
                     return (
-                      <tr key={u.email} className={u.blocked ? 'blocked' : undefined}>
+                      <tr key={u.email} className={u.blocked ? "qt-row-blocked" : undefined}>
                         <td>
                           <div className="qt-who">
                             <span className="qt-avatar" aria-hidden="true">{(u.name || u.email).trim().charAt(0).toUpperCase()}</span>
@@ -360,7 +360,7 @@ export function AdminUsers() {
                           {u.fromEnv && <small className="qt-env">Cấu hình máy chủ: {ROLE_LABEL[u.fromEnv]}</small>}
                         </td>
                         <td>
-                          <span className={`qt-badge ${u.blocked ? 'bad' : 'good'}`}>{u.blocked ? 'Bị chặn' : 'Hoạt động'}</span>
+                          <span className={`qt-badge qt-badge-${u.blocked ? "bad" : "good"}`}>{u.blocked ? 'Bị chặn' : 'Hoạt động'}</span>
                         </td>
                         <td className="qt-nowrap">
                           <FmtCell iso={u.firstSeen} />
@@ -409,7 +409,7 @@ export function AdminUsers() {
                           <FmtCell iso={a.at} />
                         </td>
                       <td>{a.actor}</td>
-                      <td><span className={`qt-badge ${a.action === 'block' ? 'bad' : a.action === 'unblock' ? 'good' : 'info'}`}>{describe(a)}</span></td>
+                      <td><span className={`qt-badge qt-badge-${a.action === "block" ? "bad" : a.action === "unblock" ? "good" : "info"}`}>{describe(a)}</span></td>
                       <td>{a.target}</td>
                     </tr>
                   ))}

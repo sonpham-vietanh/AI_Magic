@@ -40,7 +40,7 @@
   font-weight: 700;
   font-size: 16px;
   background: var(--navy-50);
-  color: var(--navy);
+  color: var(--navy-600);
   border: 2px solid var(--line-strong);
 }
 .kh-step-txt {
@@ -58,25 +58,25 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.kh-step.done .kh-step-num {
+.kh-step-done .kh-step-num {
   background: var(--success);
   border-color: var(--success);
   color: #fff;
 }
-.kh-step.done .kh-step-btn {
+.kh-step-done .kh-step-btn {
   border-color: var(--success);
 }
-.kh-step.doing .kh-step-num {
+.kh-step-doing .kh-step-num {
   background: var(--warn-bg);
   border-color: var(--warn);
   color: var(--warn);
 }
-.kh-step.bad .kh-step-num {
+.kh-step-bad .kh-step-num {
   background: var(--danger-bg);
   border-color: var(--danger);
   color: var(--danger);
 }
-.kh-step.bad .kh-step-btn {
+.kh-step-bad .kh-step-btn {
   border-color: var(--danger);
 }
 
@@ -105,9 +105,9 @@
   font-size: 16px;
   line-height: 1.5;
 }
-.kh-sibs .cur {
+.kh-sibs-cur {
   font-weight: 700;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 
 /* ---- sinh tài nguyên ---- */
@@ -141,22 +141,22 @@
   border: 1px solid var(--line-strong);
   border-radius: 99px;
   background: var(--surface);
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 16px;
   cursor: pointer;
 }
-.kh-kind.on {
+.kh-kind-on {
   background: var(--navy-50);
-  border-color: var(--navy);
+  border-color: var(--navy-600);
   font-weight: 600;
 }
 .kh-kind input {
   width: 20px;
   height: 20px;
-  accent-color: var(--navy);
+  accent-color: var(--navy-600);
 }
-.kh-gen .ag-btn.small,
-.kh-detail .ag-btn.small {
+.kh-gen .kh-btn.small,
+.kh-detail .kh-btn.small {
   min-height: 44px;
   font-size: 16px;
 }
@@ -175,7 +175,7 @@
 .kh-bar i {
   display: block;
   height: 100%;
-  background: var(--navy);
+  background: var(--navy-600);
   transition: width 0.3s;
 }
 .kh-assets {
@@ -218,7 +218,7 @@
   cursor: pointer;
   font-size: 16px;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .kh-preview-body {
   padding-top: 6px;
@@ -256,7 +256,7 @@
   cursor: pointer;
   font-size: 17px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .kh-chap > summary small {
   font-size: 16px;
@@ -285,19 +285,19 @@
   min-width: 0;
 }
 .kh-lesson-card:hover {
-  border-color: var(--navy);
+  border-color: var(--navy-600);
   box-shadow: var(--shadow-sm);
 }
-.kh-lesson-card.ok {
+.kh-lesson-ok {
   border-left: 4px solid var(--success);
 }
-.kh-lesson-card .t {
+.kh-lesson-t {
   font-size: 17px;
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
-.kh-lesson-card .s {
+.kh-lesson-s {
   font-size: 16px;
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -315,7 +315,7 @@
   padding: 0 10px;
   border-radius: 99px;
   background: var(--navy-50);
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 16px;
 }
 .kh-skel-card {
@@ -402,14 +402,14 @@
   border: 1px solid var(--line-strong);
   border-radius: 99px;
   background: var(--surface);
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
 .kh-tab[aria-selected='true'] {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--navy-600);
+  border-color: var(--navy-600);
   color: #fff;
 }
 .kh-exports {
@@ -424,7 +424,7 @@
 .kh-field h4 {
   margin: 0 0 4px;
   font-size: 16px;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .kh-field div {
   font-size: 16px;
@@ -474,7 +474,7 @@
   font-family: var(--font-display, inherit);
   font-size: 32px;
   line-height: 1;
-  color: var(--navy);
+  color: var(--navy-600);
   font-variant-numeric: tabular-nums;
 }
 .kh-sum-bar {
@@ -557,7 +557,7 @@
   outline: none;
   box-shadow: var(--ag-focus);
 }
-.kh-lesson-card.ok {
+.kh-lesson-ok {
   border-left-color: var(--success);
 }
 .kh-empty {
@@ -571,7 +571,7 @@
 .kh-empty svg {
   color: var(--navy-600);
 }
-.kh-empty .ag-btn {
+.kh-empty .kh-btn {
   margin-top: 8px;
 }
 
@@ -601,7 +601,7 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: 8px;
-  background: var(--navy);
+  background: var(--navy-600);
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -620,7 +620,7 @@
 }
 .kh-tab:hover:not([aria-selected='true']) {
   background: var(--navy-50);
-  border-color: var(--navy);
+  border-color: var(--navy-600);
 }
 .kh-tab:focus-visible,
 .kh-tabbtn:focus-visible {
@@ -665,7 +665,7 @@
   margin: 0 0 4px;
   font-size: 15px;
   letter-spacing: 0.01em;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .kh-qcount {
   margin: 0 0 10px;
@@ -701,5 +701,19 @@
   }
   .kh-sum-main b {
     font-size: 28px;
+  }
+}
+
+/* điện thoại: ba tab nằm gọn trên một hàng */
+@media (max-width: 720px) {
+  .kh-tablist {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .kh-tab {
+    flex: 1 1 auto;
+    padding: 0 10px;
+    white-space: nowrap;
+    font-size: 15px;
   }
 }

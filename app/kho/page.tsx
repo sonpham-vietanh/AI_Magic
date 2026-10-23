@@ -199,7 +199,7 @@ export default function KhoPage() {
               {rows.length > 0 && (
                 <button
                   type="button"
-                  className="ag-btn small"
+                  className="ag-btn small kh-btn"
                   onClick={() => {
                     setQ('');
                     setFilter('all');
@@ -231,11 +231,11 @@ export default function KhoPage() {
                     <button
                       key={r.atomId}
                       type="button"
-                      className={`kh-lesson-card${r.status === 'approved' ? ' ok' : ''}`}
+                      className={`kh-lesson-card${r.status === 'approved' ? ' kh-lesson-ok' : ''}`}
                       onClick={() => setOpenId(r.atomId)}
                     >
-                      <span className="t">{r.title}</span>
-                      {r.lesson && <span className="s">{r.lesson}</span>}
+                      <span className="kh-lesson-t">{r.title}</span>
+                      {r.lesson && <span className="kh-lesson-s">{r.lesson}</span>}
                       <span className="kh-row">
                         {r.status === 'approved' ? (
                           <span className="ag-status ok">Đã duyệt chuẩn{r.version ? `, v${r.version}` : ''}</span>

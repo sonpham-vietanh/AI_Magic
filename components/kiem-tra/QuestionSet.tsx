@@ -59,7 +59,7 @@ function Lines({ text }: { text: string }) {
         .split('\n')
         .map((l, i) =>
           l.trim() === '' ? null : (
-            <p key={i} className={`ag-line ${classifyLine(l) === 'li' ? 'li' : ''}`}>
+            <p key={i} className={`ag-line kt-ln ${classifyLine(l) === 'li' ? 'li' : ''}`}>
               <MathText text={l.trim()} />
             </p>
           ),

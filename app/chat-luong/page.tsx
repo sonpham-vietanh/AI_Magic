@@ -41,7 +41,7 @@ const subjectName = (k: string) => SUBJECTS.find((s) => s.code === k)?.shortName
 const toNum = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
 
 function SignalBadge({ s }: { s: Signal }) {
-  return <span className={`cl-sig ${s.tone}`}>{s.label}</span>;
+  return <span className={`cl-sig cl-sig-${s.tone}`}>{s.label}</span>;
 }
 
 /** Vòng tròn thể hiện phần trăm, kèm chữ thay thế cho trình đọc màn hình. */
@@ -51,7 +51,7 @@ function Gauge({ value, tone }: { value: number | null; tone: Signal['tone'] }) 
   const v = value === null ? 0 : Math.max(0, Math.min(100, value));
   return (
     <svg
-      className={`cl-gauge ${tone}`}
+      className={`cl-gauge cl-gauge-${tone}`}
       viewBox="0 0 128 128"
       width="128"
       height="128"
@@ -81,10 +81,10 @@ function Gauge({ value, tone }: { value: number | null; tone: Signal['tone'] }) 
 
 function Metric({ label, value, hint, tone, sub }: { label: string; value: string; hint: string; tone?: Signal['tone']; sub?: string }) {
   return (
-    <div className={`cl-tile${tone === 'low' ? ' warnt' : ''}`}>
+    <div className={`cl-tile${tone === 'low' ? ' cl-tile-warn' : ''}`}>
       <div className="cl-tile-label">{label}</div>
       <div className="cl-tile-num">{value}</div>
-      {sub && <div className={`cl-tile-sub ${tone ?? ''}`}>{sub}</div>}
+      {sub && <div className={`cl-tile-sub cl-tile-sub-${tone ?? 'none'}`}>{sub}</div>}
       <p className="cl-tile-hint">{hint}</p>
     </div>
   );
@@ -321,14 +321,14 @@ export default function ChatLuongPage() {
                 {lessons.map((l) => {
                   const rs = regenSignal(l.regenRate, l.flagged);
                   return (
-                    <div key={l.lessonKey} className={`cl-row${l.flagged ? ' flag' : ''}`}>
+                    <div key={l.lessonKey} className={`cl-row${l.flagged ? ' cl-row-flag' : ''}`}>
                       <span className="cl-row-name">
                         {l.lessonKey}
                         <small>
                           {l.generations} lượt sinh, {l.regenerations} lần sinh lại
                         </small>
                       </span>
-                      <span className={`cl-bar ${rs.tone}`} aria-hidden="true">
+                      <span className={`cl-bar cl-bar-${rs.tone}`} aria-hidden="true">
                         <i style={{ width: `${Math.min(100, l.regenRate * 100)}%` }} />
                       </span>
                       <span className="cl-pct">{vnPct(l.regenRate * 100)}</span>
@@ -355,7 +355,7 @@ export default function ChatLuongPage() {
                 đề đã có
               </span>
             </div>
-            <div className="cl-bar big" role="progressbar" aria-label="Tiến độ bộ đề" aria-valuemin={0} aria-valuemax={target} aria-valuenow={total}>
+            <div className="cl-bar cl-bar-big" role="progressbar" aria-label="Tiến độ bộ đề" aria-valuemin={0} aria-valuemax={target} aria-valuenow={total}>
               <i style={{ width: `${Math.min(100, (total / Math.max(1, target)) * 100)}%` }} />
             </div>
             {total > 0 ? (
@@ -419,7 +419,7 @@ export default function ChatLuongPage() {
                   <legend>{c.name}</legend>
                   <div className="cl-scale" role="radiogroup" aria-label={`Điểm: ${c.name}`}>
                     {[1, 2, 3, 4, 5].map((n) => (
-                      <label key={n} className={points[c.id] === n ? 'on' : ''}>
+                      <label key={n} className={points[c.id] === n ? 'cl-on' : ''}>
                         <input
                           type="radio"
                           name={`bl-${c.id}`}

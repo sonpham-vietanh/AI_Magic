@@ -78,9 +78,9 @@ function Present({ items, onClose }: { items: QuizItem[]; onClose: () => void })
         ) : null}
       </div>
       <div className="kt-present-nav">
-        <button type="button" className="ag-btn" onClick={() => setSt((s) => presentReduce(s, 'prev'))} disabled={st.index === 0}>Câu trước</button>
-        <button type="button" className="ag-btn primary" onClick={() => setSt((s) => presentReduce(s, 'toggle'))}>{st.revealed ? 'Ẩn đáp án' : 'Xem đáp án'}</button>
-        <button type="button" className="ag-btn" onClick={() => setSt((s) => presentReduce(s, 'next'))} disabled={st.index >= st.total - 1}>Câu sau</button>
+        <button type="button" className="ag-btn kt-present-btn" onClick={() => setSt((s) => presentReduce(s, 'prev'))} disabled={st.index === 0}>Câu trước</button>
+        <button type="button" className="ag-btn primary kt-present-btn" onClick={() => setSt((s) => presentReduce(s, 'toggle'))}>{st.revealed ? 'Ẩn đáp án' : 'Xem đáp án'}</button>
+        <button type="button" className="ag-btn kt-present-btn" onClick={() => setSt((s) => presentReduce(s, 'next'))} disabled={st.index >= st.total - 1}>Câu sau</button>
       </div>
     </div>
   );

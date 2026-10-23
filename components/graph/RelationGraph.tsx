@@ -101,7 +101,7 @@ export function RelationGraph({ center, links, selectedId, onSelect, onRecenter 
             height={layout.center.h}
             rx={14}
           />
-          {wrapLabel(center.title, 24, 2).map((t, i, arr) => (
+          {wrapLabel(center.title, Math.floor((layout.center.w - 28) / 8.4), 2).map((t, i, arr) => (
             <text
               key={i}
               x={cx}

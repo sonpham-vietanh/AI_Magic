@@ -473,7 +473,7 @@ function ScriptView({ intro, speakers, stances, lines, conclusion }: { intro: st
         </p>
       )}
       <p className="rs-note">
-        Đây là giọng đọc của trình duyệt để nghe thử kịch bản, chưa phải tệp âm thanh. Hệ thống chưa kết nối dịch vụ tạo giọng nói (TTS) nên chưa xuất được tệp MP3.
+        Đây là giọng đọc của trình duyệt để nghe thử kịch bản, chưa phải tệp âm thanh. Hệ thống chưa kết nối dịch vụ tạo giọng nói nên chưa xuất được tệp MP3.
       </p>
       <ol className="rs-lines">
         {lines.map((l, i) => (

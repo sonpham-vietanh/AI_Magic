@@ -46,7 +46,7 @@
   border: 1px solid var(--line-strong);
   border-radius: 99px;
   background: var(--surface);
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -54,11 +54,11 @@
 }
 .du-chip:hover {
   background: var(--navy-50);
-  border-color: var(--navy);
+  border-color: var(--navy-600);
 }
 .du-chip[aria-pressed='true'] {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--navy-600);
+  border-color: var(--navy-600);
   color: #fff;
 }
 .du-chip b {
@@ -93,7 +93,7 @@
 }
 .du-item[aria-current='true'] {
   background: var(--gold-soft);
-  border-color: var(--navy);
+  border-color: var(--navy-600);
 }
 .du-item-title {
   display: block;
@@ -118,7 +118,7 @@
 .du-empty strong {
   display: block;
   margin-bottom: 4px;
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 16.5px;
 }
 
@@ -161,7 +161,7 @@
 .du-h3 {
   margin: 22px 0 8px;
   font-size: 16px;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .du-pkg {
   margin-top: 14px;
@@ -187,7 +187,7 @@
   padding: 0 14px;
   cursor: pointer;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 15.5px;
   list-style: none;
 }
@@ -220,7 +220,7 @@
   padding: 0;
   font-weight: 700;
   font-size: 15.5px;
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .du-crit-desc {
   margin: 2px 0 8px;
@@ -242,7 +242,7 @@
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: var(--surface);
-  color: var(--navy);
+  color: var(--navy-600);
   font-weight: 800;
   font-size: 17px;
   cursor: pointer;
@@ -259,12 +259,12 @@
   opacity: 0;
   cursor: pointer;
 }
-.du-scale label.on {
-  background: var(--navy);
-  border-color: var(--navy);
+.du-scale label.du-on {
+  background: var(--navy-600);
+  border-color: var(--navy-600);
   color: #fff;
 }
-.du-scale label.on.lowv {
+.du-scale label.du-on.du-lowv {
   background: var(--danger);
   border-color: var(--danger);
 }
@@ -300,12 +300,12 @@
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--navy);
+  color: var(--navy-600);
 }
-.du-avg-num.good {
+.du-avg-num.du-avg-good {
   color: var(--success);
 }
-.du-avg-num.bad {
+.du-avg-num.du-avg-bad {
   color: var(--danger);
 }
 .du-avg-label {
@@ -358,6 +358,8 @@
   }
   .du-back {
     display: inline-flex;
+    align-items: center;
+    min-height: 44px;
     margin-bottom: 8px;
   }
   .du-layout.has-sel .du-queue {
@@ -416,7 +418,7 @@
   font-size: 15px;
 }
 .du-history {
-  border-left: 3px solid var(--navy);
+  border-left: 3px solid var(--navy-600);
 }
 .du-whoami {
   display: flex;
@@ -427,7 +429,7 @@
   border: 1px solid var(--line);
   border-radius: var(--ag-radius-sm);
   background: var(--navy-50);
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 16px;
 }
 .du-whoami svg {

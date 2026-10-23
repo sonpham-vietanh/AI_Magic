@@ -38,6 +38,7 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
+  color: var(--ink);
 }
 .ls-form .ls-field {
   flex: 1 1 240px;
@@ -82,6 +83,7 @@
   background: var(--surface);
   padding: 12px;
   min-width: 0;
+  color: var(--ink);
 }
 .ls-lesson h3 {
   margin: 0 0 8px;
@@ -133,6 +135,7 @@
   border-radius: 14px;
   background: var(--surface);
   min-width: 0;
+  color: var(--ink);
 }
 .ls-detail h2 {
   margin: 0 0 4px;
@@ -163,6 +166,7 @@
   overflow-wrap: anywhere;
   max-height: 520px;
   overflow: auto;
+  color: var(--ink);
 }
 .ls-art {
   margin-top: 14px;
@@ -180,6 +184,7 @@
   overflow: auto;
   max-height: 520px;
   background: var(--surface);
+  color: var(--ink);
 }
 .ls-diff-line {
   display: grid;
@@ -198,13 +203,15 @@
 .ls-diff-stats li.add { background: var(--success-bg); color: var(--success); }
 .ls-diff-stats li.del { background: var(--danger-bg); color: var(--danger); }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.ls-intro { display: flex; gap: 16px; align-items: flex-start; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs); }
+.ls-intro { display: flex; gap: 16px; align-items: flex-start; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs);
+ color: var(--ink); }
 .ls-intro-ico { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--navy); color: var(--cta); }
 .ls-intro h2 { margin: 0 0 4px; font-size: 20px; color: var(--navy); }
 .ls-intro p { margin: 0 0 12px; color: var(--ink-secondary); font-size: 15px; line-height: 1.55; }
 .ls-inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .ls-inline-form .ls-field { flex: 1 1 220px; min-width: 0; }
-.ls-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.ls-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+ color: var(--ink); }
 .ls-filters .ls-field { flex: 1 1 150px; min-width: 0; }
 .ls-filters .ls-f-q { flex: 2 1 220px; }
 .ls-count { margin: 0; font-size: 14px; color: var(--muted); }
@@ -239,11 +246,34 @@
   line-height: 1.6;
 }
 .ls-error {
-  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 14px 16px;
+  border: 1px solid #F0B8B4;
+  border-left: 5px solid var(--danger);
   border-radius: 12px;
   background: var(--danger-bg);
   color: var(--ink);
   font-size: 15px;
+  line-height: 1.5;
+}
+.ls-error::before {
+  content: '!';
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+}
+.ls-error .ag-btn {
+  min-height: 44px;
 }
 
 /* Kết nối dịch vụ ngoài */
@@ -261,6 +291,7 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  color: var(--ink);
 }
 .ls-svc h2 {
   margin: 0;
@@ -301,12 +332,14 @@
   background: var(--navy-50);
   padding: 1px 6px;
   border-radius: 6px;
+  color: var(--ink);
 }
 .ls-svc-fb {
   padding: 10px 12px;
   border-radius: 10px;
   background: var(--cream);
   border: 1px solid var(--line);
+  color: var(--ink);
 }
 
 /* Nhóm menu thu gọn trong Shell */
@@ -359,7 +392,8 @@
 /* ===== Kết nối: thẻ trạng thái, khung chờ, chip ===== */
 .ls-h2 { margin: 0 0 12px; font-size: 18px; color: var(--navy); }
 .ls-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
-.ls-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs); min-width: 0; }
+.ls-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs); min-width: 0;
+ color: var(--ink); }
 .ls-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-secondary); }
 .ls-card-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .ls-card-head h3 { margin: 0; font-size: 17px; color: var(--navy); overflow-wrap: anywhere; }

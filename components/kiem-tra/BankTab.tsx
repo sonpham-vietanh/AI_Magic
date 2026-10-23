@@ -46,7 +46,7 @@ function BankCard({ item }: { item: PublicBankItem }) {
         </span>
         <span className="kt-tag">{item.lastUsedAt ? `Dùng gần nhất: ${item.lastUsedAt.slice(0, 10)}` : 'Chưa dùng'}</span>
         <span className="kt-tag">{item.kind === 'trac_nghiem' ? 'Trắc nghiệm' : 'Tự luận / trả lời ngắn'}</span>
-        {item.blocked && <span className="kt-tag warn">Đang khoá chống trùng</span>}
+        {item.blocked && <span className="kt-tag kt-tag-warn">Đang khoá chống trùng</span>}
       </div>
       <p className="kt-line"><MathText text={full ? full.noiDung : item.preview} /></p>
       {full && (

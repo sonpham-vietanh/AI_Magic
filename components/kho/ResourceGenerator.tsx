@@ -136,7 +136,7 @@ export function ResourceGenerator({ atomId, canGenerate, onAssets }: Props) {
 
       <div className="kh-kinds" role="group" aria-label="Chọn dạng tài nguyên cần sinh">
         {RESOURCE_KINDS.map((k) => (
-          <label key={k} className={`kh-kind${picked.has(k) ? ' on' : ''}`}>
+          <label key={k} className={`kh-kind${picked.has(k) ? ' kh-kind-on' : ''}`}>
             <input type="checkbox" checked={picked.has(k)} onChange={() => toggle(k)} disabled={run.running} />
             {RESOURCE_LABELS[k]}
           </label>
@@ -212,7 +212,7 @@ export function ResourceGenerator({ atomId, canGenerate, onAssets }: Props) {
                   </div>
                   <button
                     type="button"
-                    className="ag-btn small"
+                    className="ag-btn small kh-btn"
                     disabled={!canGenerate || run.running}
                     onClick={() => void generate([k])}
                     aria-label={`${a ? 'Sinh lại' : 'Sinh'} ${RESOURCE_LABELS[k]}`}

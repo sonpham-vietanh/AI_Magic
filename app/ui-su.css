@@ -1,4 +1,4 @@
-﻿/* Sá»­ dá»¥ng AI vĂ  chi phĂ­ (su-). Chá»‰ dĂ¹ng biáº¿n thÆ°Æ¡ng hiá»‡u trong globals.css. */
+/* Sử dụng AI và chi phí (su-). Chỉ dùng biến thương hiệu trong globals.css. */
 
 .su {
   display: flex;
@@ -18,7 +18,8 @@
   transition: opacity 0.15s ease;
 }
 .su-dim {
-  opacity: 0.6;
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 .su-toolbar {
@@ -54,13 +55,13 @@
   background: var(--navy-50);
 }
 .su-seg-btn[aria-pressed='true'] {
-  background: var(--navy);
+  background: var(--navy-600);
   color: #fff;
 }
 .su-seg-btn:focus-visible,
 .su-csv:focus-visible,
 .su-details summary:focus-visible {
-  outline: 3px solid var(--navy);
+  outline: 3px solid var(--navy-600);
   outline-offset: 2px;
 }
 .su-seg-sm .su-seg-btn {
@@ -75,7 +76,10 @@
   text-decoration: none;
 }
 .su-csv[aria-disabled='true'] {
-  opacity: 0.5;
+  background: var(--navy-50);
+  color: var(--muted);
+  border-color: var(--line-strong);
+  border-style: dashed;
   pointer-events: none;
 }
 
@@ -147,7 +151,7 @@
   margin-bottom: 4px;
   border-radius: 10px;
   background: var(--gold-soft);
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .su-stat-label {
   color: var(--muted);
@@ -155,7 +159,7 @@
   font-weight: 600;
 }
 .su-stat-val {
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 28px;
   line-height: 1.15;
   font-weight: 800;
@@ -186,7 +190,7 @@
 }
 .su-h {
   margin: 0 0 10px;
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 18px;
   line-height: 1.3;
 }
@@ -224,7 +228,7 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--navy);
+  background: var(--navy-600);
 }
 .su-meter-fill.su-over {
   background: var(--danger);
@@ -258,11 +262,11 @@
 }
 .su-bar-today {
   fill: var(--gold);
-  stroke: var(--navy);
+  stroke: var(--navy-600);
   stroke-width: 1.5;
 }
 .su-tip {
-  fill: var(--navy);
+  fill: var(--navy-600);
 }
 .su-tip-t1 {
   fill: #fff;
@@ -283,7 +287,7 @@
   display: flex;
   align-items: center;
   min-height: 44px;
-  color: var(--navy);
+  color: var(--navy-600);
   font-weight: 700;
   font-size: 15px;
   cursor: pointer;
@@ -385,11 +389,11 @@
   background: var(--surface);
 }
 .su-state svg {
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .su-state h2 {
   margin: 0;
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 20px;
 }
 .su-state p {

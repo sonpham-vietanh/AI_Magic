@@ -236,14 +236,14 @@ export function DataOpsClient() {
                       </p>
                     )}
                     {report.errors.length > 0 && (
-                      <ul className="dl-list bad">
+                      <ul className="dl-list dl-list-bad">
                         {report.errors.map((m) => (
                           <li key={m}>{m}</li>
                         ))}
                       </ul>
                     )}
                     {report.warnings.length > 0 && (
-                      <ul className="dl-list warn">
+                      <ul className="dl-list dl-list-warn">
                         {report.warnings.map((m) => (
                           <li key={m}>{m}</li>
                         ))}
@@ -252,7 +252,7 @@ export function DataOpsClient() {
                     {report.checks.some((c) => c.ok) && (
                       <ul className="dl-checks">
                         {report.checks.filter((c) => c.ok).map((c) => (
-                          <li key={c.key} className={c.ok ? 'ok' : 'bad'}>
+                          <li key={c.key} className={c.ok ? 'dl-check-ok' : 'dl-check-bad'}>
                             <span className="dl-check-key">{c.key}</span>
                             <span>{c.ok ? `Khớp checksum, ${c.records} bản ghi` : c.problem}</span>
                           </li>
@@ -290,7 +290,7 @@ export function DataOpsClient() {
                                 {s.error && <span className="dl-row-err">{s.error}</span>}
                               </th>
                               <td data-label="Nơi lưu">
-                                <span className={`dl-pill ${loc.cls}`}>{loc.text}</span>
+                                <span className={`dl-pill dl-pill-${loc.cls}`}>{loc.text}</span>
                               </td>
                               <td data-label="Bản ghi" className="num">{s.exists ? s.records.toLocaleString('vi-VN') : '-'}</td>
                               <td data-label="Dung lượng" className="num">{s.exists ? fmtBytes(s.bytes) : '-'}</td>

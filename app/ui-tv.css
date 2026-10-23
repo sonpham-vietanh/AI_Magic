@@ -172,6 +172,7 @@
   border: 1px solid var(--line);
   border-radius: var(--ag-radius);
   background: var(--surface);
+  color: var(--ink);
 }
 .tv-event {
   display: flex;

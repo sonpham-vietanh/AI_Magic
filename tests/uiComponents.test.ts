@@ -70,3 +70,14 @@ describe('khác', () => {
     expect(isAdminPath('/quan-tri-khac')).toBe(false);
   });
 });
+
+describe('thanh bên: không dùng chung tên lớp với trang chủ', () => {
+  it('Shell dùng rail-hist, không dùng ag-recent', async () => {
+    const { readFileSync } = await import('node:fs');
+    const shell = readFileSync('components/Shell.tsx', 'utf8');
+    expect(shell).not.toMatch(/ag-recent/);
+    expect(shell).toMatch(/rail-hist-item/);
+    expect(readFileSync('app/ui-shell.css', 'utf8')).toMatch(/\.rail-hist-item:hover/);
+    expect(readFileSync('app/ui.css', 'utf8')).not.toMatch(/\.ag-recent/);
+  });
+});

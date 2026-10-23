@@ -54,7 +54,7 @@ const EXTERNAL: { id: string; name: string; icon: IconName; what: string; instea
   },
   {
     id: 'tts-stt',
-    name: 'Giọng đọc (TTS)',
+    name: 'Giọng đọc chuyên nghiệp',
     icon: 'video',
     what: 'Giọng đọc chuyên nghiệp cho podcast và video.',
     instead: 'Dùng giọng đọc có sẵn của trình duyệt trên máy cô/thầy. Video hiện chỉ có kịch bản phân cảnh.',
@@ -130,7 +130,7 @@ export default function KetNoiPage() {
 
   return (
     <Shell
-      title="Kết nối dịch vụ"
+      title="Kết nối dịch vụ ngoài"
       subtitle="Xem hệ thống đang nối với những dịch vụ nào, và cô/thầy dùng cách thay thế ra sao khi chưa nối."
     >
       <div className="ls">

@@ -28,7 +28,7 @@ export function PhaAStepper({ steps }: { steps: PhaAStep[] }) {
   return (
     <ol className="kh-steps" aria-label="Quy trình dựng kho, 6 bước">
       {steps.map((s) => (
-        <li key={s.n} className={`kh-step ${s.state}`}>
+        <li key={s.n} className={`kh-step kh-step-${s.state}`}>
           <button type="button" className="kh-step-btn" onClick={() => go(s.target)} aria-label={`Bước ${s.n}: ${s.title}. ${STATE_LABEL[s.state]}. ${s.detail}`}>
             <span className="kh-step-num" aria-hidden="true">
               {s.state === 'done' ? <Icon name="check" size={16} /> : s.n}

@@ -43,6 +43,7 @@
   padding: 16px 16px 12px 22px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
+  color: var(--ink);
 }
 .md-head-main {
   min-width: 0;
@@ -110,6 +111,7 @@
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: var(--cream);
+  color: var(--ink);
 }
 .md-form-scroll {
   flex: 1;
@@ -167,6 +169,7 @@
   background: var(--surface);
   font-size: 14.5px;
   line-height: 1.5;
+  color: var(--ink);
 }
 .md-atom summary {
   min-height: 32px;
@@ -202,6 +205,7 @@
   padding: 12px 18px 16px;
   border-top: 1px solid var(--line);
   background: var(--surface);
+  color: var(--ink);
 }
 .md-form-foot .ag-btn {
   width: 100%;
@@ -219,6 +223,7 @@
   display: flex;
   flex-direction: column;
   background: var(--surface);
+  color: var(--ink);
 }
 .md-tabbar {
   display: flex;
@@ -242,7 +247,31 @@
   text-align: right;
 }
 .md-notice.bad {
-  color: var(--danger);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 8px 12px;
+  border: 1px solid #F0B8B4;
+  border-left: 4px solid var(--danger);
+  border-radius: 10px;
+  background: var(--danger-bg);
+  color: #8E1F17;
+  text-align: left;
+}
+.md-notice.bad::before {
+  content: '!';
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 .md-toolbar {
   display: flex;
@@ -251,6 +280,7 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   background: var(--cream);
+  color: var(--ink);
 }
 .md-scroll {
   flex: 1;
@@ -298,8 +328,14 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--cream);
+  color: var(--ink);
 }
-.md-refine .ag-label {
+.md-refine .md-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--navy-600);
   display: block;
   margin-bottom: 8px;
 }
@@ -375,6 +411,7 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
+  color: var(--ink);
 }
 .md-q-head {
   display: flex;
@@ -437,7 +474,8 @@
     padding: 0 12px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
-  }
+    color: var(--ink);
+}
   .md-steps .ag-tab {
     flex: 1;
   }
@@ -476,6 +514,7 @@
   overflow: hidden;
   outline: none;
   animation: ag-in 220ms var(--ag-ease) both;
+  color: var(--ink);
 }
 .md-assist-head {
   display: flex;
@@ -485,6 +524,7 @@
   padding: 12px 10px 12px 20px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
+  color: var(--ink);
 }
 .md-assist-head h2 {
   margin: 0;

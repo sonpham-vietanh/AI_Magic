@@ -33,7 +33,7 @@ function ExportButtons({ artifact }: { artifact: Artifact }) {
     <>
       <div className="kh-exports">
         {formats.map((f) => (
-          <button key={f} type="button" className="ag-btn small" disabled={busy !== null} onClick={() => void run(f)}>
+          <button key={f} type="button" className="ag-btn small kh-btn" disabled={busy !== null} onClick={() => void run(f)}>
             {busy === f ? <span className="ag-spin" aria-hidden="true" /> : <Icon name="download" size={16} />}
             {EXPORT_LABELS[f]}
           </button>

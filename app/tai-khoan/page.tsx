@@ -170,7 +170,7 @@ export default function TaiKhoanPage() {
         )}
 
         {loadError && (
-          <div role="alert" className="tk-alert bad">
+          <div role="alert" className="tk-alert tk-alert-bad">
             <Icon name="alert" size={20} />
             <span>{loadError}</span>
             <button type="button" className="ag-btn small" onClick={() => void load()}>
@@ -184,8 +184,8 @@ export default function TaiKhoanPage() {
             <div className="tk-empty-art" aria-hidden="true">
               <svg viewBox="0 0 120 120" width="96" height="96" fill="none">
                 <circle cx="60" cy="60" r="56" fill="#FBF6DC" />
-                <circle cx="60" cy="46" r="16" fill="#14153A" />
-                <path d="M28 96c2-18 15-28 32-28s30 10 32 28" fill="#14153A" />
+                <circle cx="60" cy="46" r="16" fill="#26275D" />
+                <path d="M28 96c2-18 15-28 32-28s30 10 32 28" fill="#26275D" />
                 <circle cx="88" cy="32" r="7" fill="#E8C40A" />
               </svg>
             </div>
@@ -341,7 +341,7 @@ export default function TaiKhoanPage() {
                     {saving ? 'Đang lưu…' : 'Lưu tuỳ chọn'}
                   </button>
                   {saveMsg && (
-                    <span role={saveMsg.kind === 'bad' ? 'alert' : 'status'} className={`tk-msg ${saveMsg.kind}`}>
+                    <span role={saveMsg.kind === 'bad' ? 'alert' : 'status'} className={`tk-msg tk-msg-${saveMsg.kind}`}>
                       {saveMsg.text}
                     </span>
                   )}
@@ -361,7 +361,7 @@ export default function TaiKhoanPage() {
                   {exporting ? 'Đang chuẩn bị…' : 'Tải dữ liệu của tôi'}
                 </button>
                 {exportMsg && (
-                  <span role={exportMsg.kind === 'bad' ? 'alert' : 'status'} className={`tk-msg ${exportMsg.kind}`}>
+                  <span role={exportMsg.kind === 'bad' ? 'alert' : 'status'} className={`tk-msg tk-msg-${exportMsg.kind}`}>
                     {exportMsg.text}
                   </span>
                 )}

@@ -1,12 +1,13 @@
 /* ==========================================================================
-   VIỆT ANH DESIGN SYSTEM v2.0 — "HỌC VIỆN QUỐC TẾ"
-   Official Brand Guideline: Deep Navy (#14153A), Royal Gold (#F9DD0E / #E8C40A),
-   Warm Cream (#FAF9F4), Pure Sans-Serif (Manrope / Be Vietnam Pro >= 16px)
+   VIỆT ANH DESIGN SYSTEM v2.1 — bộ nhận diện chính thức (27/06/2026)
+   Navy #26275D (chủ đạo), Vàng #F9DD0E (chỉ CTA/điểm nhấn), nền #F0F4F8, chữ #1A1A2E,
+   viền #E2E8F0, font Be Vietnam Pro (sans-serif). Xem docs/THIET_KE.md.
    ========================================================================== */
 
 :root {
   /* Core Brand Palette */
-  --navy: #14153A;
+  --navy: #26275D;
+  --navy-deep: #14153A;
   --navy-900: #0D0E2B;
   --navy-700: #1C1D4A;
   --navy-600: #26275D;
@@ -21,12 +22,12 @@
   --gold-soft: #FBF6DC;
 
   /* Surfaces & Lines */
-  --cream: #FAF9F4;
-  --cream-hover: #FBF6DC;
+  --cream: #F0F4F8;
+  --cream-hover: #E7EDF4;
   --surface: #FFFFFF;
-  --surface-subtle: #F5F3EB;
-  --line: #E7E5DA;
-  --line-strong: #D3CFC0;
+  --surface-subtle: #F6F8FB;
+  --line: #E2E8F0;
+  --line-strong: #CBD5E1;
 
   /* Typography Colors */
   --ink: #1A1A2E;
@@ -42,7 +43,22 @@
   --danger-bg: #FDECEC;
 
   /* Legacy Alias Tokens for Compatibility */
-  --accent: #14153A;
+  --accent: #26275D;
+  --focus: #26275D;
+
+  /* Bộ biến NGỮ NGHĨA (dùng cho mã mới; mỗi bề mặt đặt color + background tường minh) */
+  --surface-page: #F0F4F8;
+  --surface-raised: #FFFFFF;
+  --on-surface: #1A1A2E;
+  --on-surface-muted: #54556E;
+  --on-dark: rgba(255, 255, 255, 0.9);
+  --on-dark-muted: rgba(255, 255, 255, 0.72);
+  --on-dark-accent: #FDE68A;
+  --on-accent: #26275D;
+  --border: #E2E8F0;
+  --border-control: #7A8BA3;
+  --info: #1D4E89;
+  --info-bg: #E8F1FB;
   --accent-soft: #E2E3F0;
   --yes: #1E7F4F;
 
@@ -83,7 +99,7 @@ body {
   padding: 0;
   background-color: var(--cream);
   color: var(--ink);
-  font-family: var(--font-manrope), var(--font-be-vietnam), 'Manrope', 'Be Vietnam Pro', Arial, sans-serif;
+  font-family: var(--font-be-vietnam), 'Be Vietnam Pro', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -96,7 +112,7 @@ h4,
 h5,
 h6 {
   margin: 0;
-  font-family: var(--font-manrope), var(--font-be-vietnam), 'Manrope', 'Be Vietnam Pro', Arial, sans-serif;
+  font-family: var(--font-be-vietnam), 'Be Vietnam Pro', Arial, sans-serif;
   color: var(--navy);
   letter-spacing: -0.015em;
   line-height: 1.28;

@@ -152,9 +152,9 @@ export default function DuyetPage() {
     const rv = lesson.review;
     const s4: PhaAStep['state'] = rv?.decision === 'reject' ? 'bad' : rv?.decision === 'approve' && draftN === 0 ? 'done' : rv?.decision === 'approve' ? 'doing' : 'todo';
     return [
-      { n: 1, title: 'Phân rã tri thức', state: hasReq ? 'done' : 'todo', detail: hasReq ? `Có yêu cầu cần đạt, ${lesson.edges.length} liên kết` : 'Thiếu yêu cầu cần đạt', target: 'kh-sec-1' },
+      { n: 1, title: 'Chuẩn bị kiến thức', state: hasReq ? 'done' : 'todo', detail: hasReq ? `Có yêu cầu cần đạt, ${lesson.edges.length} bài liên quan` : 'Thiếu yêu cầu cần đạt', target: 'kh-sec-1' },
       { n: 2, title: 'Sinh 6 dạng', state: nAssets >= 6 ? 'done' : nAssets > 0 ? 'doing' : 'todo', detail: `${nAssets}/6 dạng${draftN ? `, ${draftN} nháp` : ''}`, target: 'kh-sec-2' },
-      { n: 3, title: 'Ghép theo chương', state: chapter ? 'done' : 'todo', detail: chapter ? `${siblings + 1} nguyên tử cùng mục` : 'Chưa rõ chương/bài', target: 'kh-sec-3' },
+      { n: 3, title: 'Ghép theo chương', state: chapter ? 'done' : 'todo', detail: chapter ? `${siblings + 1} bài nhỏ cùng mục` : 'Chưa rõ chương hoặc bài', target: 'kh-sec-3' },
       { n: 4, title: 'Người duyệt', state: s4, detail: rv ? (rv.decision === 'approve' ? (draftN ? 'Có nháp mới, cần duyệt lại' : 'Đã duyệt') : 'Đã từ chối') : 'Chưa duyệt', target: 'kh-sec-4' },
       { n: 5, title: 'Nhập kho', state: lesson.version ? (draftN ? 'doing' : 'done') : 'todo', detail: lesson.version ? `Bản chuẩn v${lesson.version}` : 'Chưa có phiên bản', target: 'kh-sec-5' },
       { n: 6, title: 'Ngân hàng câu hỏi', state: lesson.questions.length > 0 ? 'done' : 'todo', detail: `${lesson.questions.length} câu hỏi`, target: 'kh-sec-6' },
@@ -370,15 +370,15 @@ export default function DuyetPage() {
                 <PhaAStepper steps={steps} />
 
                 <div className="kh-card" id="kh-sec-1">
-                  <h3 className="du-h3" style={{ margin: 0 }}>Bước 1. Phân rã tri thức</h3>
+                  <h3 className="du-h3" style={{ margin: 0 }}>Bước 1. Chuẩn bị kiến thức</h3>
                   <p className="ag-note" style={{ margin: '6px 0 0' }}>
                     {lesson.atom?.yeu_cau
                       ? `Yêu cầu cần đạt: ${lesson.atom.yeu_cau}`
-                      : 'Bài này chưa có yêu cầu cần đạt trong đồ thị tri thức.'}
+                      : 'Bài này chưa có yêu cầu cần đạt trong sơ đồ kiến thức.'}
                   </p>
                   <p className="ag-note" style={{ margin: '4px 0 0' }}>
-                    {lesson.edges.length} liên kết trong đồ thị tri thức, {lesson.packages.length} gói kiến thức
-                    {lesson.atom?.bloom ? `, bậc Bloom: ${lesson.atom.bloom}` : ''}. Phần phân rã do hệ thống kiến thức của trường chuẩn bị, trang này chỉ để xem.
+                    {lesson.edges.length} bài liên quan trong sơ đồ kiến thức, {lesson.packages.length} gói kiến thức
+                    {lesson.atom?.bloom ? `, bậc Bloom: ${lesson.atom.bloom}` : ''}. Phần này do hệ thống kiến thức của trường chuẩn bị, trang này chỉ để xem.
                   </p>
                 </div>
 
@@ -402,13 +402,13 @@ export default function DuyetPage() {
                           {chapter ? `Chương: ${chapter}. Mục: ${sub || '(chưa rõ)'}.` : 'Chưa rõ bài thuộc chương nào.'}
                         </p>
                         <p className="ag-note" style={{ margin: '4px 0 0' }}>
-                          Trường chưa có phân phối chương trình chính thức, nên ghép theo chương/bài trong cây chương trình: các bài cùng mục là các
-                          nguyên tử của cùng một tiết.
+                          Trường chưa có phân phối chương trình chính thức, nên ghép theo chương/bài trong cây chương trình: các bài cùng mục thuộc
+                          cùng một tiết.
                         </p>
                         {sibs.length > 1 && (
                           <ul className="kh-sibs">
                             {sibs.map((x) => (
-                              <li key={x.atomId} className={x.atomId === lesson.atomId ? 'cur' : ''}>
+                              <li key={x.atomId} className={x.atomId === lesson.atomId ? 'kh-sibs-cur' : ''}>
                                 {x.title}
                               </li>
                             ))}
@@ -487,7 +487,7 @@ export default function DuyetPage() {
                             <p className="du-crit-desc">{c.description}</p>
                             <div className="du-scale" role="radiogroup" aria-label={`Điểm: ${c.name}`}>
                               {[1, 2, 3, 4, 5].map((n) => (
-                                <label key={n} className={v === n ? `on${n < MIN_CRITERION ? ' lowv' : ''}` : ''}>
+                                <label key={n} className={v === n ? `du-on${n < MIN_CRITERION ? ' du-lowv' : ''}` : ''}>
                                   <input
                                     type="radio"
                                     name={`sc-${c.id}`}
@@ -565,7 +565,7 @@ export default function DuyetPage() {
 
                       <div className="du-summary">
                         <div className="du-avg">
-                          <span className={`du-avg-num${ev.canApprove ? ' good' : ev.complete ? ' bad' : ''}`}>
+                          <span className={`du-avg-num${ev.canApprove ? ' du-avg-good' : ev.complete ? ' du-avg-bad' : ''}`}>
                             {formatScore(ev.average)}
                           </span>
                           <span className="du-avg-label">
@@ -599,7 +599,7 @@ export default function DuyetPage() {
                   <p className="ag-note" style={{ margin: '6px 0 0' }}>
                     {lesson.version
                       ? `Bản chuẩn hiện hành: v${lesson.version}. Bản đã duyệt không sửa được; sinh lại hoặc chỉnh sau đó tạo bản nháp mới và phải duyệt lại mới thành v${lesson.version + 1}.`
-                      : 'Chưa có phiên bản nào. Khi người duyệt bấm "Duyệt vào Kho", bộ được đóng băng thành v1 và gắn mã tổ chức (org_id).'}
+                      : 'Chưa có phiên bản nào. Khi người duyệt bấm "Duyệt vào Kho", bộ được đóng băng thành bản chuẩn v1 và đưa vào Kho của trường.'}
                   </p>
                 </div>
 
@@ -618,7 +618,7 @@ export default function DuyetPage() {
                     })()}
                   </p>
                   <p className="ag-note" style={{ margin: '4px 0 0' }}>
-                    Chưa có ánh xạ chính thức sang các mức của TT 22/2021; thẻ hiển thị là thẻ có sẵn trong ngân hàng.
+                    Các mức hiển thị là mức đã ghi sẵn trong ngân hàng câu hỏi.
                   </p>
                   <Link className="ag-link kh-tap" href="/kiem-tra">Mở trang Kiểm tra và Đề thi</Link>
                 </div>

@@ -1082,7 +1082,7 @@ export function ToolStudioModal({
               ) : (
                 <>
                   <div className="md-refine no-print">
-                    <span className="ag-label">Chỉnh nhanh bằng AI</span>
+                    <span className="md-label">Chỉnh nhanh bằng AI</span>
                     <div className="ag-chips" style={{ marginTop: 0 }}>
                       {POST_ACTIONS.map((item) => (
                         <button

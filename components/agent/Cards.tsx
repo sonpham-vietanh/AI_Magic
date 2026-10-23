@@ -437,11 +437,15 @@ export function RunCard({
   entry,
   onCancel,
   onOpen,
+  onRetry,
+  retryDisabled,
 }: {
   run: RunState;
   entry?: ResultEntry;
   onCancel: () => void;
   onOpen: (id: string) => void;
+  onRetry?: () => void;
+  retryDisabled?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const startedRef = useRef(run.startedAt);
@@ -454,7 +458,7 @@ export function RunCard({
 
   if (run.status === 'error') {
     return (
-      <div className="ag-alert bad" role="alert">
+      <div className="ag-alert bad ag-run-error" role="alert">
         <Icon name="alert" size={18} />
         <div>
           <div>{run.error}</div>
@@ -464,6 +468,12 @@ export function RunCard({
                 <li key={i}>{d}</li>
               ))}
             </ul>
+          )}
+          {onRetry && (
+            <button type="button" className="ag-btn small ag-run-retry" onClick={onRetry} disabled={retryDisabled}>
+              <Icon name="refresh" size={16} />
+              Thử lại
+            </button>
           )}
         </div>
       </div>
@@ -497,19 +507,7 @@ export function RunCard({
         </ul>
         {run.streamPreview && (
           <div
-            className="ag-note"
-            style={{
-              marginTop: 8,
-              padding: '8px 10px',
-              background: 'var(--bg-soft, #f8fafc)',
-              borderRadius: 8,
-              border: '1px solid var(--line, #e2e8f0)',
-              fontFamily: 'inherit',
-              fontSize: 12,
-              maxHeight: 96,
-              overflow: 'hidden',
-              whiteSpace: 'pre-wrap',
-            }}
+            className="ag-note ag-stream"
           >
             {run.streamPreview}
           </div>

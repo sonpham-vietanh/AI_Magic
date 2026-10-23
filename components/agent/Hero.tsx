@@ -246,23 +246,23 @@ export function Hero({ me, usage, recent, onStart, onShowAll, onOpenRecent }: He
       </div>
 
       {recent.length > 0 && (
-        <section className="ag-recent" aria-labelledby="ag-recent-h">
-          <h2 id="ag-recent-h">
+        <section className="ag-home-recent" aria-labelledby="ag-home-recent-h">
+          <h2 id="ag-home-recent-h">
             <Icon name="clock" size={17} />
             Gần đây của tôi
           </h2>
           <ul>
             {recent.map((r) => (
               <li key={r.key}>
-                <button type="button" className="ag-recent-item" onClick={() => onOpenRecent(r)}>
-                  <span className="ag-recent-ico" aria-hidden="true">
+                <button type="button" className="ag-home-recent-item" onClick={() => onOpenRecent(r)}>
+                  <span className="ag-home-recent-ico" aria-hidden="true">
                     <Icon name="file" size={18} />
                   </span>
-                  <span className="ag-recent-txt">
+                  <span className="ag-home-recent-txt">
                     <strong>{r.title}</strong>
                     <span>{r.meta}</span>
                   </span>
-                  <span className="ag-recent-open">Mở lại</span>
+                  <span className="ag-home-recent-open">Mở lại</span>
                 </button>
               </li>
             ))}

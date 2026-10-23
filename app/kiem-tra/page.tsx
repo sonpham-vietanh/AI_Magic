@@ -90,7 +90,7 @@ function BloomChips({ value, onChange }: { value: string[]; onChange: (v: string
             <button
               key={b}
               type="button"
-              className={`ag-chip kt-toggle${on ? ' on' : ''}`}
+              className={`ag-chip kt-toggle${on ? ' kt-toggle-on' : ''}`}
               aria-pressed={on}
               onClick={() => onChange(on ? value.filter((x) => x !== b) : [...value, b])}
             >
@@ -119,6 +119,8 @@ function LangSelect({ id, value, onChange }: { id: string; value: string; onChan
 
 function MatrixTable({ m }: { m: Matrix }) {
   const cell = (c?: Cell) => (c && (c.target || c.selected) ? `${c.selected}/${c.target} câu · ${c.points}đ` : '–');
+  const short = (c?: Cell) => !!c && c.selected < c.target;
+  const cellProps = (c?: Cell) => (short(c) ? { className: 'kt-cell-short' } : {});
   return (
     <div>
       <div className="kt-scroll" tabIndex={0} role="region" aria-label="Ma trận đề, cuộn ngang để xem đủ cột">
@@ -135,13 +137,13 @@ function MatrixTable({ m }: { m: Matrix }) {
             {m.rows.map((r) => (
               <tr key={r.atomId}>
                 <th scope="row">{r.title}<small>{r.atomCode}</small></th>
-                {LEVELS.map(([k]) => <td key={k}>{cell(r.cells[k])}</td>)}
+                {LEVELS.map(([k]) => <td key={k} {...cellProps(r.cells[k])}>{cell(r.cells[k])}{short(r.cells[k]) ? ' (thiếu)' : ''}</td>)}
                 <td>{r.totalSelected} câu · {r.points}đ</td>
               </tr>
             ))}
             <tr className="kt-total">
               <th scope="row">Tổng</th>
-              {LEVELS.map(([k]) => <td key={k}>{cell(m.totals[k])}</td>)}
+              {LEVELS.map(([k]) => <td key={k} {...cellProps(m.totals[k])}>{cell(m.totals[k])}{short(m.totals[k]) ? ' (thiếu)' : ''}</td>)}
               <td>{m.totalSelected}/{m.totalTarget} câu · 10đ</td>
             </tr>
           </tbody>
@@ -169,7 +171,7 @@ function Stepper({ status }: { status: string | null }) {
       {STEPS.map((s, i) => {
         const state = i < cur || (i === cur && status === 'da_duyet') ? 'done' : i === cur ? (rejected ? 'bad' : 'cur') : 'todo';
         return (
-          <li key={s} className={`kt-step ${state}`} aria-current={i === cur ? 'step' : undefined}>
+          <li key={s} className={`kt-step kt-step-${state}`} aria-current={i === cur ? 'step' : undefined}>
             <span className="kt-step-dot">{state === 'done' ? <Icon name="check" size={16} /> : i + 1}</span>
             <span className="kt-step-name">
               {s}
@@ -380,7 +382,7 @@ function ExamTab() {
             <ul className="kt-exams">
               {list.map((e) => (
                 <li key={e.examId}>
-                  <button type="button" className={`kt-exam${exam?.examId === e.examId ? ' on' : ''}`} onClick={() => void guard(() => load(e.examId, actor.trim()))}>
+                  <button type="button" className={`kt-exam${exam?.examId === e.examId ? ' kt-exam-on' : ''}`} onClick={() => void guard(() => load(e.examId, actor.trim()))}>
                     <span className="kt-exam-main">
                       <b>{e.examId}</b>
                       <small>{e.createdBy ?? ''}{e.examDate ? ` · thi ${e.examDate}` : ''}</small>

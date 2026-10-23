@@ -1,6 +1,6 @@
 import { DashboardClient } from '@/components/DashboardClient';
 
-export const metadata = { title: 'Kho 82 công cụ' };
+export const metadata = { title: 'Bộ công cụ sư phạm' };
 
 export default async function ToolsPage({
   searchParams,

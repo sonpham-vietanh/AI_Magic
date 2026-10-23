@@ -1,7 +1,7 @@
 /* Trang giới thiệu + đăng nhập (/dang-nhap). Mọi lớp bắt đầu bằng .lp- để không đụng giao diện khác. */
 .lp {
-  --lp-navy: #14153a;
-  --lp-navy-2: #1c1d4a;
+  --lp-navy: #26275d;
+  --lp-navy-2: #1f2050;
   --lp-gold: #f9dd0e;
   --lp-gold-2: #e0b90c;
   --lp-cream: #faf9f4;
@@ -16,7 +16,7 @@
 .lp h1,
 .lp h2,
 .lp h3 {
-  font-family: var(--font-manrope), var(--font-be-vietnam), system-ui, sans-serif;
+  font-family: var(--font-be-vietnam), system-ui, sans-serif;
   letter-spacing: -0.01em;
   margin: 0;
 }
@@ -34,7 +34,7 @@
   display: inline-flex; align-items: center; justify-content: center; gap: 12px;
   min-height: 48px; padding: 0 22px; border-radius: 999px;
   background: var(--lp-gold); color: var(--lp-navy); font-weight: 800; font-size: 16px;
-  font-family: var(--font-manrope), sans-serif; text-decoration: none; text-align: center;
+  font-family: var(--font-be-vietnam), sans-serif; text-decoration: none; text-align: center;
   box-shadow: 0 6px 22px rgba(249, 221, 14, 0.28), inset 0 -2px 0 rgba(20, 21, 58, 0.12);
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
@@ -45,12 +45,12 @@
 .lp-g { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #fff; flex: none; }
 
 /* Thanh trên */
-.lp-top { position: absolute; inset: 0 0 auto 0; z-index: 5; }
+.lp-top { position: absolute; inset: 0 0 auto 0; z-index: 5; background: #26275d; color: #fff; }
 .lp-top-in { display: flex; align-items: center; gap: 16px; min-height: 76px; }
 .lp-brand { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; min-height: 44px; margin-right: auto; }
 .lp-crest { border-radius: 50%; background: #fff; padding: 2px; width: 44px; height: 44px; object-fit: contain; }
 .lp-brand-txt { display: flex; flex-direction: column; line-height: 1.2; }
-.lp-brand-txt strong { font-family: var(--font-manrope), sans-serif; font-size: 17px; font-weight: 800; }
+.lp-brand-txt strong { font-family: var(--font-be-vietnam), sans-serif; font-size: 17px; font-weight: 800; }
 .lp-brand-txt small { font-size: 12px; color: var(--lp-on-navy); }
 .lp-nav { display: none; gap: 4px; }
 .lp-nav a { color: var(--lp-on-navy); text-decoration: none; font-weight: 600; font-size: 15px; padding: 10px 14px; border-radius: 999px; min-height: 44px; display: inline-flex; align-items: center; }
@@ -58,11 +58,11 @@
 .lp-top .lp-btn-sm { display: none; }
 
 /* Hero */
-.lp-hero { position: relative; background: var(--lp-navy); color: #fff; padding: 112px 0 96px; overflow: hidden; }
+.lp-hero { position: relative; background: linear-gradient(160deg, #26275d 0%, #1f2050 100%); color: #fff; padding: 112px 0 96px; overflow: hidden; }
 .lp-hero-bg {
   position: absolute; inset: 0;
   background:
-    radial-gradient(60% 55% at 85% 20%, rgba(249, 221, 14, 0.16), transparent 70%),
+    radial-gradient(60% 55% at 85% 20%, rgba(120, 124, 230, 0.28), transparent 70%),
     radial-gradient(50% 60% at 5% 90%, rgba(80, 84, 200, 0.35), transparent 70%),
     radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.4px) 0 0 / 22px 22px;
 }
@@ -70,7 +70,7 @@
 .lp-eyebrow {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
   background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--lp-gold); font-size: 14px; font-weight: 700; margin-bottom: 18px;
+  color: var(--lp-gold); font-size: 14px; font-weight: 700; margin-bottom: 24px;
 }
 .lp-hero h1 { font-size: clamp(2rem, 7.4vw, 3.55rem); line-height: 1.12; font-weight: 800; color: #fff; text-wrap: balance; }
 .lp-hl { color: var(--lp-gold); background: linear-gradient(transparent 88%, rgba(249, 221, 14, 0.45) 88%); }
@@ -102,19 +102,19 @@
 .lp-mock-steps .live { background: #fbf6dc; color: #5f4a00; }
 .lp-dot { width: 10px; height: 10px; border-radius: 50%; background: #c99a00; animation: lp-pulse 1.4s ease-in-out infinite; }
 .lp-mock-card { border: 2px dashed #d3cfc0; border-radius: 14px; padding: 14px; display: grid; gap: 8px; }
-.lp-mock-card b { font-family: var(--font-manrope), sans-serif; font-size: 14px; }
+.lp-mock-card b { font-family: var(--font-be-vietnam), sans-serif; font-size: 14px; }
 .lp-mock-card span { height: 7px; border-radius: 4px; background: #e2e3f0; }
 .lp-mock-card span.short { width: 55%; }
 .lp-float { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; background: var(--lp-gold); color: var(--lp-navy); font-weight: 800; font-size: 14px; box-shadow: 0 12px 28px rgba(5, 6, 30, 0.4); }
 .lp-float-a { top: -14px; right: 10px; animation: lp-bob 5s ease-in-out infinite; }
 .lp-float-b { bottom: 40px; left: -22px; background: #fff; animation: lp-bob 6s ease-in-out -2s infinite; }
-.lp-art-crest { position: absolute; right: -30px; bottom: -44px; width: 112px; height: 112px; border-radius: 50%; background: #fff; padding: 4px; box-shadow: 0 16px 36px rgba(5, 6, 30, 0.45); object-fit: contain; }
+.lp-art-crest { position: absolute; right: -30px; bottom: -44px; width: 112px; height: 112px; border-radius: 50%; background: #fff; padding: 4px; object-fit: contain; }
 .lp-curve { position: absolute; left: 0; right: 0; bottom: -1px; height: 48px; background: var(--lp-cream); clip-path: ellipse(75% 100% at 50% 100%); }
 
 /* Phần chung */
 .lp-sec { padding: 72px 0; }
 .lp-sec-alt { background: #f3f1e6; }
-.lp-kicker { font-family: var(--font-manrope), sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a5f00; margin-bottom: 10px; }
+.lp-kicker { font-family: var(--font-be-vietnam), sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a5f00; margin-bottom: 10px; }
 .lp-kicker-gold { color: var(--lp-gold); }
 .lp-sec h2 { font-size: clamp(1.55rem, 4.6vw, 2.35rem); line-height: 1.2; font-weight: 800; color: var(--lp-navy); max-width: 24ch; text-wrap: balance; }
 .lp-sub { margin-top: 14px; color: #54556e; max-width: 62ch; font-size: 1.05rem; }
@@ -133,7 +133,7 @@
 /* Ba bước */
 .lp-steps { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 20px; counter-reset: s; }
 .lp-step { position: relative; background: #fff; border-radius: 20px; padding: 28px 24px 26px; border: 1px solid var(--line, #e7e5da); display: grid; gap: 10px; }
-.lp-step-n { position: absolute; top: 18px; right: 22px; font-family: var(--font-manrope), sans-serif; font-weight: 800; font-size: 3.4rem; line-height: 1; color: #eceaf5; }
+.lp-step-n { position: absolute; top: 18px; right: 22px; font-family: var(--font-be-vietnam), sans-serif; font-weight: 800; font-size: 3.4rem; line-height: 1; color: #8083ae; }
 .lp-step-ic { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: var(--lp-navy); color: var(--lp-gold); }
 .lp-step h3 { font-size: 1.2rem; font-weight: 800; color: var(--lp-navy); margin-top: 6px; }
 .lp-step p { color: #54556e; }
@@ -154,18 +154,18 @@
 .lp-faq { display: grid; gap: 12px; }
 .lp-faq details { background: #fff; border: 1px solid var(--line, #e7e5da); border-radius: 16px; transition: box-shadow 0.2s ease; }
 .lp-faq details[open] { box-shadow: 0 8px 24px rgba(20, 21, 58, 0.08); border-color: #cfd0e6; }
-.lp-faq summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 14px 20px; font-family: var(--font-manrope), sans-serif; font-weight: 800; font-size: 1.05rem; color: var(--lp-navy); }
+.lp-faq summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 14px 20px; font-family: var(--font-be-vietnam), sans-serif; font-weight: 800; font-size: 1.05rem; color: var(--lp-navy); }
 .lp-faq summary::-webkit-details-marker { display: none; }
 .lp-chev { flex: none; transition: transform 0.2s ease; }
 .lp-faq details[open] .lp-chev { transform: rotate(180deg); }
 .lp-faq details p { padding: 0 20px 20px; color: #3f4060; }
 
 /* Kêu gọi cuối */
-.lp-closing { background: linear-gradient(135deg, #f9dd0e, #f2c705); padding: 56px 0; }
+.lp-closing { background: #e2e3f0; border-top: 1px solid #cfd0e6; padding: 56px 0; }
 .lp-closing-in { display: grid; gap: 22px; justify-items: start; }
 .lp-closing h2 { font-size: clamp(1.5rem, 4.6vw, 2.2rem); color: var(--lp-navy); font-weight: 800; }
-.lp-closing .lp-btn { background: var(--lp-navy); color: #fff; box-shadow: 0 10px 26px rgba(20, 21, 58, 0.3); }
-.lp-closing .lp-btn:hover { background: var(--lp-navy-2); }
+.lp-closing .lp-btn { background: var(--lp-gold); color: var(--lp-navy); }
+.lp-closing .lp-btn:hover { background: #ffe93a; }
 .lp-closing a:focus-visible { outline-color: var(--lp-navy); }
 
 /* Chân trang */

@@ -12,7 +12,7 @@
 }
 .tk h2 {
   margin: 0;
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -37,9 +37,9 @@
 .tk-profile-band {
   height: 84px;
   background:
-    radial-gradient(circle at 88% 20%, rgba(232, 196, 10, 0.55) 0, rgba(232, 196, 10, 0) 38%),
+    radial-gradient(circle at 88% 20%, rgba(120, 124, 230, 0.4) 0, rgba(120, 124, 230, 0) 40%),
     radial-gradient(circle at 70% 120%, rgba(255, 255, 255, 0.14) 0, rgba(255, 255, 255, 0) 45%),
-    linear-gradient(120deg, var(--navy-900) 0%, var(--navy-600) 100%);
+    linear-gradient(120deg, #1f2050 0%, #26275d 100%);
 }
 .tk-profile-body {
   display: flex;
@@ -58,7 +58,7 @@
   border: 4px solid var(--surface);
   border-radius: 50%;
   background: var(--cta);
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 34px;
   font-weight: 800;
   box-shadow: var(--shadow-sm);
@@ -106,8 +106,8 @@
   color: var(--gold-text);
 }
 .tk-badge.role-admin {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--navy-600);
+  border-color: var(--navy-600);
   color: #fff;
 }
 .tk-logout {
@@ -120,7 +120,7 @@
   font-size: 15px;
 }
 .tk-adminlink a {
-  color: var(--navy);
+  color: var(--navy-600);
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -158,7 +158,7 @@
   background: var(--cream);
 }
 .tk-stat-n {
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 28px;
   font-weight: 800;
   line-height: 1.1;
@@ -193,12 +193,12 @@
   text-decoration: none;
 }
 .tk-recent a:hover {
-  border-color: var(--navy);
+  border-color: var(--navy-600);
   background: var(--cream-hover);
 }
 .tk-recent a:focus-visible,
 .tk-input:focus-visible {
-  outline: 2px solid var(--navy);
+  outline: 2px solid var(--navy-600);
   outline-offset: 2px;
 }
 .tk-recent-t {
@@ -248,10 +248,10 @@
   font-size: 15px;
   font-weight: 600;
 }
-.tk-msg.ok {
+.tk-msg-ok {
   color: var(--success);
 }
-.tk-msg.bad {
+.tk-msg-bad {
   color: var(--danger);
 }
 .tk-alert {

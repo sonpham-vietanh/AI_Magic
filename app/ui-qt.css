@@ -22,13 +22,13 @@
   min-width: 0;
   padding: 18px 20px;
   border: 1px solid var(--line);
-  border-top: 3px solid var(--navy);
+  border-top: 3px solid var(--navy-600);
   border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
 }
-.qt-tile.star {
-  background: linear-gradient(165deg, #14153a 0%, #1c1d4a 100%);
+.qt-tile-star {
+  background: linear-gradient(165deg, #26275d 0%, #1f2050 100%);
   border-top-color: var(--cta);
   color: #fff;
   box-shadow: var(--shadow-sm);
@@ -38,8 +38,8 @@
   font-weight: 700;
   color: var(--muted);
 }
-.qt-tile.star .qt-tile-label,
-.qt-tile.star .qt-tile-hint {
+.qt-tile-star .qt-tile-label,
+.qt-tile-star .qt-tile-hint {
   color: var(--gold-soft);
 }
 .qt-tile-num {
@@ -47,9 +47,9 @@
   font-size: 38px;
   font-weight: 800;
   line-height: 1.1;
-  color: var(--navy);
+  color: var(--navy-600);
 }
-.qt-tile.star .qt-tile-num {
+.qt-tile-star .qt-tile-num {
   color: #fff;
 }
 .qt-tile-hint {
@@ -99,15 +99,15 @@
   white-space: nowrap;
 }
 .qt-tab:hover {
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .qt-tab[aria-selected='true'] {
-  color: var(--navy);
+  color: var(--navy-600);
   border-bottom-color: var(--cta-hover);
 }
 .qt-tab:focus-visible,
 .qt-scroll:focus-visible {
-  outline: 3px solid var(--navy);
+  outline: 3px solid var(--navy-600);
   outline-offset: 2px;
 }
 
@@ -120,11 +120,11 @@
   font-size: 14.5px;
   font-weight: 600;
 }
-.qt-toast.ok {
+.qt-toast-ok {
   background: var(--success-bg);
   color: var(--success);
 }
-.qt-toast.err {
+.qt-toast-err {
   background: var(--danger-bg);
   color: var(--danger);
 }
@@ -167,23 +167,23 @@
 }
 .qt-table {
   width: 100%;
-  min-width: 1020px;
+  min-width: 900px;
   border-collapse: collapse;
   font-size: 14.5px;
 }
 .qt-table th {
-  padding: 12px 14px;
+  padding: 12px 10px;
   text-align: left;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: var(--navy);
+  color: var(--navy-600);
   background: var(--surface-subtle);
   border-bottom: 1px solid var(--line-strong);
   white-space: nowrap;
 }
 .qt-table td {
-  padding: 12px 14px;
+  padding: 12px 10px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
   color: var(--ink);
@@ -194,10 +194,10 @@
 .qt-table tbody tr:hover {
   background: var(--cream);
 }
-.qt-table tr.blocked {
+.qt-table tr.qt-row-blocked {
   background: var(--danger-bg);
 }
-.qt-table tr.blocked:hover {
+.qt-table tr.qt-row-blocked:hover {
   background: var(--danger-bg);
 }
 .qt-table .num {
@@ -217,7 +217,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--navy);
+  background: var(--navy-600);
   color: var(--cta);
   font-weight: 800;
 }
@@ -226,11 +226,11 @@
   min-width: 0;
 }
 .qt-who-t strong {
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 15px;
 }
 .qt-who-t {
-  min-width: 210px;
+  min-width: 180px;
 }
 .qt-who-t small,
 .qt-env {
@@ -242,7 +242,7 @@
   margin-top: 4px;
 }
 .qt-role {
-  min-width: 160px;
+  min-width: 150px;
   min-height: 44px;
 }
 .qt-badge {
@@ -255,17 +255,17 @@
   font-weight: 700;
   white-space: nowrap;
 }
-.qt-badge.good {
+.qt-badge-good {
   background: var(--success-bg);
   color: var(--success);
 }
-.qt-badge.bad {
+.qt-badge-bad {
   background: #fbd5d2;
   color: #8f1d15;
 }
-.qt-badge.info {
+.qt-badge-info {
   background: var(--navy-100);
-  color: var(--navy);
+  color: var(--navy-600);
 }
 .qt-danger {
   color: var(--danger);
@@ -325,7 +325,7 @@
   box-shadow: var(--shadow-sm);
 }
 .qt-gate h2 {
-  color: var(--navy);
+  color: var(--navy-600);
   font-size: 22px;
 }
 .qt-gate p {
@@ -338,10 +338,10 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: var(--navy);
+  background: var(--navy-600);
   color: var(--cta);
 }
-.qt-gate-ico.warn {
+.qt-gate-ico-warn {
   background: var(--warn-bg);
   color: var(--warn);
 }
