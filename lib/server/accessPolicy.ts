@@ -3,7 +3,8 @@ export type AccessDecision = 'allow' | 'login' | 'unauthorized';
 
 const PUBLIC_PAGES = ['/dang-nhap'];
 // Các API tự có cơ chế xác thực riêng hoặc phải mở: đăng nhập, kiểm tra sống, Major OS dùng Bearer riêng.
-const PUBLIC_API_EXACT = ['/api/health'];
+// Tệp mà trình duyệt/mạng xã hội cần đọc khi chưa đăng nhập (biểu tượng, ảnh chia sẻ, manifest).
+const PUBLIC_API_EXACT = ['/api/health', '/manifest.webmanifest', '/robots.txt'];
 const PUBLIC_API_PREFIXES = ['/api/auth/', '/api/major-os/'];
 
 export function decideAccess(input: {

@@ -27,7 +27,23 @@ export const metadata: Metadata = {
   description:
     'Hệ thống biên soạn học liệu chuẩn Bộ GD&ĐT (GDPT 2018), phân hóa theo Hồ sơ Lớp học (Class DNA) và tích hợp Sơ đồ Liên môn (Knowledge Graph) dành cho giáo viên Trường Việt Anh.',
   applicationName: 'Việt Anh MagicStudio',
+  // Công cụ nội bộ: không cho công cụ tìm kiếm lập chỉ mục, nhưng vẫn có thẻ chia sẻ để liên kết hiện logo trên Zalo, Facebook.
   robots: { index: false, follow: false },
+  metadataBase: new URL(process.env.APP_BASE_URL?.trim() || 'https://magic.truongvietanh.com'),
+  openGraph: {
+    type: 'website',
+    siteName: 'Việt Anh MagicStudio',
+    locale: 'vi_VN',
+    title: 'Việt Anh MagicStudio · Soạn học liệu chuẩn chương trình',
+    description:
+      'Công cụ soạn kế hoạch bài dạy, slide, phiếu học tập, quiz và đề kiểm tra từ Kho học liệu chuẩn, dành cho giáo viên Trường Việt Anh.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Việt Anh MagicStudio · Soạn học liệu chuẩn chương trình',
+    description:
+      'Công cụ soạn kế hoạch bài dạy, slide, phiếu học tập, quiz và đề kiểm tra từ Kho học liệu chuẩn, dành cho giáo viên Trường Việt Anh.',
+  },
 };
 
 export const viewport: Viewport = {

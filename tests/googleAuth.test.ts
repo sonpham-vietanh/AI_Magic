@@ -193,7 +193,7 @@ describe('decideAccess', () => {
     expect(decideAccess({ ...base, pathname: '/api/versions', hasSession: true })).toBe('allow');
   });
   it('các đường mở: đăng nhập, health, major-os', () => {
-    for (const p of ['/dang-nhap', '/api/auth/google/start', '/api/auth/session', '/api/health', '/api/major-os/usage']) {
+    for (const p of ['/dang-nhap', '/api/auth/google/start', '/api/auth/session', '/api/health', '/api/major-os/usage', '/manifest.webmanifest']) {
       expect(decideAccess({ ...base, pathname: p })).toBe('allow');
     }
   });

@@ -28,6 +28,7 @@ COPY --from=build /app/package.json /app/package-lock.json /app/next.config.ts /
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
+COPY --from=build /app/scripts ./scripts
 # Nhật ký sử dụng, ghi chú lớp: gắn volume vào /app/.data để không mất khi deploy lại.
 RUN mkdir -p /app/.data && chown -R node:node /app/.data /app/.next
 USER node
