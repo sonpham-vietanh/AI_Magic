@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAccess, timingSafeEqualStr } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { isSsoEnabled } from '@/lib/server/googleAuth';
 import {
   SESSION_COOKIE_NAME,
   createSessionToken,
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
     ok: true,
     session,
     reviewerConfigured,
+    ssoEnabled: isSsoEnabled(),
   });
 }
 
@@ -42,6 +44,13 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const limited = await rateLimit(request, 'auth-session', 20, 60_000);
   if (limited) return limited;
+  // Đã bật đăng nhập Google thì không cho tự khai tên để lấy phiên; phải đăng nhập bằng email trường.
+  if (isSsoEnabled()) {
+    return NextResponse.json(
+      { ok: false, error: 'Vui lòng đăng nhập bằng email của trường (Google).' },
+      { status: 403 },
+    );
+  }
 
   let json: unknown;
   try {

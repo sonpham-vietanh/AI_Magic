@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAccess } from '@/lib/server/guard';
 import { getOrgId } from '@/lib/server/org';
+import { effectiveActor } from '@/lib/server/identity';
 import { rateLimit } from '@/lib/server/rateLimit';
 import { getVersion, listVersions, saveVersion, VersionLimitError } from '@/lib/versions/store';
 import type { VersionInput } from '@/lib/versions/types';
@@ -47,7 +48,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Dữ liệu phiên bản không hợp lệ.' }, { status: 400 });
   }
   try {
-    const version = await saveVersion(getOrgId(request), parsed.data as unknown as VersionInput);
+    const input = { ...parsed.data, actor: effectiveActor(request, parsed.data.actor) || parsed.data.actor };
+    const version = await saveVersion(getOrgId(request), input as unknown as VersionInput);
     return NextResponse.json({ ok: true, version });
   } catch (err) {
     if (err instanceof VersionLimitError) {
@@ -82,7 +84,8 @@ export async function GET(request: Request) {
       const { orgId: _orgId, ...rest } = v;
       return NextResponse.json({ ok: true, version: { ...rest, artifacts: v.artifacts ?? [] } });
     }
-    const versions = await listVersions(org, parsed.data.actor!, parsed.data.limit ?? 100);
+    const who = effectiveActor(request, parsed.data.actor) || parsed.data.actor!;
+    const versions = await listVersions(org, who, parsed.data.limit ?? 100);
     return NextResponse.json({ ok: true, versions });
   } catch (err) {
     console.error('[versions GET] failed:', err);

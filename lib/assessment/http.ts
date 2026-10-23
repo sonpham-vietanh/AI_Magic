@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import { requireAccess } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { effectiveActor } from '@/lib/server/identity';
 import { AssessmentError } from './exam';
 
 export function fail(status: number, error: string) {
@@ -43,7 +44,8 @@ export function handleError(err: unknown, tag: string): Response {
 
 /** Tên người thao tác (CHƯA phải xác thực thật): header x-actor hoặc tham số actor. */
 export function actorOf(request: Request, url: URL): string {
-  return (request.headers.get('x-actor') || url.searchParams.get('actor') || '').trim().slice(0, 100);
+  const declared = (request.headers.get('x-actor') || url.searchParams.get('actor') || '').trim().slice(0, 100);
+  return effectiveActor(request, declared);
 }
 
 export function guardGet(request: Request, bucket: string, limit = 60): Response | null {

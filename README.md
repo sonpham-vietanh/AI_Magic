@@ -32,6 +32,7 @@ Sao chép `.env.example` thành `.env.local`:
 cp .env.example .env.local
 ```
 - Nếu cấu hình `OPENAI_BASE_URL`/`OPENAI_API_KEY`/`OPENAI_MODEL`, `OPENROUTER_API_KEY`/`OPENROUTER_MODEL` hoặc `GEMINI_API_KEY`, hệ thống sẽ gọi LLM trực tiếp (endpoint tunnel yêu cầu `stream: true`).
+- Đăng nhập email trường (Google Workspace): đặt `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_BASE_URL`, `SESSION_SECRET`, `REVIEWER_EMAILS` (xem `.env.example`). Khi bật, mọi trang/API cần phiên, tên người soạn/duyệt lấy từ email; chưa đặt thì giữ chế độ khai tên. Redirect URI trong Google Cloud: `<APP_BASE_URL>/api/auth/google/callback`.
 - Thao tác duyệt/quản trị cần `REVIEWER_KEY` (header `x-reviewer-key`); thiếu biến này thì mọi thao tác duyệt trả 503. `ASSESSMENT_REVIEWERS` là danh sách tên người duyệt.
 - Sau Cloudflare/Traefik, giới hạn tốc độ lấy IP từ `cf-connecting-ip` hoặc `x-forwarded-for` (chỉnh `TRUSTED_PROXY_HOPS` nếu số proxy khác 1).
 - Node.js >= 22.

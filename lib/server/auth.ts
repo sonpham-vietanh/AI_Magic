@@ -1,22 +1,18 @@
-// Xác thực phiên Giáo viên & Tổ trưởng chuyên môn (Reviewer) bằng chữ ký HMAC-SHA256 (`va_session`).
-// Cho phép giáo viên đăng nhập tên + email trường (@truongvietanh.com) và xác thực quyền Người duyệt một lần
-// thay vì phải nhập lại mã REVIEWER_KEY ở từng trang (/duyet, /kiem-tra, /danh-gia).
-
-import { createHmac } from 'node:crypto';
+// Xác thực phiên Giáo viên & Người duyệt. Phần ký/kiểm token nằm ở sessionToken.ts (chỉ dùng crypto) để dùng được trong proxy.ts.
+// Tại đây giữ ghi nhật ký phiên (cần đọc ghi tệp) và xuất lại các hàm cũ cho mã đang dùng.
 import { join } from 'node:path';
-import { timingSafeEqualStr } from './guard';
 import { createMutex, readJsonStrict, writeJsonAtomic } from './safeJson';
+import type { TeacherSession } from './sessionToken';
 
-export const SESSION_COOKIE_NAME = 'va_session';
-const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 ngày
-
-export interface TeacherSession {
-  name: string;
-  email?: string;
-  role: 'teacher' | 'reviewer';
-  iat: number;
-  exp: number;
-}
+export {
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_MS,
+  createSessionToken,
+  verifySessionToken,
+  parseCookieValue,
+  readSessionFromRequest,
+  type TeacherSession,
+} from './sessionToken';
 
 interface SessionAuditStore {
   sessions: {
@@ -31,104 +27,6 @@ const sessionStoreMutex = createMutex();
 
 function sessionStorePath(): string {
   return process.env.TEACHER_SESSION_STORE_PATH || join(process.cwd(), '.data', 'teacher-sessions.json');
-}
-
-function getSigningSecret(): string {
-  const fromEnv =
-    process.env.SESSION_SECRET?.trim() || process.env.REVIEWER_KEY?.trim() || process.env.SUPABASE_SECRET_KEY?.trim();
-  if (fromEnv) return fromEnv;
-  // Khóa mặc định cứng chỉ dành cho dev/test; production mà thiếu cấu hình thì từ chối ký thay vì dùng khóa ai cũng biết.
-  if (process.env.NODE_ENV === 'production') throw new Error('Chưa cấu hình SESSION_SECRET để ký phiên đăng nhập.');
-  return 'va-teaching-studio-local-secret-key';
-}
-
-function base64UrlEncode(input: string): string {
-  return Buffer.from(input, 'utf8').toString('base64url');
-}
-
-function base64UrlDecode(input: string): string {
-  return Buffer.from(input, 'base64url').toString('utf8');
-}
-
-function signPayload(encodedPayload: string): string {
-  return createHmac('sha256', getSigningSecret()).update(encodedPayload).digest('base64url');
-}
-
-export function createSessionToken(input: {
-  name: string;
-  email?: string;
-  role: 'teacher' | 'reviewer';
-  nowMs?: number;
-}): { token: string; session: TeacherSession } {
-  const now = input.nowMs ?? Date.now();
-  const session: TeacherSession = {
-    name: input.name.trim().slice(0, 100),
-    ...(input.email?.trim() ? { email: input.email.trim().toLowerCase().slice(0, 120) } : {}),
-    role: input.role,
-    iat: now,
-    exp: now + SESSION_TTL_MS,
-  };
-  const encoded = base64UrlEncode(JSON.stringify(session));
-  const sig = signPayload(encoded);
-  return { token: `${encoded}.${sig}`, session };
-}
-
-export function verifySessionToken(token: string, nowMs?: number): TeacherSession | null {
-  if (!token || typeof token !== 'string') return null;
-  const parts = token.trim().split('.');
-  if (parts.length !== 2) return null;
-  const [encoded, sig] = parts;
-  if (!encoded || !sig) return null;
-
-  let expectedSig: string;
-  try {
-    expectedSig = signPayload(encoded);
-  } catch {
-    return null;
-  }
-  if (!timingSafeEqualStr(sig, expectedSig)) return null;
-
-  try {
-    const parsed = JSON.parse(base64UrlDecode(encoded)) as Partial<TeacherSession>;
-    if (!parsed || typeof parsed.name !== 'string' || !parsed.name.trim()) return null;
-    if (parsed.role !== 'teacher' && parsed.role !== 'reviewer') return null;
-    if (typeof parsed.exp !== 'number' || parsed.exp <= (nowMs ?? Date.now())) return null;
-    return {
-      name: parsed.name.trim(),
-      ...(typeof parsed.email === 'string' && parsed.email.trim() ? { email: parsed.email.trim() } : {}),
-      role: parsed.role,
-      iat: typeof parsed.iat === 'number' ? parsed.iat : 0,
-      exp: parsed.exp,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function parseCookieValue(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(';')) {
-    const idx = part.indexOf('=');
-    if (idx === -1) continue;
-    const k = part.slice(0, idx).trim();
-    if (k === name) {
-      return decodeURIComponent(part.slice(idx + 1).trim());
-    }
-  }
-  return null;
-}
-
-export function readSessionFromRequest(request: Request): TeacherSession | null {
-  const headerToken = request.headers.get('x-va-session')?.trim();
-  if (headerToken) {
-    const s = verifySessionToken(headerToken);
-    if (s) return s;
-  }
-  const cookieToken = parseCookieValue(request.headers.get('cookie'), SESSION_COOKIE_NAME);
-  if (cookieToken) {
-    return verifySessionToken(cookieToken);
-  }
-  return null;
 }
 
 export async function recordTeacherSessionAudit(session: TeacherSession): Promise<void> {

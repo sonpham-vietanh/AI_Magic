@@ -4,6 +4,7 @@ import { callLiveLlm, callLiveLlmStream } from '@/lib/engine/llmClient';
 import { cleanPedagogicalText } from '@/lib/text/clean';
 import { getClassById, buildClassPedagogicalContext } from '@/lib/classes';
 import { requireAccess } from '@/lib/server/guard';
+import { effectiveActor } from '@/lib/server/identity';
 import { rateLimit } from '@/lib/server/rateLimit';
 import { getOrgId } from '@/lib/server/org';
 import { getStandardLesson } from '@/lib/kho';
@@ -372,7 +373,11 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return fail(400, `Tham số không hợp lệ: ${parsed.error.issues[0]?.message ?? 'sai định dạng'}`);
   }
-  const params = parsed.data.params;
+  // Khi bật đăng nhập Google, tên người soạn lấy từ phiên đã ký, không tin tên client gửi lên.
+  const signedActor = effectiveActor(request, '');
+  const params = signedActor
+    ? { ...parsed.data.params, teacher: { ...(parsed.data.params.teacher ?? {}), name: signedActor } }
+    : parsed.data.params;
   const orgId = getOrgId(request);
   const wantsStream = (request.headers.get('accept') ?? '').includes('text/event-stream');
 

@@ -14,7 +14,11 @@ export function useActor(): [string, (v: string) => void, boolean] {
     fetch('/api/auth/session')
       .then((r) => r.json())
       .then((j) => {
-        if (j?.ok && j.session?.name && !local) {
+        if (j?.ok && j.session?.via === 'google' && j.session.name) {
+          // Đăng nhập email trường: tên lấy từ phiên đã ký, không cho sửa tay.
+          setName(j.session.name);
+          writeActor(j.session.name);
+        } else if (j?.ok && j.session?.name && !local) {
           setName(j.session.name);
           writeActor(j.session.name);
         }
@@ -53,6 +57,7 @@ export function TeacherName({
   const [reviewerKey, setReviewerKey] = useState('');
   const [role, setRole] = useState<'teacher' | 'reviewer'>('teacher');
   const [authMsg, setAuthMsg] = useState('');
+  const [ssoUser, setSsoUser] = useState<{ name: string; email?: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -63,6 +68,9 @@ export function TeacherName({
         if (j?.ok && j.session?.role === 'reviewer') {
           setRole('reviewer');
         }
+        if (j?.ok && j.session?.via === 'google') {
+          setSsoUser({ name: j.session.name, email: j.session.email });
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -71,6 +79,30 @@ export function TeacherName({
   }, [value]);
 
   if (!ready) return null;
+
+  async function logout() {
+    try {
+      await fetch('/api/auth/session', { method: 'DELETE' });
+    } catch {
+      /* vẫn chuyển về trang đăng nhập */
+    }
+    window.location.assign('/dang-nhap');
+  }
+
+  if (ssoUser) {
+    return (
+      <span className="ag-who-pill" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+        <span className="ag-who-dot" aria-hidden="true" />
+        <span title={ssoUser.email}>
+          {ssoUser.name}
+          {role === 'reviewer' ? ' · Người duyệt' : ''}
+        </span>
+        <button type="button" className="ag-link" onClick={logout} aria-label="Đăng xuất">
+          Đăng xuất
+        </button>
+      </span>
+    );
+  }
 
   async function submitProfile(e: React.FormEvent) {
     e.preventDefault();
