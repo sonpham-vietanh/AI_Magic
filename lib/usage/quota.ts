@@ -6,7 +6,9 @@ import { readSessionFromRequest } from '@/lib/server/sessionToken';
 import { runWithUsageContext, type UsageContext, type UsageRecordInput } from './context';
 import { ANON_USER, appendUsage, monthKeyOf, normalizeUser, readLedger, todayKey, type LedgerStore } from './ledger';
 
-export const DEFAULT_DAILY_LIMIT = 40;
+// Mặc định KHÔNG giới hạn lượt soạn của giáo viên (0). Việc đo token và chi phí vẫn chạy để quản trị theo dõi.
+// Muốn đặt trần theo người thì đặt biến USAGE_DAILY_LIMIT (ví dụ 40).
+export const DEFAULT_DAILY_LIMIT = 0;
 
 /** 0 = không giới hạn. */
 export function dailyLimit(env: NodeJS.ProcessEnv = process.env): number {

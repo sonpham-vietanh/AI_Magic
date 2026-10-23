@@ -48,11 +48,11 @@ afterEach(() => {
 const ai = () => callLiveLlm('s', 'u', undefined, { useCache: false });
 
 describe('cấu hình hạn mức', () => {
-  it('mặc định 40, 0 là không giới hạn, giá trị sai quay về 40', () => {
-    expect(dailyLimit({} as NodeJS.ProcessEnv)).toBe(40);
+  it('mặc định không giới hạn (0), giá trị sai quay về mặc định, đặt số thì dùng số đó', () => {
+    expect(dailyLimit({} as NodeJS.ProcessEnv)).toBe(0);
     expect(dailyLimit({ USAGE_DAILY_LIMIT: '0' } as unknown as NodeJS.ProcessEnv)).toBe(0);
     expect(dailyLimit({ USAGE_DAILY_LIMIT: '12' } as unknown as NodeJS.ProcessEnv)).toBe(12);
-    expect(dailyLimit({ USAGE_DAILY_LIMIT: 'abc' } as unknown as NodeJS.ProcessEnv)).toBe(40);
+    expect(dailyLimit({ USAGE_DAILY_LIMIT: 'abc' } as unknown as NodeJS.ProcessEnv)).toBe(0);
     expect(monthlyBudgetUsd({ USAGE_MONTHLY_BUDGET_USD: '25' } as unknown as NodeJS.ProcessEnv)).toBe(25);
     expect(monthlyBudgetUsd({} as NodeJS.ProcessEnv)).toBe(0);
   });
@@ -131,7 +131,7 @@ describe('thống kê của tôi', () => {
     });
     const mine = summarizeMine(await readLedger(), 'lan@x.vn');
     expect(mine.today.used).toBe(1);
-    expect(mine.today.limit).toBe(40);
+    expect(mine.today.limit).toBe(0);
     expect(mine.month).toEqual({ runs: 1, tokens: 150 });
     expect(summarizeMine(await readLedger(), 'nguoi.khac@x.vn').today.used).toBe(0);
   });

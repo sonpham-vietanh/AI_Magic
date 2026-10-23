@@ -64,7 +64,7 @@ Supabase (tùy chọn): đồ thị tri thức và học liệu gốc (atoms, ed
 | `OPENROUTER_API_KEY` / `OPENROUTER_API_KEYS`, `OPENROUTER_BASE_URL`, `OPENROUTER_MODEL` | OpenRouter. |
 | `OPENAI_API_KEY` / `OPENAI_API_KEYS`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | Điểm cuối tương thích OpenAI (kể cả tunnel; yêu cầu `stream: true`, đã xử lý trong mã). |
 | `FORCE_LLM_ON_PACK` | `1` = ép gọi AI cho gói tài nguyên thay vì dựng mẫu. |
-| `USAGE_DAILY_LIMIT` | Số lượt soạn AI mỗi người mỗi ngày (mặc định 40; `0` = không giới hạn). |
+| `USAGE_DAILY_LIMIT` | Trần số lượt soạn AI mỗi người mỗi ngày. Mặc định `0` = KHÔNG giới hạn (giáo viên không thấy chip hạn mức). Đặt số (ví dụ 40) nếu cần kiểm soát chi phí. |
 | `USAGE_MONTHLY_BUDGET_USD` | Ngân sách tháng ước tính (USD); chỉ **cảnh báo**, không chặn. `0` hoặc trống = không đặt. |
 | `USAGE_PRICING_JSON` | Ghi đè bảng giá tham khảo, ví dụ `{"my-model":{"in":1,"out":4}}` (USD mỗi triệu token). Chi phí chỉ là ước lượng, không phải hóa đơn. |
 
