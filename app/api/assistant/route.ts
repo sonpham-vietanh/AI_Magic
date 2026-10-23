@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getClassById } from '@/lib/classes';
-import { answerPedagogicalAssistant } from '@/lib/engine/smartGenerator';
+import { callLiveLlm } from '@/lib/engine/llmClient';
+import { codeFromErrorText } from '@/lib/engine/llmErrors';
+import { ASSISTANT_FOLLOWUPS, ASSISTANT_SYSTEM, buildAssistantUserPrompt } from '@/lib/agent/assistantPrompt';
 import { getNodeById } from '@/lib/knowledge-graph';
 import { requireAccess } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { cleanPedagogicalText } from '@/lib/text/clean';
+import { isAiAuthError } from '@/lib/ui/soanBai';
 import { withUsage } from '@/lib/usage/quota';
 import { recordUsageEvent } from '@/lib/server/store';
-import type { GeneratedResource } from '@/lib/types';
 
 const idRegex = /^[A-Za-z0-9_.:-]{1,64}$/;
 
@@ -17,6 +20,15 @@ const bodySchema = z.object({
   knowledgeNodeId: z.string().regex(idRegex).optional(),
   teacherEmail: z.string().email().max(200).optional(),
   teacherName: z.string().max(100).optional(),
+  /** Ngữ cảnh từ ô chat hợp nhất: bài, môn, khối đang mở, vài lượt trước, trích đoạn bản soạn. */
+  lessonTitle: z.string().max(300).optional(),
+  subject: z.string().max(60).optional(),
+  grade: z.string().max(10).optional(),
+  currentText: z.string().max(60000).optional(),
+  history: z
+    .array(z.object({ role: z.enum(['teacher', 'assistant']), text: z.string().max(4000) }))
+    .max(12)
+    .optional(),
   currentResource: z
     .object({
       id: z.string().max(100).optional(),
@@ -63,23 +75,51 @@ export async function POST(request: Request) {
 
     const classProfile = getClassById(body.classId);
     const primaryNode = getNodeById(body.knowledgeNodeId);
+    const resource = body.currentResource as { title?: string; markdownContent?: string } | undefined;
+    const userPrompt = buildAssistantUserPrompt({
+      question,
+      className: classProfile?.className,
+      campus: classProfile?.campus,
+      studentCount: classProfile?.studentCount,
+      lessonTitle: body.lessonTitle || primaryNode?.title,
+      subject: body.subject || primaryNode?.subjectName,
+      grade: body.grade || (primaryNode?.grade ? String(primaryNode.grade) : undefined),
+      resourceTitle: resource?.title,
+      currentText: body.currentText || resource?.markdownContent,
+      history: body.history,
+    });
 
     const metered = await withUsage(
       request,
       { workflow: 'assistant', declaredUser: body.teacherEmail || body.teacherName },
       async (h) => ({
-        result: await answerPedagogicalAssistant({
-          question,
-          classProfile,
-          primaryNode,
-          currentResource: body.currentResource as unknown as GeneratedResource | undefined,
-        }),
-        exceeded: h.exceeded,
+        live: await callLiveLlm(ASSISTANT_SYSTEM, userPrompt, undefined, { maxTokens: 1800, timeoutMs: 60_000, useCache: false }),
+        exceeded: h.exceeded(),
       }),
     );
-    const ex = metered.exceeded();
-    if (ex) return NextResponse.json({ ok: false, error: ex.message }, { status: 429 });
-    const result = metered.result;
+    if (metered.exceeded) {
+      return NextResponse.json(
+        { ok: false, error: metered.exceeded.message, quota: { used: metered.exceeded.used, limit: metered.exceeded.limit } },
+        { status: 429 },
+      );
+    }
+    const live = metered.live;
+    if (!live.ok || !live.content) {
+      if (codeFromErrorText(live.error) === 'ai_auth' || isAiAuthError(502, live.error)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: 'ai_auth',
+            error: 'AI đang tạm không đăng nhập. Cô/thầy báo quản trị viên; bản nháp của cô/thầy vẫn được giữ.',
+          },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: 'AI chưa phản hồi nên mình chưa trả lời được. Cô/thầy bấm Thử lại sau ít phút nhé.' },
+        { status: 502 },
+      );
+    }
 
     await recordUsageEvent({
       nguoi: {
@@ -95,7 +135,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      ...result,
+      reply: cleanPedagogicalText(live.content),
+      suggestions: ASSISTANT_FOLLOWUPS,
+      mode: 'llm_live',
     });
   } catch (err) {
     console.error('[assistant] error:', err);

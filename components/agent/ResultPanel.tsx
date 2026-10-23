@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/icons';
 import { ArtifactView } from '@/components/resources/ArtifactView';
+import { MathText } from '@/components/MathText';
+import { buildDocumentHtml, printHtml } from '@/lib/export/print';
+import { RefineBox } from './result/RefineBox';
+import { replaceSectionBody, type RefineContext } from './result/refine';
+import { useTextHistory } from './result/useTextHistory';
 import { buildFinalText, textToSections } from '@/lib/ui/soanBai';
 import {
   ARTIFACT_SHORT,
@@ -47,7 +52,7 @@ export function DocBody({ text }: { text: string }) {
       {lines.map((line, i) =>
         line.trim() === '' ? null : (
           <p key={i} className={`ag-line ${classifyLine(line)}`}>
-            {line.trim()}
+            <MathText text={line.trim()} />
           </p>
         ),
       )}
@@ -69,6 +74,8 @@ export interface ResultPanelProps {
   fromVersion?: number;
   /** Tên bài, dùng khi bản chuẩn không có tiêu đề. */
   lessonTitle?: string;
+  /** Bối cảnh gửi kèm khi "Viết lại" (môn, khối, lớp, phong cách). */
+  refineContext?: RefineContext;
   onRegenerate: () => void;
   onAccept: () => Promise<void> | void;
 }
@@ -98,7 +105,18 @@ export function ResultPanel(p: ResultPanelProps) {
     [edited, p.text, headings, sectionsSrc],
   );
 
+  /** Chỉ đề kiểm tra và nội dung thời sự bị khoá cho tới khi người duyệt; mọi loại khác dùng được ngay. */
   const blocked = r.blockAcceptDownload === true;
+  /** Bản nháp: bản chuẩn của Kho chưa duyệt hoặc AI soạn từ dữ liệu cơ bản. Không chặn thao tác, chỉ gắn nhãn. */
+  const draft = !blocked && (r.draft === true || (r.draft === undefined && r.requiresApproval === true));
+  const hist = useTextHistory(p.text, p.onText);
+  const [printing, setPrinting] = useState(false);
+  const docKind = r.workflow === 'khbd' ? 'khbd' : 'generic';
+  const refineCtx: RefineContext = { baiDayTen: r.standard?.title ?? p.lessonTitle, ...(p.refineContext ?? {}) };
+  const applyRefine = (i: number, body: string) => {
+    const next = replaceSectionBody(sections, i, body);
+    hist.commit(buildFinalText(next, p.text));
+  };
 
   const download = async () => {
     if (blocked) return;
@@ -107,16 +125,43 @@ export function ResultPanel(p: ResultPanelProps) {
       const { buildDocxBlob, downloadBlob } = await import('@/lib/export/docx');
       const blob = await buildDocxBlob({
         title: p.title.toUpperCase(),
-        subtitle: [
-          `${p.formatText} · ${(r.bloomLevels ?? []).join(' → ')}`,
-          r.requiresApproval ? 'Bản nháp: cần người duyệt trước khi dùng' : 'Đã soạn từ bản chuẩn của Kho',
-        ],
-        sections: sections.map((s) => ({ heading: s.heading, body: s.body })),
+        subtitle: docSubtitle(),
+        sections: sections.map((s) => ({ heading: GENERIC_HEADING.test(s.heading.trim()) ? '' : s.heading, body: s.body })),
+        kind: docKind,
+        draft,
       });
       const safe = p.title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'ban-soan';
       downloadBlob(blob, `${safe}.docx`);
     } catch {
       setExportError('Không tạo được file Word. Cô/thầy thử lại hoặc dùng nút In.');
+    }
+  };
+
+  /** Phụ đề: bỏ phần trống để không còn dấu chấm hay mũi tên thừa (bản mở lại từ Lịch sử không có bậc tư duy). */
+  const docSubtitle = () =>
+    [[p.formatText, (r.bloomLevels ?? []).join(' → ')].filter((x) => x && x.trim()).join(' · '), draft ? '' : r.standard?.status === 'approved' ? 'Soạn từ bản chuẩn đã duyệt của Kho' : '']
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+  /** In đúng A4: dựng trang in sạch trong khung ẩn (có công thức, có dấu bản nháp), không in cả giao diện ứng dụng. */
+  const printDoc = async () => {
+    setExportError('');
+    setPrinting(true);
+    try {
+      await printHtml(
+        buildDocumentHtml(
+          {
+            title: p.title,
+            subtitle: docSubtitle(),
+            sections: sections.map((s) => ({ heading: GENERIC_HEADING.test(s.heading.trim()) ? '' : s.heading, body: s.body })),
+          },
+          { draft },
+        ),
+      );
+    } catch {
+      setExportError('Chưa mở được bản in. Cô/thầy thử lại hoặc dùng nút Tải .docx rồi in từ Word.');
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -149,6 +194,7 @@ export function ResultPanel(p: ResultPanelProps) {
       formatText: p.formatText,
       lessonTitle: r.standard?.title ?? p.lessonTitle,
       bloomLevels: r.bloomLevels ?? [],
+      draft,
       text: p.text,
       sections,
       artifacts,
@@ -221,16 +267,41 @@ export function ResultPanel(p: ResultPanelProps) {
                 <span>Lấy trực tiếp từ bản chuẩn đã duyệt: {fromKho.map((k) => ARTIFACT_SHORT[k] ?? k).join(', ')}.</span>
               </div>
             )}
-            {r.requiresApproval && (
+            {blocked && (
               <div className="ag-alert warn" role="status">
                 <Icon name="alert" size={18} />
                 <span>
-                  Cần người duyệt trước khi dùng. Đây mới là bản nháp.
-                  {(r.approvalReasons ?? []).length > 0 && ` ${(r.approvalReasons ?? []).join('; ')}.`}
+                  <strong>Loại này cần người duyệt trước khi tải về hoặc dùng.</strong>{' '}
+                  {(r.approvalReasons ?? []).length > 0
+                    ? `${(r.approvalReasons ?? []).join('; ')}.`
+                    : 'Đề kiểm tra và nội dung thời sự được kiểm tra kỹ hơn để bảo đảm chính xác.'}{' '}
+                  Cô/thầy vẫn xem và sao chép được.
                   {r.approvalUrl && (
                     <>
                       {' '}
-                      <a href={r.approvalUrl}>Mở trang duyệt</a>
+                      <a href={r.approvalUrl} className="ag-inline-link">
+                        Mở trang duyệt
+                      </a>
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+            {draft && (
+              <div className="dr-banner" role="status">
+                <span className="dr-tag">
+                  <Icon name="edit" size={14} />
+                  Bản nháp, chưa duyệt
+                </span>
+                <span className="dr-text">
+                  Cô/thầy dùng và tải về được ngay. Tệp tải về có dấu “BẢN NHÁP” để không nhầm với bản đã duyệt.
+                  {(r.draftReasons ?? r.approvalReasons ?? []).length > 0 && ` Lý do: ${(r.draftReasons ?? r.approvalReasons ?? []).join('; ')}.`}
+                  {r.approvalUrl && (
+                    <>
+                      {' '}
+                      <a href={r.approvalUrl} className="ag-inline-link">
+                        Mở trang duyệt
+                      </a>
                     </>
                   )}
                 </span>
@@ -265,12 +336,19 @@ export function ResultPanel(p: ResultPanelProps) {
                   </div>
                 )}
                 <div className="ag-art">
-                  <ArtifactView artifact={cur} />
+                  <ArtifactView artifact={cur} draft={draft} />
                 </div>
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '12px 0' }}>
+                <div className="dr-tools">
+                  <button type="button" className="ag-btn small" onClick={hist.undo} disabled={!hist.canUndo || p.busy}>
+                    <Icon name="refresh" size={16} />
+                    Hoàn tác
+                  </button>
+                  <button type="button" className="ag-btn small" onClick={hist.redo} disabled={!hist.canRedo || p.busy}>
+                    Làm lại
+                  </button>
                   <button type="button" className="ag-btn small" onClick={() => setEditing((v) => !v)} aria-pressed={editing}>
                     <Icon name="edit" size={16} />
                     {editing ? 'Xem bản đẹp' : 'Chỉnh sửa'}
@@ -281,12 +359,26 @@ export function ResultPanel(p: ResultPanelProps) {
                     <label className="ag-field-label" htmlFor="ag-edit">
                       Sửa trực tiếp. Mỗi mục bắt đầu bằng dòng tiêu đề.
                     </label>
-                    <textarea id="ag-edit" className="ag-field" rows={22} value={p.text} onChange={(e) => p.onText(e.target.value)} />
+                    <textarea id="ag-edit" className="ag-field" rows={22} value={p.text} onChange={(e) => hist.commit(e.target.value, 'type')} />
                   </>
                 ) : (
                   sections.map((s, i) => (
                     <section className="ag-doc-sec" key={`${s.heading}-${i}`}>
-                      {s.heading && !GENERIC_HEADING.test(s.heading.trim()) && <h3>{s.heading}</h3>}
+                      <div className="rf-head">
+                        {s.heading && !GENERIC_HEADING.test(s.heading.trim()) ? <h3><MathText text={s.heading} /></h3> : <span />}
+                        {s.body.trim() && (
+                          <RefineBox
+                            heading={GENERIC_HEADING.test(s.heading.trim()) ? '' : s.heading}
+                            body={s.body}
+                            format={p.formatText}
+                            context={refineCtx}
+                            disabled={p.busy}
+                            onApply={(body) => applyRefine(i, body)}
+                            onUndo={hist.undo}
+                            canUndo={hist.canUndo}
+                          />
+                        )}
+                      </div>
                       <DocBody text={s.body} />
                     </section>
                   ))
@@ -477,7 +569,7 @@ export function ResultPanel(p: ResultPanelProps) {
           className="ag-btn primary"
           onClick={accept}
           disabled={accepting || p.busy || p.accepted || blocked}
-          title={blocked ? 'Cần người duyệt trước khi dùng' : undefined}
+          title={blocked ? 'Loại này cần người duyệt trước khi dùng' : 'Lưu vào Lịch sử của tôi'}
         >
           <Icon name="check" />
           {p.accepted ? 'Đã duyệt & dùng' : 'Duyệt & dùng'}
@@ -499,7 +591,7 @@ export function ResultPanel(p: ResultPanelProps) {
               className="ag-btn"
               onClick={() => void exportTo('gamma')}
               disabled={blocked}
-              title={blocked ? 'Cần người duyệt trước khi xuất' : 'Tạo dàn ý slide để dán vào Gamma'}
+              title={blocked ? 'Loại này cần người duyệt trước khi xuất' : 'Tạo dàn ý slide để dán vào Gamma'}
             >
               <Icon name="slides" />
               Xuất sang Gamma
@@ -509,7 +601,7 @@ export function ResultPanel(p: ResultPanelProps) {
               className="ag-btn"
               onClick={() => void exportTo('notebook')}
               disabled={blocked}
-              title={blocked ? 'Cần người duyệt trước khi xuất' : 'Tạo văn bản nguồn để thêm vào NotebookLM'}
+              title={blocked ? 'Loại này cần người duyệt trước khi xuất' : 'Tạo văn bản nguồn để thêm vào NotebookLM'}
             >
               <Icon name="book" />
               Xuất sang NotebookLM
@@ -518,11 +610,11 @@ export function ResultPanel(p: ResultPanelProps) {
         )}
         {!cur && (
           <>
-            <button type="button" className="ag-btn" onClick={download} disabled={blocked}>
+            <button type="button" className="ag-btn" onClick={download} disabled={blocked} title={blocked ? 'Loại này cần người duyệt trước khi tải' : draft ? 'Tệp có dấu BẢN NHÁP' : undefined}>
               <Icon name="download" />
               Tải .docx
             </button>
-            <button type="button" className="ag-btn" onClick={() => window.print()}>
+            <button type="button" className="ag-btn" onClick={() => void printDoc()} disabled={blocked || printing || p.text.trim().length === 0}>
               <Icon name="print" />
               In
             </button>

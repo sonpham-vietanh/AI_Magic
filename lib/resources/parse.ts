@@ -57,6 +57,50 @@ export function extractJson(raw: string): string | null {
   return null;
 }
 
+/** Lệnh LaTeX bắt đầu bằng b/f/n/r/t: JSON.parse sẽ hiểu nhầm thành ký tự điều khiển nếu chỉ có MỘT dấu gạch chéo. */
+const LATEX_CMD_RE =
+  /^(?:frac|dfrac|tfrac|times|theta|tan|tau|text|textbf|textit|to|top|right|rightarrow|rightleftharpoons|neq|ne|nu|not|notin|nabla|beta|bar|begin|bf|binom|bigcup|bigcap|bullet|forall|flat|rho|rm|ref)(?![a-zA-Z])/;
+
+/**
+ * Sửa dấu gạch chéo ngược trong chuỗi JSON do AI trả: công thức LaTeX như \frac, \sqrt, \alpha hay bị viết với MỘT dấu
+ * (JSON sai hoặc, tệ hơn, \f thành ký tự điều khiển làm mất công thức). Chỉ sửa trong chuỗi, giữ nguyên escape hợp lệ.
+ */
+export function repairLatexEscapes(json: string): string {
+  let out = '';
+  let inStr = false;
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i];
+    if (!inStr) {
+      out += c;
+      if (c === '"') inStr = true;
+      continue;
+    }
+    if (c === '"') {
+      inStr = false;
+      out += c;
+      continue;
+    }
+    if (c !== '\\') {
+      out += c;
+      continue;
+    }
+    const n = json[i + 1];
+    if (n === undefined) {
+      out += '\\\\';
+    } else if (n === '\\' || n === '"' || n === '/') {
+      out += c + n;
+      i++;
+    } else if (n === 'u' && /^[0-9a-fA-F]{4}$/.test(json.slice(i + 2, i + 6))) {
+      out += c;
+    } else if ('bfnrt'.includes(n)) {
+      out += LATEX_CMD_RE.test(json.slice(i + 1)) ? '\\\\' : c;
+    } else {
+      out += '\\\\';
+    }
+  }
+  return out;
+}
+
 const ne = (label: string) => z.string().min(1, `${label} đang trống`);
 const scriptLines = z.array(z.object({ speaker: ne('speaker'), text: ne('text') })).min(1, 'chưa có lượt nói nào');
 
@@ -283,7 +327,7 @@ export function parseArtifact<K extends ArtifactKind>(
   if (!json) return { ok: false, error: 'Không tìm thấy JSON trong đầu ra.' };
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    parsed = JSON.parse(repairLatexEscapes(json));
   } catch (e) {
     return { ok: false, error: `JSON không hợp lệ: ${e instanceof Error ? e.message : 'lỗi cú pháp'}` };
   }

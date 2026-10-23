@@ -1,0 +1,330 @@
+/* ==========================================================================
+   Nhận xét học bạ (tiền tố hb-)
+   Mỗi bề mặt đặt color và background tường minh ở mọi trạng thái (xem docs/THIET_KE.md).
+   ========================================================================== */
+
+.hb {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 960px;
+  color: var(--on-surface);
+}
+
+.hb-privacy {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--info);
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+.hb-privacy svg {
+  flex: none;
+  margin-top: 2px;
+}
+.hb-privacy strong {
+  color: var(--info);
+}
+
+.hb-card {
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--on-surface);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hb-h {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  color: var(--navy);
+  background: transparent;
+}
+
+.hb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.hb-fieldwrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: var(--on-surface);
+  background: transparent;
+}
+.hb-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--on-surface);
+  background: transparent;
+}
+.hb-field {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-raised);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.hb-field::placeholder {
+  color: var(--on-surface-muted);
+  opacity: 1;
+}
+.hb-field:hover {
+  border-color: var(--navy);
+  background: var(--surface-raised);
+  color: var(--on-surface);
+}
+.hb-field:focus-visible {
+  outline: none;
+  border-color: var(--navy);
+  background: var(--surface-raised);
+  color: var(--on-surface);
+  box-shadow: var(--ag-focus);
+}
+.hb-field:disabled {
+  background: var(--surface-subtle);
+  color: var(--on-surface-muted);
+}
+.hb-list,
+.hb-text {
+  resize: vertical;
+}
+.hb-text {
+  min-height: 96px;
+}
+
+.hb-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.hb-filebtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-raised);
+  color: var(--navy);
+  font-weight: 600;
+  cursor: pointer;
+}
+.hb-filebtn:hover {
+  background: var(--cream-hover);
+  color: var(--navy);
+}
+.hb-filebtn:focus-within {
+  box-shadow: var(--ag-focus);
+  background: var(--surface-raised);
+  color: var(--navy);
+}
+.hb-file {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.hb-go {
+  min-height: 48px;
+}
+
+.hb-count,
+.hb-hint {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.hb-warn {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.9375rem;
+}
+
+.hb-live {
+  min-height: 0;
+}
+.hb-notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.hb-notice-ok {
+  border: 1px solid var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+}
+.hb-notice-bad {
+  border: 1px solid var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.hb-resulthead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.hb-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--navy-100);
+  overflow: hidden;
+}
+.hb-progress span {
+  display: block;
+  height: 100%;
+  background: var(--navy);
+  transition: width 240ms ease;
+}
+
+.hb-list-ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hb-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--on-surface);
+}
+.hb-itemhead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.hb-name {
+  font-weight: 700;
+  color: var(--on-surface);
+  background: transparent;
+}
+.hb-note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.hb-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--surface-raised);
+  color: var(--on-surface-muted);
+}
+.hb-badge.hb-badge-dang {
+  border-color: var(--info);
+  background: var(--info-bg);
+  color: var(--info);
+}
+.hb-badge.hb-badge-xong {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+}
+.hb-badge.hb-badge-xem {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.hb-badge.hb-badge-loi {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.hb-skel {
+  height: 88px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--navy-50), var(--navy-100), var(--navy-50));
+  background-size: 200% 100%;
+  animation: hb-shimmer 1.4s linear infinite;
+}
+@keyframes hb-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-skel {
+    animation: none;
+  }
+  .hb-progress span {
+    transition: none;
+  }
+}
+.hb-err {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.9375rem;
+}
+.hb-issues {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border-radius: 8px;
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 720px) {
+  .hb-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hb-card {
+    padding: 16px;
+  }
+  .hb-go {
+    width: 100%;
+    justify-content: center;
+  }
+}

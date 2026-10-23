@@ -12,10 +12,11 @@ import {
   type HistoryItem,
 } from '@/lib/agent/history';
 import { readActor } from '@/lib/agent/actor';
-import { AssistantDrawer } from './AssistantDrawer';
+import { QuickSearch } from './studio/QuickSearch';
 import { AccountMenu } from './ui/AccountMenu';
 import { Icon, type IconName } from './ui/icons';
 import { parseMe, quotaLeft, type MeState } from './ui/uiLogic';
+import { hocBaMinutes } from '@/lib/stats/localSavings';
 import '../app/ui-ls.css';
 import '../app/ui-shell.css';
 
@@ -39,8 +40,10 @@ interface NavItem {
 }
 
 // Menu gom theo việc cô/thầy làm, dùng từ ngữ quen thuộc với giáo viên.
+const ASSIST_NAV: NavItem[] = [{ href: '/', label: 'Trợ lý soạn bài', icon: 'sparkles', exact: true }];
+
 const WORK_NAV: NavItem[] = [
-  { href: '/', label: 'Trợ lý soạn bài', icon: 'sparkles', exact: true },
+  { href: '/hoc-ba', label: 'Nhận xét học bạ', icon: 'edit' },
   { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', icon: 'clipboard' },
   { href: '/kiem-tra', label: 'Kiểm tra & Đề thi', icon: 'exam' },
 ];
@@ -103,7 +106,8 @@ export function Shell({
 }: ShellProps) {
   const pathname = usePathname() || '/';
   const router = useRouter();
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [savedWeek, setSavedWeek] = useState<number | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [recent, setRecent] = useState<HistoryItem[]>([]);
   const [extraOpen, setExtraOpen] = useState(true);
@@ -133,6 +137,24 @@ export function Shell({
     setNavOpen(false);
   }, [pathname]);
 
+  // Phím tắt toàn cục: Ctrl+K (Cmd+K) hoặc "/" mở hộp tìm nhanh, trừ khi đang gõ trong ô nhập.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+      const combo = (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k';
+      const slash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing;
+      if (combo || slash) {
+        e.preventDefault();
+        setNavOpen(false);
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   // Danh tính và hạn mức: chịu được chưa đăng nhập, API chưa có (404) hoặc lỗi mạng.
   useEffect(() => {
     const ctl = new AbortController();
@@ -153,6 +175,15 @@ export function Shell({
         if (r.ok && !ctl.signal.aborted) setQuota(quotaLeft(await r.json()));
       } catch {
         /* bỏ qua êm */
+      }
+      if (next.user) {
+        try {
+          const r = await fetch('/api/me/savings', { credentials: 'same-origin', signal: ctl.signal, cache: 'no-store' });
+          const j = (await r.json()) as { ok?: boolean; week?: { minutes?: number } };
+          if (r.ok && j.ok && !ctl.signal.aborted) setSavedWeek((j.week?.minutes ?? 0) + hocBaMinutes(7));
+        } catch {
+          /* bỏ qua êm */
+        }
       }
     })();
     return () => ctl.abort();
@@ -238,10 +269,15 @@ export function Shell({
     else router.push(`/?h=${encodeURIComponent(id)}`);
   };
 
-  const openAssistant = () => {
+  const goTo = (href: string) => {
+    setNavOpen(false);
+    router.push(href);
+  };
+
+  const askQuick = () => {
     setNavOpen(false);
     if (onOpenAssistant) onOpenAssistant();
-    else setAssistantOpen(true);
+    else router.push('/?ask=1');
   };
 
   const meta = PAGE_TITLES.find((p) => pathname.startsWith(p.prefix));
@@ -272,7 +308,11 @@ export function Shell({
           <img src="/logo-crest.webp" alt="" />
           <span className="ag-brand-name">Việt Anh MagicStudio</span>
         </Link>
-        <button
+        <div className="qk-mobileactions">
+          <button type="button" className="ag-iconbtn" aria-label="Tìm nhanh" onClick={() => setSearchOpen(true)}>
+            <Icon name="search" size={22} />
+          </button>
+          <button
           ref={menuBtnRef}
           type="button"
           className="ag-iconbtn"
@@ -281,8 +321,9 @@ export function Shell({
           aria-label={navOpen ? 'Đóng menu' : 'Mở menu'}
           onClick={() => setNavOpen((v) => !v)}
         >
-          <Icon name={navOpen ? 'x' : 'menu'} size={22} />
-        </button>
+            <Icon name={navOpen ? 'x' : 'menu'} size={22} />
+          </button>
+        </div>
       </div>
       {navOpen && <div className="ag-scrim" aria-hidden="true" onClick={() => setNavOpen(false)} />}
 
@@ -304,9 +345,27 @@ export function Shell({
             <Icon name="plus" />
             Cuộc trò chuyện mới
           </button>
+          <button
+            type="button"
+            className="qk-trigger"
+            onClick={() => {
+              setNavOpen(false);
+              setSearchOpen(true);
+            }}
+            aria-keyshortcuts="Control+K /"
+          >
+            <Icon name="search" size={18} />
+            <span className="qk-trigger-text">Tìm nhanh</span>
+            <kbd className="qk-trigger-kbd" aria-hidden="true">
+              Ctrl K
+            </kbd>
+          </button>
         </div>
 
         <div className="ag-rail-scroll">
+          <div className="ag-label">Trợ lý</div>
+          {renderNav(ASSIST_NAV, 'Trợ lý')}
+
           <div className="ag-label">Soạn bài</div>
           {renderNav(WORK_NAV, 'Soạn bài')}
 
@@ -348,10 +407,17 @@ export function Shell({
         </div>
 
         <div className="ag-rail-foot">
-          <AccountMenu me={me} loaded={meLoaded} quota={quota} declaredName={declared} onNavigate={() => setNavOpen(false)} />
-          <button type="button" className="ag-assist-btn" onClick={openAssistant}>
+          <AccountMenu
+            me={me}
+            loaded={meLoaded}
+            quota={quota}
+            declaredName={declared}
+            savedWeekMinutes={savedWeek}
+            onNavigate={() => setNavOpen(false)}
+          />
+          <button type="button" className="ag-assist-btn" onClick={askQuick}>
             <Icon name="book" />
-            Hỏi đáp chuyên môn
+            Hỏi nhanh
           </button>
         </div>
       </aside>
@@ -379,7 +445,13 @@ export function Shell({
         )}
       </div>
 
-      {!onOpenAssistant && <AssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
+      <QuickSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        history={recent.slice(0, 8).map((h) => ({ id: h.id, title: h.title, when: formatWhen(h.at) }))}
+        onNavigate={goTo}
+        onOpenHistory={openHistory}
+      />
     </div>
   );
 }

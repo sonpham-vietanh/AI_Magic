@@ -36,6 +36,7 @@ const ALLOWED_STORE_KEYS = new Set([
   'usage-ledger',
   'audit-log',
   'ops-log',
+  'feedback',
 ]);
 
 /** Danh sách khóa kho chuẩn (dùng cho sao lưu và xuất dữ liệu). */

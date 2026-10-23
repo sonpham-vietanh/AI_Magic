@@ -1,5 +1,12 @@
 import { RUBRIC_6 } from '@/lib/eval/rubric';
-import { fetchSupabaseAtomDetail, querySupabaseAtoms } from '@/lib/supabase';
+import {
+  fetchSupabaseAtomDetail,
+  listAtomIndex,
+  querySupabaseAtoms,
+  summarizeCoverage,
+  type SlimAtom,
+} from '@/lib/supabase';
+import { chapterInfo, compareAtoms, displayTitle, searchAtoms, type LessonAtom } from '@/lib/ui/lessonList';
 import type { Artifact, ResourceKind } from '@/lib/resources/types';
 import { RESOURCE_KINDS } from '@/lib/resources/types';
 import { readReviews, reviewKey, withLock, writeReviews, type KhoReview } from './reviewStore';
@@ -351,4 +358,99 @@ export async function listLibrary(orgId: string, opts: { subject?: string; grade
       draftCount,
     };
   });
+}
+
+/* ---------------- Danh sách đầy đủ và tìm kiếm chéo khối/môn ---------------- */
+
+export interface LibraryItem extends LibraryRow {
+  subject: string;
+  subjectName: string;
+  grade: number;
+  /** Nhãn chương thân thiện: "Chương 4 · Tam giác bằng nhau". */
+  chapterLabel: string;
+  chapterNo: number | null;
+  factoryAssetCount: number;
+}
+
+export interface LibraryPage {
+  items: LibraryItem[];
+  total: number;
+  offset: number;
+  /** Vị trí trang kế tiếp, null khi đã hết. */
+  nextOffset: number | null;
+  /** Số bài theo môn và khối của phạm vi đã lọc (không tính q), để biết môn nào chưa có dữ liệu. */
+  coverage: Record<string, Record<string, number>>;
+}
+
+export const LIBRARY_MAX_LIMIT = 500;
+export const LIBRARY_DEFAULT_LIMIT = 300;
+
+/**
+ * Danh sách bài KHÔNG cắt: phân trang theo thứ tự chương trình (khối, môn, chương, bài, mục),
+ * hoặc theo độ khớp khi có từ khoá q. subject/grade bỏ trống hoặc 'all' nghĩa là mọi môn/mọi khối.
+ */
+export async function searchLibrary(
+  orgId: string,
+  opts: { subject?: string; grade?: string; q?: string; offset?: number; limit?: number; preferGrade?: string },
+): Promise<LibraryPage> {
+  const scoped = await listAtomIndex({ subject: opts.subject, grade: opts.grade });
+  const coverage = summarizeCoverage(scoped);
+  const q = (opts.q ?? '').trim();
+  const lite: (LessonAtom & { _s: SlimAtom })[] = scoped.map((a) => ({
+    id: a.id,
+    code: a.code,
+    title: a.title,
+    subject: a.subjectCode,
+    grade: a.grade,
+    chapter: a.chapter,
+    lesson: a.lesson,
+    ord: a.ord,
+    hasFactoryPackage: a.hasFactoryPackage,
+    factoryAssetCount: a.factoryAssetCount,
+    _s: a,
+  }));
+  const ordered = q
+    ? searchAtoms(lite, q, { limit: lite.length || 1, preferGrade: opts.preferGrade }).map((h) => h.atom)
+    : [...lite].sort(compareAtoms);
+  const limit = Math.min(Math.max(Math.floor(opts.limit ?? LIBRARY_DEFAULT_LIMIT), 1), LIBRARY_MAX_LIMIT);
+  const offset = Math.max(Math.floor(opts.offset ?? 0), 0);
+  const slice = ordered.slice(offset, offset + limit);
+
+  const data = await readAssets();
+  const reviews = await readReviews();
+  const items: LibraryItem[] = slice.map((l) => {
+    const a = l._s;
+    const vs = data.versions[versionKey(orgId, a.id)];
+    const latest = vs && vs.length ? vs[vs.length - 1] : undefined;
+    const rl = reviews[reviewKey(orgId, a.id)];
+    const review = rl && rl.length ? rl[rl.length - 1] : undefined;
+    const vaApproved = review?.decision === 'approve';
+    const status: KhoStatus = vaApproved ? 'approved' : a.hasFactoryPackage ? 'chua_duyet' : 'khong_co';
+    const info = chapterInfo(a.chapter, a.code);
+    return {
+      atomId: a.id,
+      code: a.code,
+      title: displayTitle(a),
+      chapter: a.chapter,
+      lesson: a.lesson,
+      status,
+      hasPackage: a.hasFactoryPackage,
+      assetCount: a.factoryAssetCount,
+      ...(review ? { review } : {}),
+      ...(vaApproved && latest ? { version: latest.version } : {}),
+      kinds:
+        vaApproved && latest
+          ? (latest.artifacts.map((x) => x.kind).filter((k) => (RESOURCE_KINDS as readonly string[]).includes(k)) as ResourceKind[])
+          : [],
+      draftCount: RESOURCE_KINDS.filter((k) => data.assets[assetKey(orgId, a.id, k)]?.status === 'draft').length,
+      subject: a.subjectCode,
+      subjectName: a.subject,
+      grade: a.grade,
+      chapterLabel: info.label,
+      chapterNo: info.no,
+      factoryAssetCount: a.factoryAssetCount,
+    };
+  });
+  const end = offset + slice.length;
+  return { items, total: ordered.length, offset, nextOffset: end < ordered.length ? end : null, coverage };
 }

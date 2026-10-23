@@ -11,6 +11,7 @@ import { ARTIFACT_LABELS } from '@/lib/resources/types';
 import { availableFormats, EXPORT_LABELS, exportArtifact, printWorksheetAnswers } from '@/lib/export/artifact';
 import type { ExportFormat } from '@/lib/export/artifact';
 import { buildInfographicScene, buildMindmapScene } from '@/lib/export/diagrams';
+import { MathText } from '@/components/MathText';
 import { SceneSvg } from './SceneSvg';
 import { useSpeech } from './useSpeech';
 
@@ -18,7 +19,7 @@ const LEVEL: Record<string, string> = { nho: 'Nhớ', hieu: 'Hiểu', van_dung: 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const paras = (t: string) => String(t ?? '').split(/\n+/).filter((x) => x.trim());
 
-export function ArtifactView({ artifact, compact }: { artifact: Artifact; compact?: boolean }) {
+export function ArtifactView({ artifact, compact, draft }: { artifact: Artifact; compact?: boolean; draft?: boolean }) {
   if (compact) return <CompactView artifact={artifact} />;
   let body: ReactNode;
   switch (artifact.kind) {
@@ -26,7 +27,7 @@ export function ArtifactView({ artifact, compact }: { artifact: Artifact; compac
       body = <SlidesView data={artifact.data as Artifact<'slides'>['data']} />;
       break;
     case 'worksheet':
-      body = <WorksheetView artifact={artifact} />;
+      body = <WorksheetView artifact={artifact} draft={draft} />;
       break;
     case 'text':
       body = <TextView data={artifact.data as Artifact<'text'>['data']} />;
@@ -69,7 +70,7 @@ export function ArtifactView({ artifact, compact }: { artifact: Artifact; compac
   }
   return (
     <section className="rs" aria-label={ARTIFACT_LABELS[artifact.kind]}>
-      <ExportBar artifact={artifact} />
+      <ExportBar artifact={artifact} draft={draft} />
       {body}
     </section>
   );
@@ -77,7 +78,7 @@ export function ArtifactView({ artifact, compact }: { artifact: Artifact; compac
 
 /* ---------- Thanh xuất tệp ---------- */
 
-function ExportBar({ artifact }: { artifact: Artifact }) {
+function ExportBar({ artifact, draft }: { artifact: Artifact; draft?: boolean }) {
   const formats = availableFormats(artifact.kind);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -85,7 +86,7 @@ function ExportBar({ artifact }: { artifact: Artifact }) {
     setBusy(f);
     setMsg(null);
     try {
-      await exportArtifact(artifact, f);
+      await exportArtifact(artifact, f, undefined, { draft: !!draft });
       setMsg({ ok: true, text: f === 'pdf' ? 'Đã mở hộp thoại in. Chọn "Lưu dạng PDF" nếu cô/thầy muốn lưu tệp.' : 'Đã tạo tệp, cô/thầy xem trong thư mục Tải xuống.' });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : 'Không xuất được tệp.' });
@@ -210,12 +211,12 @@ function SlidesView({ data }: { data: Artifact<'slides'>['data'] }) {
       <div className="rs-stage-wrap" tabIndex={0} role="group" aria-roledescription="bộ slide" aria-label={`${data.title}. Dùng phím mũi tên trái phải để đổi slide`}>
         <div className="rs-stage" aria-live="polite">
           <div className="rs-stage-head">
-            <h3>{cur.title}</h3>
+            <h3><MathText text={cur.title} /></h3>
           </div>
           <div className={`rs-stage-body${cur.visual ? ' has-visual' : ''}`}>
             <ul>
               {(cur.bullets ?? []).map((b, k) => (
-                <li key={k}>{b}</li>
+                <li key={k}><MathText text={b} /></li>
               ))}
             </ul>
             {cur.visual && (
@@ -246,13 +247,13 @@ function SlidesView({ data }: { data: Artifact<'slides'>['data'] }) {
       </div>
       <div className="rs-notes">
         <b>Ghi chú cho giáo viên (không chiếu lên màn hình)</b>
-        <p>{cur.notes || 'Slide này chưa có ghi chú.'}</p>
+        <p>{cur.notes ? <MathText text={cur.notes} /> : 'Slide này chưa có ghi chú.'}</p>
       </div>
       <div className="rs-strip" ref={stripRef} role="group" aria-label="Danh sách slide">
         {slides.map((s, k) => (
           <button key={k} type="button" className={`rs-thumb${k === i ? ' on' : ''}`} onClick={() => go(k)} aria-current={k === i ? 'true' : undefined} aria-label={`Slide ${k + 1}: ${s.title}`}>
             <span className="rs-thumb-n">{k + 1}</span>
-            <span className="rs-thumb-t">{s.title}</span>
+            <span className="rs-thumb-t"><MathText text={s.title} /></span>
           </button>
         ))}
       </div>
@@ -262,7 +263,7 @@ function SlidesView({ data }: { data: Artifact<'slides'>['data'] }) {
 
 /* ---------- Phiếu học tập ---------- */
 
-function WorksheetView({ artifact }: { artifact: Artifact }) {
+function WorksheetView({ artifact, draft }: { artifact: Artifact; draft?: boolean }) {
   const d = artifact.data as Artifact<'worksheet'>['data'];
   const [tab, setTab] = useState<'hs' | 'gv'>('hs');
   const id = useId();
@@ -290,13 +291,13 @@ function WorksheetView({ artifact }: { artifact: Artifact }) {
             <h3 className="rs-paper-title">{d.title}</h3>
             {(d.sections ?? []).map((s, si) => (
               <div key={si} className="rs-paper-sec">
-                <h4>{s.heading}</h4>
+                <h4><MathText text={s.heading} /></h4>
                 {(s.items ?? []).map((it, ii) => {
                   n++;
                   return (
                     <div key={ii} className="rs-q">
                       <p>
-                        <b>Câu {n}.</b> {it.prompt}
+                        <b>Câu {n}.</b> <MathText text={it.prompt} />
                         {it.level && <span className="rs-level"> ({LEVEL[it.level]})</span>}
                       </p>
                       {Array.from({ length: Math.max(0, Math.min(10, it.lines ?? 3)) }, (_, k) => (
@@ -314,16 +315,16 @@ function WorksheetView({ artifact }: { artifact: Artifact }) {
             <h3 className="rs-paper-title">Đáp án: {d.title}</h3>
             {(d.answerKey ?? []).map((k, ki) => (
               <div key={ki} className="rs-key">
-                <h4>{k.heading}</h4>
+                <h4><MathText text={k.heading} /></h4>
                 {paras(k.body).map((p, pi) => (
-                  <p key={pi}>{p}</p>
+                  <p key={pi}><MathText text={p} /></p>
                 ))}
               </div>
             ))}
             <button
               type="button"
               className="ag-btn small"
-              onClick={() => printWorksheetAnswers(artifact).catch((e) => setErr(e instanceof Error ? e.message : 'Không in được.'))}
+              onClick={() => printWorksheetAnswers(artifact, { draft: !!draft }).catch((e) => setErr(e instanceof Error ? e.message : 'Không in được.'))}
             >
               In trang đáp án riêng
             </button>
@@ -340,12 +341,12 @@ function WorksheetView({ artifact }: { artifact: Artifact }) {
 function TextView({ data }: { data: Artifact<'text'>['data'] }) {
   return (
     <article className="rs-text">
-      <h3>{data.title}</h3>
+      <h3><MathText text={data.title} /></h3>
       {(data.sections ?? []).map((s, i) => (
         <section key={i}>
-          <h4>{s.heading}</h4>
+          <h4><MathText text={s.heading} /></h4>
           {paras(s.body).map((p, k) => (
-            <p key={k}>{p}</p>
+            <p key={k}><MathText text={p} /></p>
           ))}
         </section>
       ))}
@@ -479,7 +480,7 @@ function ScriptView({ intro, speakers, stances, lines, conclusion }: { intro: st
         {lines.map((l, i) => (
           <li key={i} className={`rs-line c${colorOf(l.speaker)}${i === sp.index ? ' now' : ''}`} aria-current={i === sp.index ? 'true' : undefined}>
             <span className="rs-who-tag">{l.speaker}</span>
-            <p>{l.text}</p>
+            <p><MathText text={l.text} /></p>
             <button type="button" className="rs-line-play" disabled={!sp.supported} onClick={() => sp.play(i)} aria-label={`Nghe từ lượt ${i + 1}, ${l.speaker}`}>
               Nghe
             </button>
@@ -489,7 +490,7 @@ function ScriptView({ intro, speakers, stances, lines, conclusion }: { intro: st
       {conclusion && (
         <div className="rs-conclusion">
           <b>Kết luận</b>
-          <p>{conclusion}</p>
+          <p><MathText text={conclusion} /></p>
         </div>
       )}
     </div>
@@ -533,7 +534,7 @@ function VideoView({ data }: { data: Artifact<'video'>['data'] }) {
               <dt>Hình ảnh gợi ý</dt>
               <dd>{s.visual}</dd>
               <dt>Lời dẫn</dt>
-              <dd>{s.narration}</dd>
+              <dd><MathText text={s.narration} /></dd>
               {s.onScreenText && (
                 <>
                   <dt>Chữ trên màn hình</dt>

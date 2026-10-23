@@ -16,6 +16,7 @@ interface Row {
   code: string;
   title: string;
   chapter: string;
+  chapterLabel?: string;
   lesson: string;
   status: KhoStatus;
   hasPackage?: boolean;
@@ -48,9 +49,17 @@ export default function KhoPage() {
       setLoading(true);
       setError('');
       try {
-        const qs = new URLSearchParams({ subject, grade });
-        const data = await fetchJson<{ ok?: boolean; items?: Row[] }>(`/api/kho/library?${qs.toString()}`, { signal });
-        setRows(data.items || []);
+        // Lấy đủ mọi bài của môn/khối, từng trang một (không cắt ở 200).
+        const all: Row[] = [];
+        let offset = 0;
+        for (let guard = 0; guard < 20; guard++) {
+          const qs = new URLSearchParams({ subject, grade, limit: '500', offset: String(offset) });
+          const data = await fetchJson<{ ok?: boolean; items?: Row[]; nextOffset?: number | null }>(`/api/kho/library?${qs.toString()}`, { signal });
+          all.push(...(data.items || []));
+          if (data.nextOffset == null) break;
+          offset = data.nextOffset;
+        }
+        setRows(all);
       } catch (e) {
         if (signal?.aborted) return;
         setRows([]);
@@ -85,8 +94,8 @@ export default function KhoPage() {
       if (filter === 'ready' && r.status !== 'approved' && r.status !== 'chua_duyet') continue;
       if (filter === 'approved' && r.status !== 'approved') continue;
       if (filter === 'pending' && r.status !== 'khong_co') continue;
-      if (nq && !norm(`${r.title} ${r.code} ${r.lesson}`).includes(nq)) continue;
-      const k = r.chapter || 'Chưa rõ chương';
+      if (nq && !norm(`${r.title} ${r.code} ${r.lesson} ${r.chapterLabel ?? r.chapter}`).includes(nq)) continue;
+      const k = r.chapterLabel || r.chapter || 'Chưa phân chương';
       map.set(k, [...(map.get(k) || []), r]);
     }
     return [...map];
@@ -195,7 +204,7 @@ export default function KhoPage() {
             <div className="du-empty kh-empty">
               <Icon name="library" size={32} />
               <strong>{rows.length === 0 ? 'Chưa có bài nào cho môn và khối này' : 'Không có bài khớp bộ lọc'}</strong>
-              {rows.length === 0 ? 'Thử đổi môn hoặc khối khác.' : 'Thử bỏ bớt từ khoá hoặc đổi trạng thái lọc.'}
+              {rows.length === 0 ? 'Môn này chưa có bài trong Kho ở khối đang chọn. Cô/thầy thử đổi khối hoặc môn khác, hoặc vẫn soạn được bằng cách nhập tên bài ở trang Soạn bài.' : 'Thử bỏ bớt từ khoá hoặc đổi trạng thái lọc.'}
               {rows.length > 0 && (
                 <button
                   type="button"

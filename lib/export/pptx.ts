@@ -1,5 +1,16 @@
 // Dựng tệp PowerPoint (16:9) từ SlidesData bằng pptxgenjs. Chạy được cả trong trình duyệt lẫn Node.
 import type { Slide, SlidesData } from '@/lib/resources/types';
+import { mathToUnicode } from './latex';
+import { viDatesInText } from '@/lib/text/date';
+
+/** Công thức và ngày tháng thành chữ đọc được trong PowerPoint (PPTX không dựng được công thức Word). */
+const tx = (v: unknown): string => viDatesInText(mathToUnicode(String(v ?? '')));
+
+export interface PptxOptions {
+  /** true: đóng dấu "BẢN NHÁP, CHƯA DUYỆT" ở góc mỗi slide. */
+  draft?: boolean;
+}
+const DRAFT_LABEL = 'BẢN NHÁP, CHƯA DUYỆT';
 
 const NAVY = '14153A';
 const GOLD = 'F9DD0E';
@@ -70,7 +81,25 @@ export interface PptxBuildResult {
   slideCount: number;
 }
 
-export async function buildSlidesPptx(deck: SlidesData): Promise<PptxBuildResult> {
+export async function buildSlidesPptx(deckIn: SlidesData, opts: PptxOptions = {}): Promise<PptxBuildResult> {
+  const deck: SlidesData = {
+    ...deckIn,
+    title: tx(deckIn.title),
+    slides: (deckIn.slides ?? []).map((s) => ({
+      ...s,
+      title: tx(s.title),
+      bullets: (s.bullets ?? []).map(tx),
+      visual: s.visual ? tx(s.visual) : s.visual,
+      notes: s.notes ? tx(s.notes) : s.notes,
+    })),
+  };
+  const stamp = (sl: { addText: (t: string, o: object) => void }, onDark: boolean) => {
+    if (!opts.draft) return;
+    sl.addText(DRAFT_LABEL, {
+      x: 4.45, y: 5.2, w: 3.9, h: 0.3, fontFace: FONT, fontSize: 10, bold: true, align: 'center', valign: 'middle',
+      color: '7C2D12', fill: { color: 'FEF3C7' }, line: { color: onDark ? GOLD : 'B45309', width: 1 },
+    });
+  };
   const mod = await import('pptxgenjs');
   const PptxGenJS = (mod as { default?: unknown }).default ?? mod;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +126,7 @@ export async function buildSlidesPptx(deck: SlidesData): Promise<PptxBuildResult
     fit: 'shrink',
   });
   cover.addText('Trường Việt Anh', { x: 0.6, y: 3.2, w: 8.8, h: 0.5, fontFace: FONT, fontSize: 18, color: GOLD });
+  stamp(cover, true);
   cover.addNotes('Slide bìa. Chiếu khi học sinh vào lớp.');
 
   const slides = deck.slides ?? [];
@@ -151,6 +181,7 @@ export async function buildSlidesPptx(deck: SlidesData): Promise<PptxBuildResult
     }
     sl.addText('Trường Việt Anh', { x: 0.5, y: 5.2, w: 4, h: 0.3, fontFace: FONT, fontSize: 10, color: MUTED });
     sl.addText(String(idx + 1), { x: 8.8, y: 5.2, w: 0.7, h: 0.3, fontFace: FONT, fontSize: 10, color: MUTED, align: 'right' });
+    stamp(sl, true);
     sl.addNotes(slideNotes(s) || 'Chưa có ghi chú cho slide này.');
   });
 

@@ -37,6 +37,7 @@ const PATHS = {
   layers: 'M12 4l9 5-9 5-9-5 9-5zM3 14l9 5 9-5',
   exam: 'M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5',
   plug: 'M9 3v5M15 3v5M6 8h12v3a6 6 0 01-12 0V8zM12 17v4',
+  search: 'M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4',
   library: 'M4 4h4v16H4zM10 4h4v16h-4zM16.5 5.5l3.5 1-3.5 13.5-3.5-1z',
 } as const;
 

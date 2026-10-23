@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { Icon, type IconName } from '@/components/ui/icons';
-import { formatLabel, type FormatValue } from '@/lib/agent/flow';
+import { formatLabel, type AgentSlots, type FormatValue } from '@/lib/agent/flow';
 import { EVENT_HISTORY, formatWhen, loadHistory } from '@/lib/agent/history';
-import { greetingByHour, greetingName, isReviewerRole, roleLabel, type MeInfo } from '@/lib/agent/prefs';
+import { QUICK_QUESTIONS } from '@/lib/agent/nlu';
+import { dailyTip, greetingByHour, greetingName, isReviewerRole, roleLabel, todayLabel, type MeInfo } from '@/lib/agent/prefs';
+import type { ClassProfile } from '@/lib/types';
+import { HeroArt } from './HeroArt';
 import type { UsageInfo } from './useMe';
 
+export { HeroArt } from './HeroArt';
+
 const QUICK: { format: FormatValue; icon: IconName; title: string; desc: string; tone: string }[] = [
+  { format: 'bo_tiet_day', icon: 'sparkles', title: 'Bộ tiết dạy', desc: 'Kế hoạch bài dạy, slide, phiếu học tập và quiz của một bài, chỉ một lần bấm', tone: 'gold' },
   { format: 'ke_hoach', icon: 'book', title: 'Kế hoạch bài dạy', desc: 'Theo Công văn 5512, dựa trên gói kiến thức của Kho', tone: 'navy' },
-  { format: 'slide', icon: 'slides', title: 'Slide bài giảng', desc: 'Bộ slide tải ngay về PowerPoint (.pptx)', tone: 'gold' },
+  { format: 'slide', icon: 'slides', title: 'Slide bài giảng', desc: 'Bộ slide tải ngay về PowerPoint (.pptx)', tone: 'navy' },
   { format: 'worksheet', icon: 'file', title: 'Phiếu học tập', desc: 'Phiếu cho học sinh, đáp án riêng cho giáo viên', tone: 'teal' },
   { format: 'quiz', icon: 'quiz', title: 'Quiz củng cố', desc: 'Câu hỏi nhanh trong tiết, kèm giải thích', tone: 'rose' },
 ];
@@ -24,79 +30,16 @@ const MORE: { format: FormatValue; icon: IconName; label: string }[] = [
   { format: 'tai_nguyen_6_dang', icon: 'sparkles', label: 'Trọn bộ 6 tài nguyên' },
 ];
 
-/** Minh hoạ tự vẽ: bản soạn, slide và câu hỏi quanh một tia sáng. Trang trí nên ẩn khỏi trình đọc màn hình. */
-export function HeroArt() {
-  return (
-    <svg className="ag-art-svg" viewBox="0 0 380 320" role="presentation" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="ag-g-gold" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#F9DD0E" />
-          <stop offset="1" stopColor="#E8C40A" />
-        </linearGradient>
-        <linearGradient id="ag-g-navy" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#26275D" />
-          <stop offset="1" stopColor="#14153A" />
-        </linearGradient>
-      </defs>
-      <circle cx="196" cy="162" r="132" fill="#FBF6DC" />
-      <circle cx="196" cy="162" r="96" fill="none" stroke="#E8C40A" strokeOpacity="0.45" strokeDasharray="3 9" strokeWidth="2" />
-      {/* slide */}
-      <g className="ag-art-float b" transform="rotate(7 288 118)">
-        <rect x="222" y="62" width="136" height="92" rx="12" fill="#fff" stroke="#D3CFC0" />
-        <rect x="222" y="62" width="136" height="20" rx="12" fill="url(#ag-g-navy)" />
-        <rect x="222" y="74" width="136" height="8" fill="url(#ag-g-navy)" />
-        <circle cx="236" cy="72" r="3" fill="#F9DD0E" />
-        <rect x="236" y="96" width="50" height="6" rx="3" fill="#14153A" />
-        <rect x="236" y="108" width="34" height="5" rx="2.5" fill="#D3CFC0" />
-        <rect x="300" y="132" width="10" height="14" rx="2" fill="#E8C40A" />
-        <rect x="314" y="122" width="10" height="24" rx="2" fill="#14153A" />
-        <rect x="328" y="112" width="10" height="34" rx="2" fill="#26275D" />
-      </g>
-      {/* kế hoạch bài dạy */}
-      <g className="ag-art-float a">
-        <rect x="70" y="52" width="150" height="196" rx="14" fill="#fff" stroke="#D3CFC0" />
-        <rect x="70" y="52" width="150" height="38" rx="14" fill="url(#ag-g-navy)" />
-        <rect x="70" y="76" width="150" height="14" fill="url(#ag-g-navy)" />
-        <rect x="86" y="64" width="64" height="8" rx="4" fill="#F9DD0E" />
-        <rect x="86" y="104" width="118" height="7" rx="3.5" fill="#14153A" />
-        <rect x="86" y="120" width="96" height="6" rx="3" fill="#D3CFC0" />
-        <rect x="86" y="134" width="108" height="6" rx="3" fill="#D3CFC0" />
-        <rect x="86" y="154" width="118" height="7" rx="3.5" fill="#14153A" />
-        <rect x="86" y="170" width="84" height="6" rx="3" fill="#D3CFC0" />
-        <rect x="86" y="184" width="100" height="6" rx="3" fill="#D3CFC0" />
-        <rect x="86" y="204" width="56" height="22" rx="11" fill="url(#ag-g-gold)" />
-        <path d="M96 215l4 4 8-8" fill="none" stroke="#14153A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-      {/* câu hỏi */}
-      <g className="ag-art-float c">
-        <rect x="204" y="190" width="132" height="70" rx="14" fill="#14153A" />
-        <path d="M236 260l-6 18 22-18z" fill="#14153A" />
-        <circle cx="228" cy="214" r="12" fill="url(#ag-g-gold)" />
-        <text x="228" y="219" textAnchor="middle" fontSize="15" fontWeight="800" fill="#14153A" fontFamily="inherit">
-          ?
-        </text>
-        <rect x="248" y="208" width="72" height="6" rx="3" fill="#E2E3F0" />
-        <rect x="248" y="220" width="52" height="6" rx="3" fill="#8D8FC0" />
-        <rect x="218" y="238" width="100" height="10" rx="5" fill="#26275D" />
-        <rect x="218" y="238" width="62" height="10" rx="5" fill="#F9DD0E" />
-      </g>
-      {/* tia sáng */}
-      <g className="ag-art-spark">
-        <path d="M62 120l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#E8C40A" />
-        <path d="M336 30l3.5 8.5 8.5 3.5-8.5 3.5-3.5 8.5-3.5-8.5-8.5-3.5 8.5-3.5z" fill="#14153A" />
-        <circle cx="48" cy="248" r="5" fill="#26275D" />
-        <circle cx="352" cy="170" r="4" fill="#E8C40A" />
-      </g>
-    </svg>
-  );
-}
-
 export interface RecentItem {
   key: string;
   title: string;
   meta: string;
   kind: 'version' | 'local';
   id: string;
+  /** Có với bản lưu trong trình duyệt: dùng cho "Soạn lại như lần trước". */
+  slots?: AgentSlots;
+  /** Bản nháp chưa duyệt, đang làm dở. */
+  inProgress?: boolean;
 }
 
 interface VersionLite {
@@ -108,7 +51,7 @@ interface VersionLite {
   createdAt: string;
 }
 
-/** "Gần đây của tôi": phiên bản đã lưu (máy chủ) cộng các bản soạn mới trong trình duyệt, bỏ trùng theo runId. */
+/** "Gần đây của tôi": bản soạn trong trình duyệt (có đủ lựa chọn để soạn lại) cộng phiên bản đã lưu trên máy chủ, bỏ trùng theo runId. */
 export function useRecent(actor: string, sso: boolean, refreshKey: unknown): RecentItem[] {
   const [versions, setVersions] = useState<VersionLite[]>([]);
   const [local, setLocal] = useState<ReturnType<typeof loadHistory>>([]);
@@ -140,6 +83,19 @@ export function useRecent(actor: string, sso: boolean, refreshKey: unknown): Rec
 
   const seen = new Set<string>();
   const out: RecentItem[] = [];
+  for (const h of local) {
+    if (seen.has(h.id)) continue;
+    seen.add(h.id);
+    out.push({
+      key: `l-${h.id}`,
+      id: h.id,
+      kind: 'local',
+      title: h.title,
+      slots: h.slots,
+      inProgress: !h.accepted,
+      meta: `${formatLabel(h.slots?.format) || 'Bản soạn'} · ${h.accepted ? 'đã duyệt' : 'bản nháp'} · ${formatWhen(h.at)}`,
+    });
+  }
   const sorted = [...versions].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   for (const v of sorted) {
     if (seen.has(v.runId)) continue;
@@ -150,17 +106,6 @@ export function useRecent(actor: string, sso: boolean, refreshKey: unknown): Rec
       kind: 'version',
       title: v.title,
       meta: `${formatLabel(v.format) || 'Bản soạn'} · bản ${v.number} · ${formatWhen(v.createdAt)}`,
-    });
-  }
-  for (const h of local) {
-    if (seen.has(h.id)) continue;
-    seen.add(h.id);
-    out.push({
-      key: `l-${h.id}`,
-      id: h.id,
-      kind: 'local',
-      title: h.title,
-      meta: `${formatLabel(h.slots?.format) || 'Bản soạn'} · ${h.accepted ? 'đã duyệt' : 'bản nháp'} · ${formatWhen(h.at)}`,
     });
   }
   return out.slice(0, 4);
@@ -189,14 +134,155 @@ interface HeroProps {
   me: MeInfo;
   usage: UsageInfo | null;
   recent: RecentItem[];
+  /** Lớp của tôi (theo email giáo viên chủ nhiệm hoặc lớp đã dùng gần đây). */
+  myClasses: ClassProfile[];
+  /** Mọi lớp chọn được khi chưa có "lớp của tôi". */
+  pickableClasses: ClassProfile[];
   onStart: (f: FormatValue) => void;
   onShowAll: () => void;
   onOpenRecent: (item: RecentItem) => void;
+  onRedo: (item: RecentItem) => void;
+  onRedoOtherClass: (item: RecentItem) => void;
+  onPlanForClass: (c: ClassProfile) => void;
+  onQuickAsk: (question: string) => void;
 }
 
-export function Hero({ me, usage, recent, onStart, onShowAll, onOpenRecent }: HeroProps) {
+export function Hero({
+  me,
+  usage,
+  recent,
+  myClasses,
+  pickableClasses,
+  onStart,
+  onShowAll,
+  onOpenRecent,
+  onRedo,
+  onRedoOtherClass,
+  onPlanForClass,
+  onQuickAsk,
+}: HeroProps) {
   const name = greetingName(me.user?.name);
   const hello = name ? `${greetingByHour()}, ${name}` : 'Chào cô/thầy';
+  const [pickClass, setPickClass] = useState('');
+  const [today, setToday] = useState('');
+  const [tip, setTip] = useState('');
+  useEffect(() => {
+    // Tính trên trình duyệt để ngày và mẹo đúng theo ngày của cô/thầy (không lệch giữa máy chủ và trình duyệt).
+    setToday(todayLabel());
+    setTip(dailyTip());
+  }, []);
+  const todayFirst = recent.length > 0 || myClasses.length > 0;
+  const todaySection = (
+      <section className="ag-today" aria-labelledby="ag-today-h">
+        <div className="ag-today-head">
+          <h2 id="ag-today-h">Hôm nay</h2>
+          {today && <span className="ag-today-date">{today}</span>}
+        </div>
+        <div className="ag-today-grid">
+          <div className="ag-today-card">
+            <h3>
+              <Icon name="users" size={17} />
+              Lớp của tôi
+            </h3>
+            {myClasses.length > 0 ? (
+              <ul className="ag-today-list">
+                {myClasses.map((c) => (
+                  <li key={c.id} className="ag-today-row">
+                    <span className="ag-today-row-txt">
+                      <strong>Lớp {c.className}</strong>
+                      <span>
+                        {c.studentCount} học sinh · {c.campus}
+                      </span>
+                    </span>
+                    <button type="button" className="ag-btn small" onClick={() => onPlanForClass(c)}>
+                      <Icon name="sparkles" size={16} />
+                      Soạn bài tiếp theo
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="ag-today-empty">
+                <p>Chưa có lớp nào gắn với tài khoản của cô/thầy. Chọn lớp đang dạy để mình soạn sát đặc điểm của lớp.</p>
+                <div className="ag-today-pick">
+                  <label htmlFor="ag-today-class" className="ag-today-sr">
+                    Chọn lớp đang dạy
+                  </label>
+                  <select id="ag-today-class" className="ag-field" value={pickClass} onChange={(e) => setPickClass(e.target.value)}>
+                    <option value="">Chọn lớp đang dạy</option>
+                    {pickableClasses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        Lớp {c.className} · {c.campus}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="ag-btn small"
+                    disabled={!pickClass}
+                    onClick={() => {
+                      const c = pickableClasses.find((x) => x.id === pickClass);
+                      if (c) onPlanForClass(c);
+                    }}
+                  >
+                    Soạn bài cho lớp này
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="ag-today-card">
+            <h3>
+              <Icon name="clock" size={17} />
+              Gần đây của tôi
+            </h3>
+            {recent.length === 0 ? (
+              <p className="ag-today-muted">
+                Chưa có bản soạn nào. Bản soạn đầu tiên sẽ hiện ở đây ngay khi xong, kể cả khi cô/thầy chưa duyệt.
+              </p>
+            ) : (
+              <ul className="ag-today-list">
+                {recent.map((r) => (
+                  <li key={r.key} className="ag-today-item">
+                    <button type="button" className="ag-home-recent-item" onClick={() => onOpenRecent(r)}>
+                      <span className="ag-home-recent-ico" aria-hidden="true">
+                        <Icon name="file" size={18} />
+                      </span>
+                      <span className="ag-home-recent-txt">
+                        <strong>{r.title}</strong>
+                        <span>{r.meta}</span>
+                      </span>
+                      <span className="ag-home-recent-open">{r.inProgress ? 'Tiếp tục' : 'Mở lại'}</span>
+                    </button>
+                    {r.slots && (
+                      <div className="ag-today-acts">
+                        <button type="button" className="ag-btn small" onClick={() => onRedo(r)}>
+                          <Icon name="refresh" size={15} />
+                          Soạn lại như lần trước
+                        </button>
+                        <button type="button" className="ag-btn small" onClick={() => onRedoOtherClass(r)}>
+                          <Icon name="users" size={15} />
+                          Soạn lại cho lớp khác
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        {tip && (
+          <p className="ag-today-tip">
+            <Icon name="info" size={16} />
+            <span>
+              <strong>Mẹo hôm nay:</strong> {tip}
+            </span>
+          </p>
+        )}
+      </section>
+  );
   return (
     <div className="ag-hero ag-hero2">
       <div className="ag-hero-top">
@@ -210,8 +296,7 @@ export function Hero({ me, usage, recent, onStart, onShowAll, onOpenRecent }: He
             <span className="ag-h1-sub">Hôm nay mình soạn gì?</span>
           </h1>
           <p>
-            Mình đối chiếu gói kiến thức chuẩn trong Kho của Trường Việt Anh, phân hoá theo lớp và mức tư duy Bloom, rồi soạn
-            bản nháp để cô/thầy chỉnh và duyệt.
+            Gõ một câu như “soạn kế hoạch bài dạy định lí Pythagore lớp 7A2, 2 tiết”, hỏi chuyên môn, hoặc bấm một thẻ bên dưới.
           </p>
           <div className="ag-hero-meta">
             {usage && <QuotaChip usage={usage} />}
@@ -228,9 +313,16 @@ export function Hero({ me, usage, recent, onStart, onShowAll, onOpenRecent }: He
         </div>
       </div>
 
+      {todayFirst && todaySection}
+
       <div className="ag-quick" role="group" aria-label="Bắt đầu nhanh">
-        {QUICK.map((s) => (
-          <button key={s.format} type="button" className={`ag-quick-card tone-${s.tone}`} onClick={() => onStart(s.format)}>
+        {QUICK.map((s, i) => (
+          <button
+            key={s.format}
+            type="button"
+            className={`ag-quick-card tone-${s.tone}${i === 0 ? ' ag-quick-featured' : ''}`}
+            onClick={() => onStart(s.format)}
+          >
             <span className="ag-quick-ico">
               <Icon name={s.icon} size={22} />
             </span>
@@ -245,30 +337,19 @@ export function Hero({ me, usage, recent, onStart, onShowAll, onOpenRecent }: He
         ))}
       </div>
 
-      {recent.length > 0 && (
-        <section className="ag-home-recent" aria-labelledby="ag-home-recent-h">
-          <h2 id="ag-home-recent-h">
-            <Icon name="clock" size={17} />
-            Gần đây của tôi
-          </h2>
-          <ul>
-            {recent.map((r) => (
-              <li key={r.key}>
-                <button type="button" className="ag-home-recent-item" onClick={() => onOpenRecent(r)}>
-                  <span className="ag-home-recent-ico" aria-hidden="true">
-                    <Icon name="file" size={18} />
-                  </span>
-                  <span className="ag-home-recent-txt">
-                    <strong>{r.title}</strong>
-                    <span>{r.meta}</span>
-                  </span>
-                  <span className="ag-home-recent-open">Mở lại</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {!todayFirst && todaySection}
+
+      <section className="ag-today-ask" aria-labelledby="ag-today-ask-h">
+        <h2 id="ag-today-ask-h">Hỏi nhanh</h2>
+        <div className="ag-today-asks">
+          {QUICK_QUESTIONS.map((q) => (
+            <button key={q.title} type="button" className="ag-today-askbtn" onClick={() => onQuickAsk(q.question)}>
+              <Icon name={q.icon} size={18} />
+              <span>{q.title}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="ag-hero-more">
         <div className="ag-hero-more-head">

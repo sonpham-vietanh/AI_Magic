@@ -1,3 +1,4 @@
+import { toVnDates } from './mathSafe';
 import { PHONG_CACH, type WorkflowId, type WorkflowParams } from './types';
 
 const TAG_RE = /<\/?\s*(?:du_lieu_chuan|bai_lien_ket|su_kien|system|assistant|user|noi_dung|script)[^>]*>/gi;
@@ -107,7 +108,7 @@ const LANG: Record<WorkflowParams['ngonNgu'], string> = {
   song_ngu: 'Song ngữ Việt – Anh: mỗi mục có tiếng Việt kèm bản tiếng Anh tương ứng.',
 };
 
-type LlmWorkflow = Exclude<WorkflowId, 'quiz' | 'de_kiem_tra'>;
+type LlmWorkflow = Exclude<WorkflowId, 'quiz' | 'de_kiem_tra' | 'bo_tiet_day'>;
 
 const TASK: Record<LlmWorkflow, string> = {
   khbd:
@@ -142,6 +143,7 @@ export function buildPrompts(args: {
     TASK[workflow],
     LANG[params.ngonNgu],
     'Trả về Markdown thuần, dùng tiêu đề "##" cho từng phần chính.',
+    'Công thức toán, lý, hoá viết bằng LaTeX trong dấu $...$ (hoặc $$...$$ cho công thức riêng một dòng), giữ nguyên ký hiệu. Ngày tháng viết dd/mm/yyyy.',
   ].join('\n');
   const newsBlock = news
     ? `<su_kien>\nTiêu đề: ${strip(news.tieuDe)}\nNguồn: ${strip(news.url)} (đăng ${strip(news.ngayDang)})\n${strip(
@@ -149,7 +151,7 @@ export function buildPrompts(args: {
       )}\n</su_kien>\nLồng ghép sự kiện thời sự này phù hợp với bài; không thêm số liệu ngoài nội dung đã cho.`
     : '';
   const parts = [
-    `Ngày dạy: ${params.ngayDay}`,
+    `Ngày dạy: ${toVnDates(params.ngayDay)}`,
     `Phong cách sư phạm: ${style}`,
     `Các mức Bloom phải phủ (bắt buộc có "Phân tích"): ${bloomLevels.join(', ')}`,
     classContext ? `Ngữ cảnh lớp:\n${strip(classContext).slice(0, 3000)}` : '',

@@ -23,6 +23,7 @@ import {
   type StyleValue,
 } from '@/lib/agent/flow';
 import { Icon } from '@/components/ui/icons';
+import { MathText } from '@/components/MathText';
 import type { ResourceKind } from '@/lib/resources/types';
 import { getFromKho, getStructure, structureSummary } from '@/lib/agent/result';
 import { ResourceChecklist } from './ResourcePicker';
@@ -309,7 +310,7 @@ export function ConfirmCard({ slots, standardStatus, onEdit, onChange, onStart }
       {standardStatus === 'chua_duyet' && (
         <div className="ag-alert warn" role="status">
           <Icon name="alert" size={18} />
-          <span>Bài này chưa có bản chuẩn đã duyệt. Mình vẫn soạn được, nhưng kết quả chỉ là bản nháp cần người duyệt.</span>
+          <span>Bài này chưa có bản chuẩn đã duyệt. Mình vẫn soạn được. Kết quả là bản nháp, cô/thầy đọc lại và chỉnh trước khi dạy.</span>
         </div>
       )}
       {standardStatus === 'approved' && (
@@ -469,12 +470,23 @@ export function RunCard({
               ))}
             </ul>
           )}
-          {onRetry && (
-            <button type="button" className="ag-btn small ag-run-retry" onClick={onRetry} disabled={retryDisabled}>
-              <Icon name="refresh" size={16} />
-              Thử lại
-            </button>
+          {run.partialId && (
+            <p className="ag-ask-keep">Phần AI đã soạn được trước khi bị ngắt vẫn được giữ lại trong bản nháp của cô/thầy.</p>
           )}
+          <div className="ag-ask-btns">
+            {onRetry && (
+              <button type="button" className="ag-btn small ag-run-retry" onClick={onRetry} disabled={retryDisabled}>
+                <Icon name="refresh" size={16} />
+                Thử lại
+              </button>
+            )}
+            {run.partialId && (
+              <button type="button" className="ag-btn small ag-run-retry" onClick={() => onOpen(run.partialId!)}>
+                <Icon name="panel" size={16} />
+                Mở phần đã soạn dở
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -503,13 +515,16 @@ export function RunCard({
           {run.hasNews && <TraceLine state={stepState('guardrail', 1)} text="Kiểm tra sự kiện thời sự" />}
           <TraceLine state={stepState('route', run.hasNews ? 2 : 1)} text="Chọn quy trình soạn phù hợp" />
           <TraceLine state={stepState('generate', run.hasNews ? 3 : 2)} text="Soạn nội dung theo các bậc tư duy" />
-          <TraceLine state={stepState('reflect', 99)} text="Tự soi lại theo 6 tiêu chí" />
+          <TraceLine state={stepState('reflect', 99)} text="Kiểm tra cấu trúc bản soạn" />
+          {(run.doneParts ?? []).map((label) => (
+            <TraceLine key={label} state="ok" text={`Xong: ${label}`} />
+          ))}
         </ul>
         {run.streamPreview && (
           <div
             className="ag-note ag-stream"
           >
-            {run.streamPreview}
+            <MathText text={run.streamPreview} />
           </div>
         )}
         <div className="ag-actions">

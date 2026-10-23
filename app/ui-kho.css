@@ -717,3 +717,324 @@
     font-size: 15px;
   }
 }
+
+/* ---------- Ô chọn bài (components/agent/LessonField.tsx), tiền tố lf- ---------- */
+.lf-box {
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--on-surface);
+}
+.lf-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.lf-searchwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--on-surface-muted);
+}
+.lf-searchwrap > svg {
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+}
+.lf-searchwrap .lf-search {
+  padding-left: 38px;
+  min-height: 44px;
+}
+.lf-section {
+  margin-top: 12px;
+}
+.lf-head {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.lf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: var(--on-surface);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-control);
+  border-radius: 10px;
+}
+.lf-row:hover {
+  color: var(--on-surface);
+  background: var(--surface-subtle);
+  border-color: var(--navy);
+}
+.lf-row:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  color: var(--on-surface);
+  background: var(--surface-subtle);
+}
+.lf-row:active {
+  color: var(--on-surface);
+  background: var(--info-bg);
+}
+.lf-row.lf-row-on {
+  color: var(--on-surface);
+  background: var(--info-bg);
+  border-color: var(--navy);
+  border-width: 2px;
+}
+.lf-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lf-row-title {
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--on-surface);
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+.lf-row-where {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.lf-row-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.lf-chap {
+  margin-top: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--on-surface);
+}
+.lf-chap > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--surface-subtle);
+  border-radius: 10px;
+}
+.lf-chap > summary::-webkit-details-marker {
+  display: none;
+}
+.lf-chap > summary:hover {
+  color: var(--navy);
+  background: var(--info-bg);
+}
+.lf-chap > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  color: var(--navy);
+  background: var(--info-bg);
+}
+.lf-chap[open] > summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.lf-chap-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lf-chap > summary small {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.lf-chev {
+  flex: 0 0 auto;
+  transition: transform 0.15s ease;
+}
+.lf-chap[open] .lf-chev {
+  transform: rotate(90deg);
+}
+.lf-lesson {
+  padding: 8px 10px 4px;
+}
+.lf-lesson-name {
+  margin: 4px 2px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.lf-lesson:last-child {
+  padding-bottom: 10px;
+}
+.lf-hint,
+.lf-empty,
+.lf-error {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.lf-hint {
+  color: var(--info);
+  background: var(--info-bg);
+}
+.lf-hint > svg,
+.lf-empty > svg,
+.lf-error > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.lf-empty {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--on-surface);
+  background: var(--surface-subtle);
+  border: 1px dashed var(--border-control);
+}
+.lf-empty strong {
+  color: var(--on-surface);
+  background: transparent;
+}
+.lf-empty span {
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.lf-error {
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.lf-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lf-skel i {
+  display: block;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--line);
+}
+.lf-cross {
+  margin-top: 14px;
+}
+.lf-free {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  color: var(--on-surface);
+  background: var(--warn-bg);
+  border: 1px solid var(--line-strong);
+}
+.lf-free-lead {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: var(--on-surface);
+  background: transparent;
+}
+.lf-free-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lf-free-input {
+  flex: 1 1 220px;
+  min-height: 44px;
+}
+.lf-free-go {
+  min-height: 44px;
+}
+.lf-free-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--on-surface);
+  background: transparent;
+}
+.lf-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--on-surface-muted);
+  background: transparent;
+}
+.lf-note b {
+  color: var(--on-surface);
+}
+.lf-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--border-control);
+  border-radius: 12px;
+  color: var(--on-surface);
+  background: var(--surface-raised);
+}
+.lf-selected-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  align-items: flex-start;
+}
+.lf-change {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+@media (max-width: 560px) {
+  .lf-filters {
+    grid-template-columns: 1fr;
+  }
+  .lf-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .lf-selected {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lf-free-go {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lf-chev {
+    transition: none;
+  }
+}

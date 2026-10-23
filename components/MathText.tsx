@@ -3,29 +3,10 @@
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { Fragment, useMemo } from 'react';
+import { splitMath } from '@/lib/text/math';
+import { latexToUnicode } from '@/lib/export/latex';
 
-type Seg = { type: 'text' | 'math'; value: string; display?: boolean };
-
-const MATH_RE =
-  /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$([^$\n]+?)\$/g;
-
-export function splitMath(input: string): Seg[] {
-  const segs: Seg[] = [];
-  let last = 0;
-  for (const m of input.matchAll(MATH_RE)) {
-    const idx = m.index ?? 0;
-    if (idx > last) segs.push({ type: 'text', value: input.slice(last, idx) });
-    const display = m[1] !== undefined || m[2] !== undefined;
-    segs.push({
-      type: 'math',
-      value: (m[1] ?? m[2] ?? m[3] ?? m[4] ?? '').trim(),
-      display,
-    });
-    last = idx + m[0].length;
-  }
-  if (last < input.length) segs.push({ type: 'text', value: input.slice(last) });
-  return segs;
-}
+export { splitMath };
 
 function renderKatex(tex: string, display: boolean): string | null {
   try {
@@ -41,25 +22,23 @@ function renderKatex(tex: string, display: boolean): string | null {
 }
 
 /**
- * Renders text with $..$, $$..$$, \(..\) LaTeX via KaTeX; everything else
- * stays React text nodes. Already-cleaned text (no delimiters) renders as plain text.
+ * Hiện văn bản có công thức LaTeX ($..$, $$..$$, \(..\), \[..\]) bằng KaTeX; phần còn lại là text node của React.
+ * Văn bản không có dấu phân cách công thức hiện nguyên như chữ thường. Công thức hỏng rơi về chữ Unicode đọc được.
  */
 export function MathText({ text }: { text?: string | null }) {
-  const segs = useMemo(
-    () => (typeof text === 'string' && text ? splitMath(text) : []),
-    [text],
-  );
+  const segs = useMemo(() => (typeof text === 'string' && text ? splitMath(text) : []), [text]);
   if (segs.length === 0) return null;
   return (
     <>
       {segs.map((s, i) => {
         if (s.type === 'text') return <Fragment key={i}>{s.value}</Fragment>;
         const html = renderKatex(s.value, !!s.display);
-        if (html === null) return <Fragment key={i}>{s.value}</Fragment>;
+        if (html === null) return <Fragment key={i}>{latexToUnicode(s.value)}</Fragment>;
         return (
           <span
             key={i}
-            // Only KaTeX output of the isolated math fragment is injected.
+            className={s.display ? 'mt-display' : 'mt-inline'}
+            // Chỉ chèn đầu ra KaTeX của đúng đoạn công thức đã tách (trust tắt, không chạy lệnh nguy hiểm).
             dangerouslySetInnerHTML={{ __html: html }}
           />
         );

@@ -70,7 +70,7 @@ export async function reflect(markdown: string): Promise<Reflection> {
   // Thử tối đa 2 lần: lần lỗi thoáng qua (mạng, JSON cụt) không nên làm mất bước tự soi.
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const res = await callLiveLlm(system, user, undefined, { maxTokens: 1200, timeoutMs: 45_000 });
+      const res = await callLiveLlm(system, user, undefined, { maxTokens: 1200, timeoutMs: 45_000, vary: false });
       if (!res.ok || !res.content) {
         console.error(`[reflect] lần ${attempt}: AI không trả kết quả (${res.error ?? 'rỗng'})`);
         continue;

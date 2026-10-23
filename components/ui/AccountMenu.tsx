@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon, type IconName } from './icons';
+import { formatApprox } from '@/lib/stats/savings';
 import { initialOf, nextIndex, quotaLabel, roleLabel, type MeState } from './uiLogic';
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   quota: number | null;
   /** Tên khai báo (chế độ khai tên). */
   declaredName: string;
+  /** Số phút ước tính đã tiết kiệm trong 7 ngày qua; null nếu chưa biết. */
+  savedWeekMinutes?: number | null;
   /** Gọi sau khi menu điều hướng, để đóng ngăn kéo trên điện thoại. */
   onNavigate?: () => void;
 }
@@ -29,7 +32,7 @@ const ADMIN_ENTRIES: Entry[] = [
 ];
 
 /** Menu tài khoản: avatar + vai trò, mở menu role=menu có đủ phím mũi tên, Home/End, Esc, Tab. */
-export function AccountMenu({ me, loaded, quota, declaredName, onNavigate }: Props) {
+export function AccountMenu({ me, loaded, quota, declaredName, savedWeekMinutes = null, onNavigate }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -153,6 +156,9 @@ export function AccountMenu({ me, loaded, quota, declaredName, onNavigate }: Pro
           <div className="ui-menu-head" role="presentation">
             <strong>{title}</strong>
             {user?.email && <span>{user.email}</span>}
+            {user && savedWeekMinutes !== null && savedWeekMinutes > 0 && (
+              <span className="ui-menu-save">Tuần này tiết kiệm {formatApprox(savedWeekMinutes)} (ước lượng)</span>
+            )}
             {!user && !me.ssoEnabled && <span>Chưa bật đăng nhập Google, cô/thầy tự khai tên khi soạn bài.</span>}
           </div>
           <Link href="/tai-khoan" role="menuitem" className="ui-menu-item" tabIndex={-1} onClick={navigated}>

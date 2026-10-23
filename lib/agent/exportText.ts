@@ -1,6 +1,12 @@
 // Dựng văn bản để cô/thầy dán vào Gamma hoặc thêm làm nguồn trong NotebookLM.
 // Hàm thuần: không gọi API ngoài, không phụ thuộc React hay trình duyệt.
 import type { Artifact, SlidesData, TextData, WorksheetData } from '../resources/types';
+import { mathToUnicode } from '../export/latex';
+import { viDatesInText } from '../text/date';
+
+/** Công thức thành chữ Unicode đọc được và ngày kiểu Việt Nam (Gamma, NotebookLM không dựng được LaTeX). */
+const plain = (s: string): string => viDatesInText(mathToUnicode(s));
+export const DRAFT_LINE = '> BẢN NHÁP, CHƯA DUYỆT: nội dung do trợ lý soạn, cần người có chuyên môn xem lại trước khi dùng chính thức.';
 
 export interface ExportSection {
   heading: string;
@@ -17,6 +23,8 @@ export interface ExportInput {
   text: string;
   sections?: ExportSection[];
   artifacts?: Artifact[];
+  /** true: thêm dòng "BẢN NHÁP, CHƯA DUYỆT" ở đầu tệp xuất. */
+  draft?: boolean;
 }
 
 const MAX_BULLETS = 5;
@@ -99,6 +107,7 @@ function metaLine(i: ExportInput): string {
 /** Dàn ý markdown theo thẻ slide để dán vào Gamma ("Dán văn bản"): mỗi slide một tiêu đề, 3-5 ý, ghi chú cho giáo viên. */
 export function buildGammaOutline(i: ExportInput): string {
   const lines: string[] = [`# ${clean(i.title) || 'Bài giảng'}`];
+  if (i.draft) lines.push('', DRAFT_LINE);
   const meta = metaLine(i);
   if (meta) lines.push('', meta);
 
@@ -111,7 +120,7 @@ export function buildGammaOutline(i: ExportInput): string {
       if (s.visual?.trim()) lines.push('', `Gợi ý hình: ${clean(s.visual)}`);
       if (s.notes?.trim()) lines.push('', `Ghi chú cho giáo viên: ${clean(s.notes)}`);
     });
-    return `${lines.join('\n')}\n`;
+    return `${plain(lines.join('\n'))}\n`;
   }
 
   const secs = sectionsOf(i);
@@ -123,7 +132,7 @@ export function buildGammaOutline(i: ExportInput): string {
     const rest = toBullets(s.body, 40).slice(MAX_BULLETS);
     if (rest.length > 0) lines.push('', `Ghi chú cho giáo viên: ${rest.map((r) => shorten(r, 200)).join(' ')}`);
   });
-  return `${lines.join('\n')}\n`;
+  return `${plain(lines.join('\n'))}\n`;
 }
 
 function worksheetQuestions(artifacts?: Artifact[]): string[] {
@@ -139,6 +148,7 @@ function worksheetQuestions(artifacts?: Artifact[]): string[] {
 /** Văn bản nguồn sạch cho NotebookLM: tiêu đề, mục tiêu, nội dung, câu hỏi. Không có chú thích kỹ thuật. */
 export function buildNotebookSource(i: ExportInput): string {
   const lines: string[] = [`# ${clean(i.title) || 'Học liệu'}`];
+  if (i.draft) lines.push('', DRAFT_LINE);
   const meta = metaLine(i);
   if (meta) lines.push('', meta);
 
@@ -176,7 +186,7 @@ export function buildNotebookSource(i: ExportInput): string {
     if (qs.length > 0) lines.push('', ...qs);
     wq.forEach((q, n) => lines.push(`${n + 1}. ${q}`));
   }
-  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`;
+  return `${plain(lines.join('\n')).replace(/\n{3,}/g, '\n\n')}\n`;
 }
 
 /** Tên tệp an toàn, có dấu gạch ngang, kèm hậu tố. */

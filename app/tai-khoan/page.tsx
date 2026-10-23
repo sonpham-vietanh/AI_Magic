@@ -6,6 +6,8 @@ import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
 import { GRADE_OPTIONS, SUBJECT_OPTIONS } from '@/components/agent/types';
 import { FORMAT_DAU_RA, PHONG_CACH } from '@/lib/workflows/types';
+import { formatApprox, formatDuration, SAVINGS_DISCLAIMER } from '@/lib/stats/savings';
+import { hocBaMinutes } from '@/lib/stats/localSavings';
 import '../ui-tk.css';
 
 interface MeUser {
@@ -32,6 +34,12 @@ interface Activity {
   recent: { id: string; title: string; format: string; lessonTitle?: string; number: number; createdAt: string }[];
 }
 
+interface Savings {
+  week: { minutes: number; count: number };
+  month: { minutes: number; count: number };
+  total: { minutes: number; count: number };
+}
+
 const ROLE_LABEL: Record<MeUser['role'], string> = {
   teacher: 'Giáo viên',
   reviewer: 'Người duyệt',
@@ -52,6 +60,10 @@ export default function TaiKhoanPage() {
   const [loadError, setLoadError] = useState('');
   const [activity, setActivity] = useState<Activity | null>(null);
   const [activityError, setActivityError] = useState(false);
+  const [savings, setSavings] = useState<Savings | null>(null);
+  const [savingsError, setSavingsError] = useState(false);
+  const [hbWeek, setHbWeek] = useState(0);
+  const [hbMonth, setHbMonth] = useState(0);
   const [form, setForm] = useState<Prefs>({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
@@ -79,6 +91,17 @@ export default function TaiKhoanPage() {
           else setActivityError(true);
         } catch {
           setActivityError(true);
+        }
+        try {
+          const sv = await fetch('/api/me/savings', { cache: 'no-store' });
+          const sj = await sv.json();
+          if (sj.ok) {
+            setSavings({ week: sj.week, month: sj.month, total: sj.total });
+            setHbWeek(hocBaMinutes(7));
+            setHbMonth(hocBaMinutes(30));
+          } else setSavingsError(true);
+        } catch {
+          setSavingsError(true);
         }
       }
     } catch {
@@ -238,6 +261,46 @@ export default function TaiKhoanPage() {
                 <div className="tk-adminlink">
                   <Link href="/quan-tri">Vào trang quản trị người dùng</Link>
                 </div>
+              )}
+            </section>
+
+            <section aria-labelledby="tk-sv-h" className="tk-card sv-card">
+              <h2 id="tk-sv-h">Đã tiết kiệm</h2>
+              {savingsError && (
+                <p className="ag-note" role="status">
+                  Chưa tính được thời gian tiết kiệm. Cô/thầy tải lại trang sau ít phút.
+                </p>
+              )}
+              {!savingsError && !savings && <p className="tk-skeleton">Đang tính…</p>}
+              {savings && (
+                <>
+                  <div className="sv-big">
+                    <span className="sv-num">{savings.week.minutes + hbWeek > 0 ? formatApprox(savings.week.minutes + hbWeek) : '0 giờ'}</span>
+                    <span className="sv-label">Tuần này cô/thầy đã tiết kiệm (ước lượng)</span>
+                  </div>
+                  {savings.week.minutes + hbWeek === 0 ? (
+                    <p className="ag-note">
+                      Tuần này cô/thầy chưa có bản soạn nào được lưu. <Link href="/">Soạn một bài</Link> hoặc{' '}
+                      <Link href="/hoc-ba">viết nhận xét học bạ</Link> để thấy thời gian tiết kiệm tại đây.
+                    </p>
+                  ) : (
+                    <div className="sv-grid">
+                      <div className="sv-cell">
+                        <strong>{formatDuration(savings.week.minutes + hbWeek)}</strong>
+                        <span>7 ngày qua, {savings.week.count} bản soạn</span>
+                      </div>
+                      <div className="sv-cell">
+                        <strong>{formatDuration(savings.month.minutes + hbMonth)}</strong>
+                        <span>30 ngày qua, {savings.month.count} bản soạn</span>
+                      </div>
+                      <div className="sv-cell">
+                        <strong>{formatDuration(savings.total.minutes)}</strong>
+                        <span>Tổng các bản đã lưu, {savings.total.count} bản</span>
+                      </div>
+                    </div>
+                  )}
+                  <p className="sv-note">{SAVINGS_DISCLAIMER} Nhận xét học bạ chỉ được cộng trên trình duyệt này.</p>
+                </>
               )}
             </section>
 

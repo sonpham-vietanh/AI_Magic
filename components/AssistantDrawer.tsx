@@ -5,6 +5,7 @@ import '@/app/ui-modal.css';
 import { cleanPedagogicalText } from '@/lib/text/clean';
 import { Icon } from '@/components/ui/icons';
 import { formatApiError } from '@/lib/ui/soanBai';
+import { QUICK_QUESTIONS } from '@/lib/agent/nlu';
 import { useDialog } from '@/components/studio/useDialog';
 import type { ClassProfile, GeneratedResource, KnowledgeNode } from '@/lib/types';
 
@@ -20,12 +21,8 @@ const WELCOME: Msg = {
   text: 'Chào cô/thầy. Cô/thầy cần hỏi về quy chế (Công văn 5512, Thông tư 22), hoạt động khởi động hay cách phân hóa bài tập cho lớp đang dạy?',
 };
 
-const DEFAULT_SUGGESTIONS = [
-  'Gợi ý hoạt động khởi động 5 phút đầu giờ',
-  'Cách giao bài phân hóa cho nhóm Cơ bản và Nâng cao',
-  'Kết nối bài học này với môn học khác',
-  'Cách viết nhận xét học bạ cuối kỳ theo Thông tư 22',
-];
+// Cùng một bộ câu hỏi sẵn với màn chào của ô chat hợp nhất (một nguồn duy nhất).
+const DEFAULT_SUGGESTIONS = QUICK_QUESTIONS.map((q) => q.question).slice(0, 4);
 
 export function AssistantDrawer({
   open,

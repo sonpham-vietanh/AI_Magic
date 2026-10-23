@@ -161,7 +161,7 @@ describe('POST /api/workflows/run', () => {
     expect(callLiveLlm).not.toHaveBeenCalled();
   });
 
-  it('chua_duyet: cảnh báo + requiresApproval; có reflection', async () => {
+  it('chua_duyet: bản nháp có nhãn, KHÔNG chặn tải; có reflection', async () => {
     vi.mocked(getStandardLesson).mockResolvedValue(std('chua_duyet') as never);
     vi.mocked(callLiveLlm)
       .mockResolvedValueOnce({ ok: true, content: FULL_KHBD, modelUsed: 'm' })
@@ -170,7 +170,10 @@ describe('POST /api/workflows/run', () => {
     const j = await res.json();
     expect(res.status).toBe(200);
     expect(j.result.workflow).toBe('khbd');
-    expect(j.result.requiresApproval).toBe(true);
+    expect(j.result.draft).toBe(true);
+    expect(j.result.draftReasons.length).toBeGreaterThan(0);
+    expect(j.result.requiresApproval).toBe(false);
+    expect(j.result.blockAcceptDownload).toBeUndefined();
     expect(j.result.warnings.join(' ')).toContain('chưa qua người duyệt');
     expect(j.result.reflection.average).toBe(4);
     expect(j.result.bloomLevels).toContain('Phân tích');
@@ -186,6 +189,8 @@ describe('POST /api/workflows/run', () => {
       await call({ ...baseParams, suKienThoiSu: { tieuDe: 't', url: 'https://x.vn', ngayDang: '2026-10-20' } })
     ).json();
     expect(j.result.requiresApproval).toBe(true);
+    expect(j.result.blockAcceptDownload).toBe(true);
+    expect(j.result.draft).toBe(true);
     expect(j.result.guardrail.ok).toBe(true);
     expect(j.result.reflection.skipped).toBe(true);
   });

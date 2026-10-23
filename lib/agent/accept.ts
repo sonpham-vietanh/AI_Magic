@@ -104,3 +104,37 @@ export async function loadVersion(id: string): Promise<LoadedVersion | undefined
     return undefined;
   }
 }
+
+/**
+ * Lưu NGAY khi AI trả xong, trước khi cô/thầy bấm "Duyệt & dùng": mỗi bản soạn đều có trong Lịch sử của tôi
+ * (đánh dấu bản nháp ở tiêu đề). Chỉ ghi phiên bản, không ghi tín hiệu "đã chấp nhận". Lỗi không chặn ai.
+ */
+export async function saveDraftVersion(i: AcceptInput): Promise<{ id: string; number: number } | undefined> {
+  const text = i.text.trim() ? i.text : artifactsToText(i.artifacts ?? []);
+  if (!text.trim() || !i.lessonKey) return undefined;
+  try {
+    const body: Record<string, unknown> = {
+      runId: i.runId,
+      title: i.title.slice(0, 300),
+      format: i.format || 'ke_hoach',
+      workflow: i.workflow || 'khbd',
+      lessonKey: i.lessonKey,
+      text: text.slice(0, 100_000),
+      actor: i.actor.trim() || ANONYMOUS_ACTOR,
+    };
+    if (i.lessonTitle) body.lessonTitle = i.lessonTitle.slice(0, 300);
+    if (i.artifacts && i.artifacts.length > 0) body.artifacts = i.artifacts;
+    const res = await fetch('/api/versions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = (await res.json().catch(() => ({}))) as { ok?: boolean; version?: { id?: string; number?: number } };
+    if (res.ok && j.ok && j.version && typeof j.version.number === 'number' && j.version.id) {
+      return { id: String(j.version.id), number: j.version.number };
+    }
+  } catch {
+    /* lưu nháp là phụ */
+  }
+  return undefined;
+}

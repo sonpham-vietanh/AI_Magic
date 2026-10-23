@@ -1,6 +1,6 @@
 // KHBD: kiểm cấu trúc xác định, thiếu thì TỰ SỬA đúng 1 lần bằng một lần gọi AI kèm danh sách mục thiếu.
 import { callLiveLlm } from '@/lib/engine/llmClient';
-import { cleanPedagogicalText } from '@/lib/text/clean';
+import { cleanKeepMath } from './mathSafe';
 import type { StructureCheck } from '@/lib/resources/types';
 import { checkKhbdStructure, missingItems } from './validators';
 
@@ -30,9 +30,9 @@ export async function ensureKhbdStructure(markdown: string, bloomLevels: string[
     `Các mục còn thiếu/sai:\n${missing.map((m) => `- ${m}`).join('\n')}\n\n` +
     `<ke_hoach>\n${markdown.replace(/<\/?ke_hoach>/gi, ' ').slice(0, 20000)}\n</ke_hoach>`;
   try {
-    const res = await callLiveLlm(system, user, undefined, { maxTokens: 7000, timeoutMs: 90_000 });
+    const res = await callLiveLlm(system, user, undefined, { maxTokens: 7000, timeoutMs: 90_000, vary: false });
     if (res.ok && res.content) {
-      const candidate = cleanPedagogicalText(res.content);
+      const candidate = cleanKeepMath(res.content);
       const second = checkKhbdStructure(candidate, bloomLevels);
       // Chỉ nhận bản sửa nếu không tệ hơn bản đầu.
       if (second.filter((c) => !c.ok).length <= first.filter((c) => !c.ok).length) {

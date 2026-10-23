@@ -8,6 +8,21 @@ const atomsMock = vi.fn();
 vi.mock('@/lib/supabase', () => ({
   fetchSupabaseAtomDetail: (...a: unknown[]) => detailMock(...a),
   querySupabaseAtoms: (...a: unknown[]) => atomsMock(...a),
+  // Danh sách đầy đủ (API thư viện) lấy cùng dữ liệu giả với atomsMock để test dùng chung.
+  listAtomIndex: async () => {
+    const r = (await atomsMock()) as { atoms?: Record<string, unknown>[] };
+    return (r.atoms ?? []).map((a) => ({
+      subject: 'Toán',
+      subjectCode: 'toan',
+      grade: 10,
+      ord: 0,
+      factoryAssetCount: 0,
+      factoryPackageCount: 0,
+      ...a,
+      hasFactoryPackage: !!a.hasFactoryPackage,
+    }));
+  },
+  summarizeCoverage: () => ({}),
 }));
 const genMock = vi.fn();
 vi.mock('@/lib/resources', () => ({
@@ -164,6 +179,31 @@ describe('API sinh tài nguyên', () => {
     expect(list.assets[0].status).toBe('draft');
   });
 
+  it('SSE: phát từng thẻ khi xong rồi mới lưu và báo done', async () => {
+    genMock.mockImplementation(async (_ctx: unknown, _kinds: unknown, opts: { onArtifact: (a: Artifact) => void; onError: (k: string, e: string) => void }) => {
+      opts.onArtifact(art('text', 'bài đọc'));
+      opts.onError('video', 'quá thời gian');
+      return { artifacts: [art('text', 'bài đọc')], errors: [{ kind: 'video', error: 'quá thời gian' }] };
+    });
+    const res = await generatePOST(
+      new Request('http://x/api/kho/resources/generate', {
+        method: 'POST',
+        headers: { ...H, Accept: 'text/event-stream' },
+        body: JSON.stringify({ atomId: 'a1', kinds: ['text', 'video'] }),
+      }),
+    );
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    const ev = (await res.text())
+      .split('\n\n')
+      .filter((b) => b.startsWith('data: '))
+      .map((b) => JSON.parse(b.slice(6)));
+    const types = ev.map((e) => e.type);
+    expect(types.filter((t) => t === 'part')).toHaveLength(2);
+    expect(types.indexOf('done')).toBeGreaterThan(types.lastIndexOf('part'));
+    expect(ev.find((e) => e.type === 'part' && e.ok).artifact.kind).toBe('text');
+    expect(ev.find((e) => e.type === 'done').saved).toHaveLength(1);
+  });
+
   it('bài không có gói thì 422, lỗi bên trong thì 500 thông báo chung', async () => {
     detailMock.mockResolvedValueOnce({ atom: { id: 'a2', title: 'x', grade: 10, subject: 'Toán' }, packages: [], factoryAssets: [], questions: [], socratic: [], edges: [] });
     expect((await post({ atomId: 'a2' })).status).toBe(422);
@@ -192,6 +232,7 @@ describe('API sinh tài nguyên', () => {
     expect(a1).toMatchObject({ status: 'approved', version: 1, kinds: ['text'] });
     expect(lib.items.find((i: { atomId: string }) => i.atomId === 'a3').status).toBe('khong_co');
     // lần 2 dùng cache: không gọi lại Supabase
+    await listLibrary('vietanh', { subject: 'toan', grade: '10' });
     const calls = atomsMock.mock.calls.length;
     await listLibrary('vietanh', { subject: 'toan', grade: '10' });
     expect(atomsMock.mock.calls.length).toBe(calls);

@@ -4,6 +4,7 @@ import type {
   SubjectCode,
   ToolCategoryCode,
 } from './types';
+import { searchAtoms } from './ui/lessonList';
 
 // Không hard-code khoá. Thiếu biến môi trường sẽ báo lỗi khi gọi (lazy), không phải lúc import.
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -593,6 +594,46 @@ function sanitizeAtom(a: SupabaseAtom): SupabaseAtom {
   };
 }
 
+/** Tìm theo từ khoá bằng chỉ mục toàn bộ bài; trả đủ trường như truy vấn cũ (đọc lại hàng đầy đủ cho các bài tìm được). */
+async function searchSupabaseAtoms(params: {
+  subject?: string;
+  grade?: string | number;
+  search?: string;
+  limit?: number;
+}): Promise<{ atoms: SupabaseAtom[]; totalCount: number }> {
+  const limit = Math.min(Math.max(params.limit || 60, 1), 200);
+  const scoped = await listAtomIndex({
+    subject: params.subject,
+    grade: params.grade === undefined ? undefined : String(params.grade),
+  });
+  const lite = scoped.map((a) => ({ ...a, subject: a.subjectCode }));
+  const hits = searchAtoms(lite, params.search || '', { limit: 10_000 });
+  const top = hits.slice(0, limit);
+  const ids = top.map((h) => h.atom.id).filter(isSafeId);
+  const bySlim = new Map(scoped.map((a) => [a.id, a]));
+  const full = new Map<string, SupabaseAtom>();
+  if (ids.length) {
+    const res = await sbFetch(
+      `/atoms?select=id,code,title,subject,grade,chapter,lesson,parent_id,ord,atom_type,bloom,dok,nang_luc,yeu_cau,quan_niem_sai,verified&id=in.(${ids.join(',')})`,
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    for (const a of (await res.json()) as SupabaseAtom[]) full.set(a.id, a);
+  }
+  const atoms: SupabaseAtom[] = [];
+  for (const h of top) {
+    const row = full.get(h.atom.id);
+    const slim = bySlim.get(h.atom.id);
+    if (!row || !slim) continue;
+    atoms.push({
+      ...sanitizeAtom(row),
+      hasFactoryPackage: slim.hasFactoryPackage,
+      factoryPackageCount: slim.factoryPackageCount,
+      factoryAssetCount: slim.factoryAssetCount,
+    });
+  }
+  return { atoms, totalCount: hits.length };
+}
+
 export async function querySupabaseAtoms(params: {
   subject?: string;
   grade?: string | number;
@@ -601,6 +642,14 @@ export async function querySupabaseAtoms(params: {
   limit?: number;
   onlyFactoryReady?: boolean;
 }): Promise<{ atoms: SupabaseAtom[]; totalCount: number }> {
+  // Có từ khoá: tìm không dấu, hiểu đồng nghĩa (pitago/pythagore), xếp theo độ khớp, trên TOÀN BỘ bài của phạm vi lọc.
+  if ((params.search || '').trim() && !params.parentId && !params.onlyFactoryReady) {
+    try {
+      return await searchSupabaseAtoms(params);
+    } catch (err) {
+      console.error('[supabase] indexed atom search failed, falling back:', err);
+    }
+  }
   // Fetch factory package & asset index in parallel so we can badge and prioritize Factory-ready atoms
   const [pkgIndexRes, assetIndexRes, tnIndexRes] = await Promise.all([
     sbFetch(
@@ -773,6 +822,141 @@ export async function querySupabaseAtoms(params: {
     atoms: enrichedList.slice(0, limit),
     totalCount: totalCount || enrichedList.length,
   };
+}
+
+/* ---------- Chỉ mục bài học dùng cho danh sách đầy đủ và tìm kiếm chéo khối/môn ---------- */
+
+export interface SlimAtom {
+  id: string;
+  code: string;
+  title: string;
+  /** Tên môn trong cơ sở dữ liệu (ví dụ "Toán"). */
+  subject: string;
+  /** Mã môn của ứng dụng (ví dụ "toan"). */
+  subjectCode: string;
+  grade: number;
+  chapter: string;
+  lesson: string;
+  ord: number;
+  hasFactoryPackage: boolean;
+  factoryPackageCount: number;
+  factoryAssetCount: number;
+}
+
+const DB_NAME_TO_SUBJECT_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(SUBJECT_CODE_TO_DB_NAME).map(([code, name]) => [name.toLowerCase(), code]),
+);
+
+function slugSubject(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/đ/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/** Tên môn trong dữ liệu -> mã môn của ứng dụng. Môn lạ giữ mã dạng chữ không dấu, KHÔNG rơi về Toán. */
+export function subjectCodeFromDbName(name: string): string {
+  const n = (name || '').trim();
+  const direct = DB_NAME_TO_SUBJECT_CODE[n.toLowerCase()];
+  if (direct) return direct;
+  const s = slugSubject(n);
+  if (s.includes('kinh_te') || s.includes('cong_dan')) return 'gdcd_gdktpl';
+  if (s === 'lich_su') return 'lich_su';
+  return s || 'khac';
+}
+
+const ATOM_INDEX_TTL_MS = 5 * 60_000;
+let atomIndexCache: { at: number; promise: Promise<SlimAtom[]> } | null = null;
+
+export function invalidateAtomIndex(): void {
+  atomIndexCache = null;
+}
+
+async function fetchAllAtomsSlim(): Promise<SlimAtom[]> {
+  const [pkgRes, assetRes] = await Promise.all([
+    sbFetch('/studio_kv?collection=eq.packages&select=id,atomId:j->>atomId&limit=2000'),
+    sbFetch('/studio_kv?collection=eq.assets&select=id,packageId:j->>packageId&limit=3000'),
+  ]);
+  const pkgRows: { id: string; atomId?: string }[] = pkgRes.ok ? await pkgRes.json() : [];
+  const assetRows: { id: string; packageId?: string }[] = assetRes.ok ? await assetRes.json() : [];
+  const pkgCount = new Map<string, number>();
+  const pkgIds = new Map<string, string[]>();
+  for (const r of pkgRows) {
+    if (!r.atomId) continue;
+    pkgCount.set(r.atomId, (pkgCount.get(r.atomId) || 0) + 1);
+    pkgIds.set(r.atomId, [...(pkgIds.get(r.atomId) || []), r.id]);
+  }
+  const assetByPkg = new Map<string, number>();
+  for (const r of assetRows) {
+    if (r.packageId) assetByPkg.set(r.packageId, (assetByPkg.get(r.packageId) || 0) + 1);
+  }
+
+  const PAGE = 1000;
+  const out: SlimAtom[] = [];
+  for (let offset = 0; offset < 40_000; offset += PAGE) {
+    const res = await sbFetch(
+      `/atoms?select=id,code,title,subject,grade,chapter,lesson,ord&order=grade.asc,code.asc&limit=${PAGE}&offset=${offset}`,
+    );
+    if (!res.ok) {
+      console.error(`[supabase] list atoms failed: HTTP ${res.status}`);
+      if (offset === 0) throw new Error('Không đọc được danh sách bài.');
+      break;
+    }
+    const rows = (await res.json()) as Pick<
+      SupabaseAtom,
+      'id' | 'code' | 'title' | 'subject' | 'grade' | 'chapter' | 'lesson' | 'ord'
+    >[];
+    for (const a of rows) {
+      const ids = [...(pkgIds.get(a.id) || []), `${a.code}-L1`, `${a.code}-L2`, `${a.code}-L3`, `${a.id}-L1`, `${a.id}-L2`, `${a.id}-L3`];
+      let assets = 0;
+      for (const pid of new Set(ids)) assets += assetByPkg.get(pid) || 0;
+      const pc = pkgCount.get(a.id) || 0;
+      out.push({
+        id: a.id,
+        code: a.code,
+        title: cleanFactoryText(a.title),
+        subject: a.subject,
+        subjectCode: subjectCodeFromDbName(a.subject),
+        grade: Number(a.grade),
+        chapter: cleanFactoryText(a.chapter),
+        lesson: cleanFactoryText(a.lesson),
+        ord: a.ord || 0,
+        hasFactoryPackage: pc > 0,
+        factoryPackageCount: pc,
+        factoryAssetCount: assets,
+      });
+    }
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+/** Toàn bộ bài (không cắt ở 200), nhớ 5 phút. Lọc theo mã môn và khối ('all' hoặc bỏ trống = tất cả). */
+export async function listAtomIndex(params: { subject?: string; grade?: string } = {}): Promise<SlimAtom[]> {
+  if (!atomIndexCache || Date.now() - atomIndexCache.at > ATOM_INDEX_TTL_MS) {
+    const promise = fetchAllAtomsSlim();
+    atomIndexCache = { at: Date.now(), promise };
+    promise.catch(() => {
+      if (atomIndexCache?.promise === promise) atomIndexCache = null;
+    });
+  }
+  const all = await atomIndexCache.promise;
+  const sub = params.subject && params.subject !== 'all' ? params.subject : '';
+  const gr = params.grade && params.grade !== 'all' ? Number(params.grade) : NaN;
+  return all.filter((a) => (!sub || a.subjectCode === sub) && (Number.isNaN(gr) || a.grade === gr));
+}
+
+/** Số bài theo môn và khối: giúp giao diện biết môn nào chưa có dữ liệu. */
+export function summarizeCoverage(atoms: SlimAtom[]): Record<string, Record<string, number>> {
+  const cov: Record<string, Record<string, number>> = {};
+  for (const a of atoms) {
+    const bySub = (cov[a.subjectCode] ||= {});
+    bySub[String(a.grade)] = (bySub[String(a.grade)] || 0) + 1;
+  }
+  return cov;
 }
 
 export async function fetchSupabaseAtomDetail(atomId: string): Promise<{

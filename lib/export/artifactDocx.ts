@@ -12,6 +12,8 @@ import {
   TextRun,
 } from 'docx';
 import type { Artifact } from '@/lib/resources/types';
+import { DRAFT_NOTE, stampPara, type ExportOptions } from './docx';
+import { richParagraphs, richRuns } from './richText';
 
 const FONT = 'Arial';
 const SCHOOL = 'Trường Việt Anh';
@@ -33,10 +35,7 @@ const run = (text: string, o: { bold?: boolean; italics?: boolean; size?: number
   new TextRun({ text, font: FONT, size: o.size ?? 24, bold: o.bold, italics: o.italics, color: o.color });
 
 function paragraphs(text: string, o: { italics?: boolean; bold?: boolean } = {}): Paragraph[] {
-  return String(text ?? '')
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((l) => new Paragraph({ spacing: { after: 100, line: 320 }, children: [run(l, o)] }));
+  return richParagraphs(text, { font: FONT, size: 24, bold: o.bold, italics: o.italics, after: 100, line: 320 });
 }
 
 function toParagraphs(blocks: Block[]): Paragraph[] {
@@ -62,7 +61,7 @@ function toParagraphs(blocks: Block[]): Paragraph[] {
             keepNext: true,
             spacing: { before: 260, after: 120 },
             border: b.k === 'h1' ? { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'D3CFC0', space: 2 } } : undefined,
-            children: [run(b.text, { bold: true, size: b.k === 'h1' ? 28 : 25, color: NAVY })],
+            children: richRuns(b.text, { font: FONT, bold: true, size: b.k === 'h1' ? 28 : 25, color: NAVY }),
           }),
         );
         break;
@@ -70,14 +69,14 @@ function toParagraphs(blocks: Block[]): Paragraph[] {
         out.push(...paragraphs(b.text, { italics: b.italic, bold: b.bold }));
         break;
       case 'bullet':
-        out.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 80, line: 320 }, children: [run(b.text)] }));
+        out.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: 80, line: 320 }, children: richRuns(b.text, { font: FONT, size: 24 }) }));
         break;
       case 'numbered':
         out.push(
           new Paragraph({
             spacing: { before: 160, after: 60, line: 320 },
             keepNext: true,
-            children: [run(`Câu ${b.n}. `, { bold: true }), run(b.text), ...(b.tag ? [run(`  (${b.tag})`, { italics: true, size: 20, color: '54556E' })] : [])],
+            children: [run(`Câu ${b.n}. `, { bold: true }), ...richRuns(b.text, { font: FONT, size: 24 }), ...(b.tag ? [run(`  (${b.tag})`, { italics: true, size: 20, color: '54556E' })] : [])],
           }),
         );
         break;
@@ -85,7 +84,7 @@ function toParagraphs(blocks: Block[]): Paragraph[] {
         out.push(
           new Paragraph({
             spacing: { after: 100, line: 320 },
-            children: [run(`${b.who}: `, { bold: true, color: NAVY }), run(b.text)],
+            children: [run(`${b.who}: `, { bold: true, color: NAVY }), ...richRuns(b.text, { font: FONT, size: 24 })],
           }),
         );
         break;
@@ -101,7 +100,7 @@ function toParagraphs(blocks: Block[]): Paragraph[] {
         }
         break;
       case 'info':
-        out.push(new Paragraph({ spacing: { after: 160 }, children: [run(b.text, { size: 24 })] }));
+        out.push(new Paragraph({ spacing: { after: 160 }, children: richRuns(b.text, { font: FONT, size: 24 }) }));
         break;
       case 'banner':
         out.push(
@@ -122,7 +121,8 @@ function toParagraphs(blocks: Block[]): Paragraph[] {
   return out;
 }
 
-async function pack(title: string, blocks: Block[]): Promise<Blob> {
+async function pack(title: string, blocks: Block[], opts: ExportOptions = {}): Promise<Blob> {
+  const blocksOut: Block[] = opts.draft ? [...blocks, { k: 'p', text: DRAFT_NOTE, italic: true }] : blocks;
   const doc = new Document({
     creator: SCHOOL,
     title,
@@ -133,6 +133,7 @@ async function pack(title: string, blocks: Block[]): Promise<Blob> {
         headers: {
           default: new Header({
             children: [
+              ...(opts.draft ? [stampPara(22)] : []),
               new Paragraph({
                 border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: NAVY, space: 2 } },
                 children: [run(SCHOOL.toUpperCase(), { bold: true, size: 22, color: NAVY })],
@@ -143,6 +144,7 @@ async function pack(title: string, blocks: Block[]): Promise<Blob> {
         footers: {
           default: new Footer({
             children: [
+              ...(opts.draft ? [stampPara(18)] : []),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [new TextRun({ children: ['Trang ', PageNumber.CURRENT, ' / ', PageNumber.TOTAL_PAGES], font: FONT, size: 20 })],
@@ -150,7 +152,7 @@ async function pack(title: string, blocks: Block[]): Promise<Blob> {
             ],
           }),
         },
-        children: toParagraphs(blocks),
+        children: toParagraphs(blocksOut),
       },
     ],
   });
@@ -160,7 +162,9 @@ async function pack(title: string, blocks: Block[]): Promise<Blob> {
 const LEVEL: Record<string, string> = { nho: 'Nhớ', hieu: 'Hiểu', van_dung: 'Vận dụng' };
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
-function blocksFor(a: Artifact): Block[] {
+export type WorksheetVariant = 'all' | 'student' | 'teacher';
+
+function blocksFor(a: Artifact, variant: WorksheetVariant = 'all'): Block[] {
   const b: Block[] = [];
   switch (a.kind) {
     case 'text': {
@@ -184,6 +188,12 @@ function blocksFor(a: Artifact): Block[] {
     }
     case 'worksheet': {
       const d = a.data as Artifact<'worksheet'>['data'];
+      if (variant === 'teacher') {
+        b.push({ k: 'title', text: `Đáp án: ${d.title || a.title}` });
+        b.push({ k: 'banner', text: 'DÀNH CHO GIÁO VIÊN — không phát cho học sinh' });
+        for (const k of d.answerKey ?? []) b.push({ k: 'h2', text: k.heading }, { k: 'p', text: k.body });
+        break;
+      }
       b.push({ k: 'info', text: 'Họ và tên: ……………………………………………………   Lớp: …………   Ngày: ……………………' });
       b.push({ k: 'title', text: d.title || a.title });
       let n = 0;
@@ -196,6 +206,7 @@ function blocksFor(a: Artifact): Block[] {
           b.push({ k: 'rule', count: Math.max(0, Math.min(10, it.lines ?? 3)) });
         }
       });
+      if (variant === 'student') break;
       b.push({ k: 'h1', text: 'ĐÁP ÁN VÀ GỢI Ý CHẤM', pageBreak: true });
       b.push({ k: 'banner', text: 'DÀNH CHO GIÁO VIÊN — không phát cho học sinh' });
       for (const k of d.answerKey ?? []) {
@@ -252,6 +263,6 @@ function blocksFor(a: Artifact): Block[] {
   return b;
 }
 
-export function buildArtifactDocx(artifact: Artifact): Promise<Blob> {
-  return pack(artifact.title, blocksFor(artifact));
+export function buildArtifactDocx(artifact: Artifact, opts: ExportOptions & { variant?: WorksheetVariant } = {}): Promise<Blob> {
+  return pack(artifact.title, blocksFor(artifact, opts.variant), opts);
 }

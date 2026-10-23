@@ -1,11 +1,15 @@
 import { getUsageContext, type UsageContext } from '@/lib/usage/context';
 import { estimateTokens } from '@/lib/usage/pricing';
+import { getVariation, variationInstruction } from './variation';
+import { isAiAuthText, type LlmErrorCode } from './llmErrors';
 
 export interface LlmCallResult {
   ok: boolean;
   content?: string;
   modelUsed: string;
   error?: string;
+  /** Mã lỗi để giao diện nói đúng (ai_auth = AI chưa đăng nhập/hết hạn...). */
+  code?: LlmErrorCode;
 }
 
 const DEFAULT_OPENAI_MODEL = 'cc/claude-haiku-4-5-20251001';
@@ -104,6 +108,10 @@ type LlmOpts = {
   timeoutMs?: number;
   signal?: AbortSignal;
   useCache?: boolean;
+  /** Quá ngần này ms mà không thấy dữ liệu nào về thì bỏ kết nối (mặc định 40 giây). */
+  stallMs?: number;
+  /** false: không gắn yêu cầu "phương án khác" khi lượt đang sinh lại (dùng cho bước chấm điểm). */
+  vary?: boolean;
 };
 
 const LLM_CACHE_MAX = 250;
@@ -187,6 +195,7 @@ async function readOpenAiStream(
   onDelta: DeltaHandler,
   signal?: AbortSignal,
   meter?: Meter,
+  onActivity?: () => void,
 ): Promise<string> {
   const pieces: string[] = [];
   const handleLine = (line: string) => {
@@ -239,6 +248,7 @@ async function readOpenAiStream(
     }
     const { done, value } = step;
     if (done) break;
+    onActivity?.();
     const chunk = decoder.decode(value, { stream: true });
     if (pieces.length === 0) raw += chunk;
     buffer += chunk;
@@ -260,9 +270,48 @@ async function readOpenAiStream(
   return pieces.join('').trim();
 }
 
+/** Lỗi một lần thử, đủ để quyết định thử lại tại chỗ, đổi khoá/mô hình hay bỏ cuộc. */
+interface Fail {
+  error: string;
+  /** Lỗi thoáng qua (429, 5xx, mạng, rỗng): đáng thử lại sau một nhịp chờ. */
+  transient: boolean;
+  auth?: boolean;
+  busy?: boolean;
+  timeout?: boolean;
+}
+type AttemptOut = { ok: true; res: LlmCallResult } | { ok: false; fail: Fail };
+
+const MAX_RETRY_PASSES = 2;
+const retryDelayMs = (pass: number): number => {
+  const base = process.env.VITEST ? 5 : 700;
+  return Math.round(base * 2 ** pass + Math.random() * base * 0.3);
+};
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const stallDefaultMs = (): number => {
+  const s = Number(process.env.LLM_STALL_SECONDS);
+  return (Number.isFinite(s) && s >= 3 ? s : 40) * 1000;
+};
+
+/** Phân loại HTTP lỗi: nội dung phản hồi có "OAuth/expired" cũng tính là chưa đăng nhập dù mã là 500. */
+function classifyHttp(status: number, bodySnippet: string, label: string): Fail {
+  const auth = status === 401 || status === 403 || (status >= 400 && isAiAuthText(bodySnippet));
+  const busy = status === 429 || status === 503 || status === 529;
+  const transient = !auth && (status === 408 || status === 429 || status >= 500);
+  return { error: `${label} HTTP ${status}`, transient, auth, busy };
+}
+
+/** Gộp các lỗi từng lần thử thành một mã lỗi cho giao diện: chưa đăng nhập được ưu tiên vì chỉ quản trị viên sửa được. */
+function summarizeFailures(failures: Fail[], triedAny: boolean): LlmErrorCode {
+  if (!triedAny || failures.length === 0) return 'ai_unconfigured';
+  if (failures.some((f) => f.auth)) return 'ai_auth';
+  if (failures.every((f) => f.timeout)) return 'ai_timeout';
+  if (failures.some((f) => f.busy)) return 'ai_busy';
+  return 'ai_unavailable';
+}
+
 const callLiveLlmStreamInner = async (
   systemPrompt: string,
-  userPrompt: string,
+  userPromptRaw: string,
   preferredModel: string | undefined,
   opts: LlmOpts | undefined,
   onDelta: DeltaHandler,
@@ -270,20 +319,29 @@ const callLiveLlmStreamInner = async (
 ): Promise<LlmCallResult> => {
   const maxTokens = opts?.maxTokens && opts.maxTokens > 0 ? opts.maxTokens : 4000;
   const timeoutMs = opts?.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : undefined;
+  const stallMs = opts?.stallMs && opts.stallMs > 0 ? opts.stallMs : stallDefaultMs();
   const safePreferred =
     preferredModel && SAFE_MODEL_RE.test(preferredModel.trim())
       ? preferredModel.trim()
       : undefined;
 
+  // Sinh lại: nonce riêng cho lượt này -> khoá bộ nhớ đệm khác và lời nhắc yêu cầu phương án khác.
+  const nonce = opts?.vary === false ? undefined : getVariation();
+  const userPrompt = nonce ? userPromptRaw + variationInstruction(nonce) : userPromptRaw;
+  const temperature = nonce ? 0.8 : 0.45;
+
   const cacheEnabled =
     opts?.useCache ?? (!process.env.VITEST && process.env.NODE_ENV !== 'test');
   const cacheKey = cacheEnabled
-    ? `${safePreferred ?? ''}\u0000${systemPrompt}\u0000${userPrompt}`
+    ? `${safePreferred ?? ''}\u0000${nonce ?? ''}\u0000${systemPrompt}\u0000${userPrompt}`
     : '';
 
   if (cacheEnabled) {
     const hit = llmCache.get(cacheKey);
     if (hit && Date.now() - hit.at < LLM_CACHE_TTL_MS) {
+      // LRU thật: lần dùng gần nhất đưa xuống cuối hàng.
+      llmCache.delete(cacheKey);
+      llmCache.set(cacheKey, hit);
       onDelta(hit.content);
       return {
         ok: true,
@@ -303,12 +361,18 @@ const callLiveLlmStreamInner = async (
     }
     if (!allowed) {
       meter.blocked = true;
-      return { ok: false, modelUsed: TEMPLATE_LABEL, error: 'Đã hết hạn mức lượt soạn bằng AI trong ngày.' };
+      return {
+        ok: false,
+        modelUsed: TEMPLATE_LABEL,
+        code: 'ai_quota',
+        error: 'Đã hết hạn mức lượt soạn bằng AI trong ngày.',
+      };
     }
   }
 
   const saveCache = (content: string, modelUsed: string) => {
     if (!cacheEnabled) return;
+    llmCache.delete(cacheKey);
     if (llmCache.size >= LLM_CACHE_MAX) {
       const oldest = llmCache.keys().next().value;
       if (oldest !== undefined) llmCache.delete(oldest);
@@ -316,7 +380,54 @@ const callLiveLlmStreamInner = async (
     llmCache.set(cacheKey, { content, modelUsed, at: Date.now() });
   };
 
+  const startedAt = Date.now();
+  const failures: Fail[] = [];
   let lastError: string | undefined;
+  let triedAny = false;
+
+  /** Chạy một tầng: xoay khoá trong mỗi lượt; nếu mọi khoá đều lỗi thoáng qua thì chờ (lũy thừa nhẹ) rồi thử lại. */
+  const runTier = async (
+    keys: string[],
+    attempt: (key: string) => Promise<AttemptOut>,
+    maxPasses = MAX_RETRY_PASSES,
+  ): Promise<LlmCallResult | null> => {
+    const dead = new Set<string>();
+    for (let pass = 0; pass <= maxPasses; pass++) {
+      let anyTransient = false;
+      for (const key of keys) {
+        if (dead.has(key)) continue;
+        if (opts?.signal?.aborted) return null;
+        triedAny = true;
+        const out = await attempt(key);
+        if (out.ok) return out.res;
+        failures.push(out.fail);
+        lastError = out.fail.error;
+        if (out.fail.auth) dead.add(key);
+        if (out.fail.transient) anyTransient = true;
+      }
+      if (!anyTransient || pass === maxPasses) break;
+      // Đã tốn quá nửa thời gian cho phép thì thôi: nhường tầng sau, không bắt giáo viên chờ thêm.
+      if (timeoutMs && Date.now() - startedAt > timeoutMs * 0.5) break;
+      await sleep(retryDelayMs(pass));
+    }
+    return null;
+  };
+
+  /** Mô hình dự phòng cùng nhà cung cấp: chỉ thử khi mô hình chính hỏng mà không phải do khoá bị từ chối. */
+  const authDead = () => failures.length > 0 && failures.every((f) => f.auth);
+  const withFallback = async (
+    keys: string[],
+    primary: string,
+    fallback: string | undefined,
+    make: (model: string) => (key: string) => Promise<AttemptOut>,
+  ): Promise<LlmCallResult | null> => {
+    const r = await runTier(keys, make(primary));
+    if (r) return r;
+    if (fallback && fallback !== primary && SAFE_MODEL_RE.test(fallback) && !authDead() && !opts?.signal?.aborted) {
+      return runTier(keys, make(fallback), 0);
+    }
+    return null;
+  };
 
   // TẦNG 1: Google Gemini Free Tier (hỗ trợ xoay vòng nhiều khóa GEMINI_API_KEY / GEMINI_API_KEYS)
   const geminiKeys = parseKeyPool(
@@ -326,32 +437,27 @@ const callLiveLlmStreamInner = async (
   if (geminiKeys.length > 0) {
     const rawModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
     const model = SAFE_MODEL_RE.test(rawModel) ? rawModel : 'gemini-2.5-flash';
-    for (const geminiKey of geminiKeys) {
+    const makeGemini = (m: string) => async (geminiKey: string): Promise<AttemptOut> => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs ?? 45000);
-      opts?.signal?.addEventListener('abort', () => controller.abort(), {
-        once: true,
-      });
+      opts?.signal?.addEventListener('abort', () => controller.abort(), { once: true });
       meter.attempted = true;
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
+        const response = await abortable(
+          fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': geminiKey,
-            },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: systemPrompt }] },
               contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-              generationConfig: { temperature: 0.45, maxOutputTokens: maxTokens },
+              generationConfig: { temperature, maxOutputTokens: maxTokens },
             }),
             signal: controller.signal,
-          },
+          }),
+          controller.signal,
         );
         if (response.ok) {
-          const data = (await response.json()) as {
+          const data = (await abortable(response.json(), controller.signal)) as {
             candidates?: { content?: { parts?: { text?: string }[] } }[];
             usageMetadata?: {
               promptTokenCount?: number;
@@ -371,24 +477,29 @@ const callLiveLlmStreamInner = async (
             ?.trim();
           if (text) {
             onDelta(text);
-            const modelUsed = `Google Gemini (${model})`;
+            const modelUsed = `Google Gemini (${m})`;
             meter.provider = 'gemini';
-            meter.model = `google/${model}`;
+            meter.model = `google/${m}`;
             saveCache(text, modelUsed);
-            return { ok: true, content: text, modelUsed };
+            return { ok: true, res: { ok: true, content: text, modelUsed } };
           }
-          lastError = 'Gemini returned empty content';
-        } else {
-          lastError = `Gemini HTTP ${response.status}`;
-          console.error(`[llmClient] ${lastError}`);
+          return { ok: false, fail: { error: 'Gemini returned empty content', transient: true } };
         }
+        const body = await response.text().catch(() => '');
+        const fail = classifyHttp(response.status, body.slice(0, 300), 'Gemini');
+        console.error(`[llmClient] ${fail.error}`);
+        return { ok: false, fail };
       } catch (err) {
-        lastError = err instanceof Error ? err.message : 'Gemini call failed';
-        console.error(`[llmClient] Gemini error: ${lastError}`);
+        const msg = err instanceof Error ? err.message : 'Gemini call failed';
+        console.error(`[llmClient] Gemini error: ${msg}`);
+        const timeout = /timeout|thời gian|abort/i.test(msg);
+        return { ok: false, fail: { error: msg, transient: !timeout, timeout, auth: isAiAuthText(msg) } };
       } finally {
         clearTimeout(timer);
       }
-    }
+    };
+    const gRes = await withFallback(geminiKeys, model, process.env.GEMINI_FALLBACK_MODEL?.trim(), makeGemini);
+    if (gRes) return gRes;
   }
 
   // Hàm dùng chung cho các cổng tương thích OpenAI (Groq, OpenRouter, OpenAI/Proxy)
@@ -397,16 +508,26 @@ const callLiveLlmStreamInner = async (
     baseUrl: string,
     model: string,
     labelPrefix: string,
+    fallbackModel?: string,
   ): Promise<LlmCallResult | null> => {
-    for (const apiKey of keys) {
+    const make = (m: string) => async (apiKey: string): Promise<AttemptOut> => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs ?? 90000);
-      opts?.signal?.addEventListener('abort', () => controller.abort(), {
-        once: true,
-      });
+      // Đồng hồ "không thấy chữ nào": đặt lại mỗi lần có dữ liệu về; quá hạn thì bỏ kết nối treo.
+      let stalled = false;
+      let stallTimer: ReturnType<typeof setTimeout> | undefined;
+      const arm = () => {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          stalled = true;
+          controller.abort();
+        }, stallMs);
+      };
+      opts?.signal?.addEventListener('abort', () => controller.abort(), { once: true });
       meter.attempted = true;
       meter.promptTokens = undefined;
       meter.completionTokens = undefined;
+      arm();
       try {
         const response = await abortable(
           fetch(baseUrl, {
@@ -416,12 +537,12 @@ const callLiveLlmStreamInner = async (
               Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-              model,
+              model: m,
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt },
               ],
-              temperature: 0.45,
+              temperature,
               max_tokens: maxTokens,
               stream: true,
               // OpenAI chỉ trả usage khi được yêu cầu; các cổng khác bỏ qua tham số này.
@@ -432,31 +553,41 @@ const callLiveLlmStreamInner = async (
           controller.signal,
         );
         if (response.ok) {
-          const text = await readOpenAiStream(response, onDelta, controller.signal, meter);
+          const text = await readOpenAiStream(response, onDelta, controller.signal, meter, arm);
           if (text) {
-            const modelUsed = `${labelPrefix} (${model})`;
+            const modelUsed = `${labelPrefix} (${m})`;
             meter.provider = labelPrefix.startsWith('Groq')
               ? 'groq'
               : baseUrl.includes('openrouter')
                 ? 'openrouter'
                 : 'openai';
-            meter.model = labelPrefix.startsWith('Groq') ? `groq/${model}` : model;
+            meter.model = labelPrefix.startsWith('Groq') ? `groq/${m}` : m;
             saveCache(text, modelUsed);
-            return { ok: true, content: text, modelUsed };
+            return { ok: true, res: { ok: true, content: text, modelUsed } };
           }
-          lastError = 'LLM returned empty content';
-        } else {
-          lastError = `LLM HTTP ${response.status}`;
-          console.error(`[llmClient] ${lastError}`);
+          return { ok: false, fail: { error: 'LLM returned empty content', transient: true } };
         }
+        const body = await abortable(response.text(), controller.signal).catch(() => '');
+        const fail = classifyHttp(response.status, body.slice(0, 300), 'LLM');
+        console.error(`[llmClient] ${fail.error}`);
+        return { ok: false, fail };
       } catch (err) {
-        lastError = err instanceof Error ? err.message : 'OpenAI call failed';
-        console.error(`[llmClient] OpenAI-compatible error: ${lastError}`);
+        if (stalled) {
+          const msg = `LLM timeout: không thấy chữ nào trong ${Math.round(stallMs / 1000)} giây`;
+          console.error(`[llmClient] ${msg}`);
+          return { ok: false, fail: { error: msg, transient: false, timeout: true } };
+        }
+        const msg = err instanceof Error ? err.message : 'OpenAI call failed';
+        console.error(`[llmClient] OpenAI-compatible error: ${msg}`);
+        const timeout = /timeout|thời gian/i.test(msg);
+        // Lỗi mạng tức thời (reset, DNS) đáng thử lại; hết hạn chót thì không.
+        return { ok: false, fail: { error: msg, transient: !timeout, timeout, auth: isAiAuthText(msg) } };
       } finally {
         clearTimeout(timer);
+        if (stallTimer) clearTimeout(stallTimer);
       }
-    }
-    return null;
+    };
+    return withFallback(keys, model, fallbackModel, make);
   };
 
   // TẦNG 2: Groq Free Tier (tốc độ cao, miễn phí)
@@ -469,7 +600,13 @@ const callLiveLlmStreamInner = async (
     const groqBase = normalizeChatCompletionsUrl(
       process.env.GROQ_BASE_URL?.trim() || 'https://api.groq.com/openai/v1',
     );
-    const groqRes = await tryOpenAiCompatible(groqKeys, groqBase, groqModel, 'Groq Free AI');
+    const groqRes = await tryOpenAiCompatible(
+      groqKeys,
+      groqBase,
+      groqModel,
+      'Groq Free AI',
+      process.env.GROQ_FALLBACK_MODEL?.trim(),
+    );
     if (groqRes) return groqRes;
   }
 
@@ -489,7 +626,13 @@ const callLiveLlmStreamInner = async (
     const orBase = normalizeChatCompletionsUrl(
       process.env.OPENROUTER_BASE_URL?.trim() || 'https://openrouter.ai/api/v1',
     );
-    const orRes = await tryOpenAiCompatible(openRouterKeys, orBase, orModel, 'Live AI');
+    const orRes = await tryOpenAiCompatible(
+      openRouterKeys,
+      orBase,
+      orModel,
+      'Live AI',
+      process.env.OPENROUTER_FALLBACK_MODEL?.trim(),
+    );
     if (orRes) return orRes;
   }
 
@@ -505,11 +648,17 @@ const callLiveLlmStreamInner = async (
     const baseUrl = normalizeChatCompletionsUrl(
       process.env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1',
     );
-    const oaRes = await tryOpenAiCompatible(openAiKeys, baseUrl, model, 'Live AI');
+    const oaRes = await tryOpenAiCompatible(
+      openAiKeys,
+      baseUrl,
+      model,
+      'Live AI',
+      process.env.OPENAI_FALLBACK_MODEL?.trim(),
+    );
     if (oaRes) return oaRes;
   }
 
-  return { ok: false, modelUsed: TEMPLATE_LABEL, error: lastError };
+  return { ok: false, modelUsed: TEMPLATE_LABEL, error: lastError, code: summarizeFailures(failures, triedAny) };
 };
 
 export const callLiveLlmStream = async (

@@ -13,6 +13,7 @@ const TABLE: Record<FormatId, WorkflowId> = {
   tranh_luan: 'tai_nguyen_6_dang',
   video: 'tai_nguyen_6_dang',
   tai_nguyen_6_dang: 'tai_nguyen_6_dang',
+  bo_tiet_day: 'bo_tiet_day',
 };
 
 /** Router xác định (bảng tra cứu cố định, không LLM, không Planner). */

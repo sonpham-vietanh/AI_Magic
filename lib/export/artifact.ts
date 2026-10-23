@@ -6,10 +6,17 @@ import { downloadBlob } from './docx';
 import { buildSlidesPptx } from './pptx';
 import { buildWorksheetStudentHtml, buildWorksheetTeacherHtml, printHtml } from './print';
 
-export type ExportFormat = 'docx' | 'pptx' | 'svg' | 'png' | 'pdf' | 'json';
+export type ExportFormat = 'docx' | 'docx_hs' | 'docx_gv' | 'pptx' | 'svg' | 'png' | 'pdf' | 'json';
+
+export interface ExportOpts {
+  /** true: đóng dấu "BẢN NHÁP, CHƯA DUYỆT" trong tệp xuất. */
+  draft?: boolean;
+}
 
 export const EXPORT_LABELS: Record<ExportFormat, string> = {
   docx: 'Tải Word (.docx)',
+  docx_hs: 'Word bản học sinh',
+  docx_gv: 'Word bản giáo viên (đáp án)',
   pptx: 'Tải PowerPoint (.pptx)',
   svg: 'Tải ảnh vector (.svg)',
   png: 'Tải ảnh (.png)',
@@ -23,7 +30,7 @@ export function availableFormats(kind: ArtifactKind): ExportFormat[] {
     case 'slides':
       return ['pptx', 'docx', 'json'];
     case 'worksheet':
-      return ['docx', 'pdf', 'json'];
+      return ['docx', 'docx_hs', 'docx_gv', 'pdf', 'json'];
     case 'mindmap':
     case 'infographic':
       return ['png', 'svg', 'json'];
@@ -32,7 +39,7 @@ export function availableFormats(kind: ArtifactKind): ExportFormat[] {
   }
 }
 
-const EXT: Record<ExportFormat, string> = { docx: 'docx', pptx: 'pptx', svg: 'svg', png: 'png', pdf: 'pdf', json: 'json' };
+const EXT: Record<ExportFormat, string> = { docx: 'docx', docx_hs: 'docx', docx_gv: 'docx', pptx: 'pptx', svg: 'svg', png: 'png', pdf: 'pdf', json: 'json' };
 
 /** Tên tệp an toàn, bỏ dấu tiếng Việt. */
 export function safeFilename(name: string): string {
@@ -86,16 +93,17 @@ export async function svgToPngBlob(svg: string, width: number, height: number): 
 }
 
 /** In bản đáp án của phiếu (dành cho giáo viên), tách hẳn khỏi phiếu học sinh. */
-export function printWorksheetAnswers(artifact: Artifact): Promise<void> {
-  return printHtml(buildWorksheetTeacherHtml(artifact.data as Artifact<'worksheet'>['data']));
+export function printWorksheetAnswers(artifact: Artifact, opts: ExportOpts = {}): Promise<void> {
+  return printHtml(buildWorksheetTeacherHtml(artifact.data as Artifact<'worksheet'>['data'], opts));
 }
 
-export async function exportArtifact(artifact: Artifact, format: ExportFormat, filename?: string): Promise<void> {
+export async function exportArtifact(artifact: Artifact, format: ExportFormat, filename?: string, opts: ExportOpts = {}): Promise<void> {
   if (!availableFormats(artifact.kind).includes(format)) {
     throw new Error('Loại sản phẩm này chưa hỗ trợ định dạng đã chọn.');
   }
   const base = safeFilename(filename || artifact.title);
-  const name = `${base}.${EXT[format]}`;
+  const suffix = format === 'docx_hs' ? '-hoc-sinh' : format === 'docx_gv' ? '-giao-vien' : '';
+  const name = `${base}${suffix}.${EXT[format]}`;
 
   if (format === 'json') {
     downloadBlob(new Blob([JSON.stringify(artifact, null, 2)], { type: 'application/json' }), name);
@@ -103,15 +111,16 @@ export async function exportArtifact(artifact: Artifact, format: ExportFormat, f
   }
   if (format === 'pdf') {
     // Chỉ in phiếu của học sinh; đáp án in riêng bằng printWorksheetAnswers.
-    await printHtml(buildWorksheetStudentHtml(artifact.data as Artifact<'worksheet'>['data']));
+    await printHtml(buildWorksheetStudentHtml(artifact.data as Artifact<'worksheet'>['data'], opts));
     return;
   }
-  if (format === 'docx') {
-    downloadBlob(await buildArtifactDocx(artifact), name);
+  if (format === 'docx' || format === 'docx_hs' || format === 'docx_gv') {
+    const variant = format === 'docx_hs' ? 'student' : format === 'docx_gv' ? 'teacher' : 'all';
+    downloadBlob(await buildArtifactDocx(artifact, { ...opts, variant }), name);
     return;
   }
   if (format === 'pptx') {
-    const { data } = await buildSlidesPptx(artifact.data as Artifact<'slides'>['data']);
+    const { data } = await buildSlidesPptx(artifact.data as Artifact<'slides'>['data'], opts);
     const copy = new Uint8Array(data);
     downloadBlob(
       new Blob([copy], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }),

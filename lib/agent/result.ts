@@ -4,7 +4,9 @@
 import { RESOURCE_KINDS, type Artifact, type ArtifactKind, type StructureCheck } from '../resources/types';
 import type { WorkflowResult } from '../workflows/types';
 
-export type AgentResult = Omit<WorkflowResult, 'artifacts' | 'structure' | 'fromKho'> & {
+export type AgentResult = Omit<WorkflowResult, 'artifacts' | 'structure' | 'fromKho' | 'draft'> & {
+  /** Bản nháp: bản chuẩn Kho chưa duyệt hoặc AI soạn từ dữ liệu cơ bản. Kết quả cũ trong Lịch sử có thể chưa có trường này. */
+  draft?: boolean;
   artifacts?: Artifact[];
   structure?: StructureCheck[];
   fromKho?: ArtifactKind[];

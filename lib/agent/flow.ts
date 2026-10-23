@@ -2,6 +2,7 @@
 // Trợ lý chỉ điền 7 tham số theo thứ tự cố định bằng thẻ chọn có ràng buộc; mọi bước
 // đều quy về đúng API /api/workflows/run (router cứng 6 workflow ở phía máy chủ).
 import { WorkflowParamsSchema, type WorkflowParams } from '../workflows/types';
+import { getClassById } from '../classes';
 import { RESOURCE_KINDS, RESOURCE_LABELS, type ResourceKind } from '../resources/types';
 import {
   BLOOM_CHOICES,
@@ -13,7 +14,8 @@ import {
   type NgonNgu,
 } from '../ui/soanBai';
 
-export type FormatValue = (typeof FORMAT_OPTIONS)[number]['value'];
+/** 11 dạng của sơ đồ v2.1 cộng 'bo_tiet_day' (Bộ tiết dạy: KHBD + slide + phiếu + quiz, chạy một lần bấm). */
+export type FormatValue = (typeof FORMAT_OPTIONS)[number]['value'] | 'bo_tiet_day';
 export type StyleValue = (typeof PHONG_CACH_OPTIONS)[number]['value'];
 export type AskStep = 'format' | 'dangTaiNguyen' | 'bai' | 'bloom' | 'phongCach';
 export type Step = AskStep | 'confirm';
@@ -42,6 +44,10 @@ export interface AgentSlots {
   /** Bài thứ hai để soạn tích hợp liên môn (đến từ Sơ đồ liên môn). */
   lienKetId?: string;
   lienKetTitle?: string;
+  /** Số tiết của bài (từ câu gõ như "2 tiết"); gửi kèm cho máy chủ khi máy chủ hỗ trợ. */
+  soTiet?: number;
+  /** Ghi chú ngắn của giáo viên (tối đa 500 ký tự), ví dụ "lớp có 5 em cần hỗ trợ". */
+  ghiChu?: string;
 }
 
 /** 11 sản phẩm của sơ đồ v2.1, nhóm theo cách giáo viên dùng. `desc` nói rõ ĐẦU RA nhận được. */
@@ -81,8 +87,15 @@ export const FORMAT_GROUPS: { title: string; items: FormatItem[] }[] = [
 
 export const FORMAT_ITEMS: FormatItem[] = FORMAT_GROUPS.flatMap((g) => g.items);
 
+/** Gói một bấm: KHBD + slide + phiếu học tập + quiz của một bài. Tách riêng khỏi 11 dạng để không đổi sơ đồ gốc. */
+export const BUNDLE_ITEM: FormatItem = {
+  value: 'bo_tiet_day',
+  label: 'Bộ tiết dạy',
+  desc: 'Kế hoạch bài dạy, slide, phiếu học tập và quiz của một bài, chạy một lần bấm',
+};
+
 export function formatDesc(v?: string): string {
-  return FORMAT_ITEMS.find((o) => o.value === v)?.desc ?? '';
+  return [...FORMAT_ITEMS, BUNDLE_ITEM].find((o) => o.value === v)?.desc ?? '';
 }
 
 /** Chuẩn hoá danh sách dạng tài nguyên: bỏ trùng/sai, giữ thứ tự chuẩn của sơ đồ. */
@@ -176,7 +189,7 @@ export const STEP_PROMPTS: Record<AskStep, string> = {
 };
 
 export function formatLabel(v?: string): string {
-  return FORMAT_ITEMS.find((o) => o.value === v)?.label ?? FORMAT_OPTIONS.find((o) => o.value === v)?.label ?? '';
+  return [...FORMAT_ITEMS, BUNDLE_ITEM].find((o) => o.value === v)?.label ?? FORMAT_OPTIONS.find((o) => o.value === v)?.label ?? '';
 }
 export function styleLabel(v?: string): string {
   return PHONG_CACH_OPTIONS.find((o) => o.value === v)?.label ?? '';
@@ -215,11 +228,14 @@ export function summaryRows(s: AgentSlots): SummaryRow[] {
   }
   if (needsStyle(s.format)) rows.push({ step: 'phongCach', label: 'Phong cách', value: styleLabel(s.phongCach) });
   if (s.lienKetId) rows.push({ step: null, label: 'Bài liên kết (liên môn)', value: s.lienKetTitle ?? s.lienKetId });
+  const cls = s.classId ? getClassById(s.classId) : undefined;
+  if (cls) rows.push({ step: null, label: 'Lớp', value: `Lớp ${cls.className}` });
+  if (s.soTiet) rows.push({ step: null, label: 'Số tiết', value: `${s.soTiet} tiết` });
   return rows;
 }
 
 /** Tham số gửi API: WorkflowParams cộng phần mở rộng `dangTaiNguyen` (chỉ có với trọn bộ 6 dạng). */
-export type RunParams = WorkflowParams & { dangTaiNguyen?: ResourceKind[] };
+export type RunParams = WorkflowParams & { dangTaiNguyen?: ResourceKind[]; soTiet?: number; ghiChu?: string };
 
 export type ParamsResult =
   | { ok: true; params: RunParams }
@@ -250,7 +266,10 @@ export function toParams(
   }
   const withRes = attachResources({ ...parsed.data }, s.format, s.dangTaiNguyen);
   if (!withRes.ok) return withRes;
-  return { ok: true, params: withRes.params as RunParams };
+  const out = withRes.params as RunParams;
+  if (s.soTiet && s.soTiet >= 1 && s.soTiet <= 10) out.soTiet = s.soTiet;
+  if (s.ghiChu?.trim()) out.ghiChu = s.ghiChu.trim().slice(0, 500);
+  return { ok: true, params: out };
 }
 
 /** Gợi ý tiếp theo sau khi soạn xong: đổi sản phẩm nhưng giữ nguyên bài và lớp. */

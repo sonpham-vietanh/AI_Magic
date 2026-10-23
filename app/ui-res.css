@@ -673,3 +673,16 @@
     display: none;
   }
 }
+
+/* ---------- Công thức toán (KaTeX) trong bản soạn ---------- */
+.mt-display {
+  display: block;
+  max-width: 100%;
+  margin: 6px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  color: inherit;
+}
+.mt-inline {
+  color: inherit;
+}

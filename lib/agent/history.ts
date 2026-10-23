@@ -12,10 +12,12 @@ export interface HistoryItem {
   /** Văn bản giáo viên đã chỉnh (nếu có), mặc định là bản AI soạn. */
   text: string;
   accepted?: boolean;
+  /** Bản nháp chưa duyệt (lưu ngay khi AI trả xong, trước khi bấm Duyệt & dùng). */
+  draft?: boolean;
 }
 
 const KEY = 'va.agent.history.v1';
-const MAX_ITEMS = 8;
+const MAX_ITEMS = 12;
 
 export const EVENT_HISTORY = 'va:history-changed';
 export const EVENT_NEW_CHAT = 'va:new-chat';
@@ -54,6 +56,13 @@ export function saveHistoryItem(item: HistoryItem): void {
   } catch {
     /* bỏ qua */
   }
+}
+
+/** Cập nhật văn bản đã chỉnh của một bản (giữ nguyên các trường khác) để tải lại trang không mất chỉnh sửa. */
+export function updateHistoryText(id: string, text: string): void {
+  const cur = getHistoryItem(id);
+  if (!cur) return;
+  saveHistoryItem({ ...cur, text, accepted: false });
 }
 
 export function getHistoryItem(id: string): HistoryItem | undefined {

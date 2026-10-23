@@ -262,7 +262,7 @@ describe('generateArtifact', () => {
 });
 
 describe('generateAllResources', () => {
-  it('mặc định đủ 6 dạng, tối đa 3 cùng lúc, lỗi từng phần', async () => {
+  it('mặc định đủ 6 dạng, chạy song song cả 6, lỗi từng phần', async () => {
     let running = 0;
     let peak = 0;
     llm.mockImplementation(async (...args: unknown[]) => { const user = (args[1] as string) ?? '';
@@ -284,8 +284,8 @@ describe('generateAllResources', () => {
       return ok(JSON.stringify(data.sections));
     });
     const r = await generateAllResources(ctx);
-    expect(peak).toBeLessThanOrEqual(3);
-    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(6);
+    expect(peak).toBeGreaterThanOrEqual(5);
     expect(r.errors.map((e) => e.kind)).toEqual(['tranh_luan']);
     expect(r.artifacts.map((a) => a.kind)).toEqual(['text', 'infographic', 'mindmap', 'video', 'podcast']);
   });

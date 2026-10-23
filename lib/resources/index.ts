@@ -1,5 +1,6 @@
 // Bộ sinh tài nguyên: 6 dạng tài nguyên + slide + worksheet. Dùng LLM thật, kiểm cấu trúc xác định, thử lại 1 lần.
 import { callLiveLlm } from '@/lib/engine/llmClient';
+import type { LlmErrorCode } from '@/lib/engine/llmErrors';
 import { checkArtifact } from './check';
 import { parseArtifact } from './parse';
 import { buildPrompt, MAX_TOKENS } from './prompts';
@@ -22,7 +23,7 @@ export interface GenContext {
   classContext?: string;
 }
 
-export type GenResult<T> = { ok: true; value: T; modelUsed: string } | { ok: false; error: string };
+export type GenResult<T> = { ok: true; value: T; modelUsed: string } | { ok: false; error: string; code?: LlmErrorCode };
 
 const DEFAULT_TIMEOUT = 120_000;
 /**
@@ -30,7 +31,8 @@ const DEFAULT_TIMEOUT = 120_000;
  * nên không báo lỗi cả sản phẩm; độ lệch vẫn hiện ở tab "Kiểm tra cấu trúc" để giáo viên biết.
  */
 const SOFT_CHECK_IDS = new Set(['pc.duration', 'vd.sum']);
-const CONCURRENCY = 3;
+/** 6 dạng chạy song song hết: thời gian chờ bằng dạng chậm nhất thay vì cộng dồn. */
+const CONCURRENCY = 6;
 
 export async function generateArtifact<K extends ArtifactKind>(
   kind: K,
@@ -40,6 +42,7 @@ export async function generateArtifact<K extends ArtifactKind>(
   let fixNote: string | undefined;
   let lastError = 'Không sinh được nội dung.';
   let modelUsed = '';
+  let lastCode: LlmErrorCode | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (opts?.signal?.aborted) return { ok: false, error: 'Đã huỷ.' };
     const { system, user } = buildPrompt(kind, ctx, fixNote);
@@ -52,7 +55,10 @@ export async function generateArtifact<K extends ArtifactKind>(
     modelUsed = res.modelUsed;
     if (!res.ok || !res.content) {
       lastError = `Chưa gọi được AI${res.error ? ` (${res.error})` : ''}.`;
+      lastCode = res.code;
       fixNote = undefined;
+      // Chưa đăng nhập AI thì thử lại cũng vô ích.
+      if (res.code === 'ai_auth' || res.code === 'ai_quota') break;
       continue;
     }
     const parsed = parseArtifact(kind, res.content);
@@ -72,16 +78,21 @@ export async function generateArtifact<K extends ArtifactKind>(
     }
     return { ok: true, value: artifact, modelUsed };
   }
-  return { ok: false, error: lastError };
+  return { ok: false, error: lastError, ...(lastCode ? { code: lastCode } : {}) };
 }
 
 export async function generateAllResources(
   ctx: GenContext,
   kinds?: ResourceKind[],
-  opts?: { signal?: AbortSignal },
-): Promise<{ artifacts: Artifact[]; errors: { kind: ResourceKind; error: string }[] }> {
+  opts?: {
+    signal?: AbortSignal;
+    /** Gọi ngay khi từng dạng xong (để phát từng thẻ lên màn hình, không chờ đủ 6). */
+    onArtifact?: (a: Artifact) => void;
+    onError?: (kind: ResourceKind, error: string, code?: LlmErrorCode) => void;
+  },
+): Promise<{ artifacts: Artifact[]; errors: { kind: ResourceKind; error: string; code?: LlmErrorCode }[] }> {
   const list: ResourceKind[] = kinds && kinds.length ? kinds : [...RESOURCE_KINDS];
-  const results: ({ a: Artifact } | { e: string })[] = new Array(list.length);
+  const results: ({ a: Artifact } | { e: string; c?: LlmErrorCode })[] = new Array(list.length);
   let next = 0;
   const worker = async () => {
     for (;;) {
@@ -89,18 +100,22 @@ export async function generateAllResources(
       if (i >= list.length) return;
       try {
         const r = await generateArtifact(list[i], ctx, { signal: opts?.signal });
-        results[i] = r.ok ? { a: r.value as Artifact } : { e: r.error };
+        results[i] = r.ok ? { a: r.value as Artifact } : { e: r.error, c: r.code };
+        if (r.ok) opts?.onArtifact?.(r.value as Artifact);
+        else opts?.onError?.(list[i], r.error, r.code);
       } catch (err) {
-        results[i] = { e: err instanceof Error ? err.message : 'Lỗi không xác định.' };
+        const msg = err instanceof Error ? err.message : 'Lỗi không xác định.';
+        results[i] = { e: msg };
+        opts?.onError?.(list[i], msg);
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, list.length) }, worker));
   const artifacts: Artifact[] = [];
-  const errors: { kind: ResourceKind; error: string }[] = [];
+  const errors: { kind: ResourceKind; error: string; code?: LlmErrorCode }[] = [];
   results.forEach((r, i) => {
     if ('a' in r) artifacts.push(r.a);
-    else errors.push({ kind: list[i], error: r.e });
+    else errors.push({ kind: list[i], error: r.e, ...(r.c ? { code: r.c } : {}) });
   });
   return { artifacts, errors };
 }

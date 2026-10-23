@@ -86,3 +86,29 @@ export function greetingName(name?: string): string {
   const t = (name ?? '').trim();
   return t.slice(0, 40);
 }
+
+const WEEKDAYS = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+/** "Thứ Sáu, 23/10/2026" theo giờ Việt Nam. */
+export function todayLabel(now: Date = new Date()): string {
+  const vn = new Date(now.getTime() + 7 * 3600_000);
+  const dd = String(vn.getUTCDate()).padStart(2, '0');
+  const mm = String(vn.getUTCMonth() + 1).padStart(2, '0');
+  return `${WEEKDAYS[vn.getUTCDay()]}, ${dd}/${mm}/${vn.getUTCFullYear()}`;
+}
+
+/** Mẹo ngắn về chính công cụ này (không bịa số liệu); mỗi ngày một mẹo. */
+export const TIPS = [
+  'Cô/thầy có thể gõ cả câu: “soạn kế hoạch bài dạy định lí Pythagore lớp 7A2, 2 tiết, hoạt động nhóm”. Mình tự điền sẵn môn, khối, lớp và phong cách.',
+  'Sau khi có bản soạn, cô/thầy nói thẳng: “rút còn 35 phút”, “thêm hoạt động nhóm” hay “đổi ví dụ cho lớp yếu”, mình chỉnh ngay và có nút Hoàn tác.',
+  'Bấm “Bộ tiết dạy” để có kế hoạch bài dạy, slide, phiếu học tập và quiz của một bài chỉ trong một lần bấm.',
+  'Công thức toán trong bản soạn hiện đúng dạng công thức, cả khi tải về Word hay PowerPoint.',
+  'Chọn lớp trong “Lớp của tôi” để mình soạn sát đặc điểm lớp: sĩ số, nhóm trình độ, thời lượng tập trung.',
+  'Mọi bản soạn được lưu tự động ngay khi xong. Cô/thầy tải lại trang vẫn mở lại được ở mục “Gần đây của tôi”.',
+  'Cô/thầy có thể hỏi nhanh về Thông tư 22, Công văn 5512, cách phân hoá bài tập ngay trong ô chat này, không cần mở trang khác.',
+];
+
+export function dailyTip(now: Date = new Date()): string {
+  const day = Math.floor((now.getTime() + 7 * 3600_000) / 86_400_000);
+  return TIPS[day % TIPS.length];
+}

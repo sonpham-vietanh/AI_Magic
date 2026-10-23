@@ -33,11 +33,16 @@ export const FORMAT_DAU_RA = [
   { id: 'tranh_luan', label: 'Audio tranh luận 2 chuyên gia' },
   { id: 'video', label: 'Video 1–8 phút' },
   { id: 'tai_nguyen_6_dang', label: 'Trọn bộ 6 dạng tài nguyên' },
+  { id: 'bo_tiet_day', label: 'Bộ tiết dạy (giáo án + slide + phiếu + quiz)' },
 ] as const;
 
 export type FormatId = (typeof FORMAT_DAU_RA)[number]['id'];
 export type PhongCachId = (typeof PHONG_CACH)[number]['id'];
-export type WorkflowId = 'khbd' | 'slide' | 'worksheet' | 'quiz' | 'de_kiem_tra' | 'tai_nguyen_6_dang';
+export type WorkflowId = 'khbd' | 'slide' | 'worksheet' | 'quiz' | 'de_kiem_tra' | 'tai_nguyen_6_dang' | 'bo_tiet_day';
+
+/** Các phần của Bộ tiết dạy, theo thứ tự hiển thị. */
+export const BO_TIET_DAY_PARTS = ['khbd', 'slides', 'worksheet', 'quiz'] as const;
+export type BoTietDayPart = (typeof BO_TIET_DAY_PARTS)[number];
 
 export const WorkflowParamsSchema = z.object({
   ngayDay: z
@@ -76,6 +81,7 @@ export const WorkflowParamsSchema = z.object({
     'tranh_luan',
     'video',
     'tai_nguyen_6_dang',
+    'bo_tiet_day',
   ]),
   classId: z
     .string()
@@ -106,6 +112,8 @@ export interface Reflection {
   average: number;
   issues: string[];
   skipped?: boolean;
+  /** true: bước tự soát đang chạy nền, nhận xét sẽ đến sau qua sự kiện 'review'. */
+  pending?: boolean;
 }
 export interface WorkflowResult {
   runId: string;
@@ -121,6 +129,14 @@ export interface WorkflowResult {
   content: { sections: Section[]; markdown: string };
   reflection: Reflection;
   guardrail?: { ok: boolean; reasons: string[] };
+  /**
+   * true khi nội dung là BẢN NHÁP: bản chuẩn Kho chưa được người duyệt, hoặc AI soạn từ dữ liệu cơ bản.
+   * Vẫn dùng và tải được; giao diện phải gắn nhãn "Bản nháp, chưa duyệt" và file xuất có dấu hiệu bản nháp.
+   */
+  draft: boolean;
+  /** Vì sao là bản nháp (câu thân thiện, tiếng Việt). */
+  draftReasons?: string[];
+  /** Chỉ true cho đề kiểm tra và nội dung thời sự: bắt buộc người duyệt trước khi dùng/tải. */
   requiresApproval: boolean;
   /** Lý do cần người duyệt (khi requiresApproval). */
   approvalReasons?: string[];
@@ -136,4 +152,8 @@ export interface WorkflowResult {
   structure: StructureCheck[];
   /** Các dạng lấy thẳng từ bản chuẩn đã duyệt trong Kho (không gọi AI). */
   fromKho?: ArtifactKind[];
+  /** Các phần của Bộ tiết dạy / trọn bộ tài nguyên và phần nào đã xong hay lỗi. */
+  parts?: { key: string; label: string; ok: boolean; error?: string }[];
+  /** Mã lỗi AI khi một phần không sinh được (vd. ai_auth = AI chưa đăng nhập), để giao diện nói đúng. */
+  aiCode?: string;
 }

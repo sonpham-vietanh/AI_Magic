@@ -2,7 +2,7 @@
 // Chuyển hóa trực tiếp gói kiến thức chuẩn (Factory packages, assets, questions, socratic, edges)
 // từ Supabase thành đủ 8 dạng Artifact + Giáo án Công văn 5512 + Phiếu học tập 3 mức mà không tốn token AI.
 
-import { cleanPedagogicalText } from '@/lib/text/clean';
+import { cleanKeepMath } from '@/lib/workflows/mathSafe';
 import type {
   Artifact,
   ArtifactKind,
@@ -101,7 +101,7 @@ export interface FactorySource {
 }
 
 const clean = (v: unknown, fallback = ''): string => {
-  const s = cleanPedagogicalText(String(v ?? '')).trim();
+  const s = cleanKeepMath(String(v ?? '')).trim();
   return s || fallback;
 };
 
