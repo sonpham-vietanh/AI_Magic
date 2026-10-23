@@ -183,16 +183,35 @@
 }
 .ls-diff-line {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 36px 36px 22px minmax(0, 1fr);
   padding: 2px 10px 2px 0;
   font-size: 15px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.ls-diff-line > span:first-child {
-  text-align: center;
-  font-weight: 700;
+.ls-diff-line > span:nth-child(3) { text-align: center; font-weight: 700; }
+.ls-diff-no { text-align: right; padding-right: 8px; font-size: 12px; color: var(--muted); user-select: none; font-variant-numeric: tabular-nums; }
+.ls-diff-gap { padding: 4px 12px; background: var(--surface-subtle); border-block: 1px dashed var(--line-strong); color: var(--muted); font-size: 13px; text-align: center; }
+.ls-diff-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
+.ls-diff-stats li { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 999px; background: var(--surface-subtle); color: var(--ink-secondary); font-size: 14px; font-weight: 600; }
+.ls-diff-stats li.add { background: var(--success-bg); color: var(--success); }
+.ls-diff-stats li.del { background: var(--danger-bg); color: var(--danger); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.ls-intro { display: flex; gap: 16px; align-items: flex-start; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs); }
+.ls-intro-ico { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--navy); color: var(--cta); }
+.ls-intro h2 { margin: 0 0 4px; font-size: 20px; color: var(--navy); }
+.ls-intro p { margin: 0 0 12px; color: var(--ink-secondary); font-size: 15px; line-height: 1.55; }
+.ls-inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.ls-inline-form .ls-field { flex: 1 1 220px; min-width: 0; }
+.ls-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.ls-filters .ls-field { flex: 1 1 150px; min-width: 0; }
+.ls-filters .ls-f-q { flex: 2 1 220px; }
+.ls-count { margin: 0; font-size: 14px; color: var(--muted); }
+.ls-skel-list { display: flex; flex-direction: column; gap: 10px; }
+@media (max-width: 520px) {
+  .ls-intro { flex-direction: column; }
+  .ls-diff-line { grid-template-columns: 28px 28px 18px minmax(0, 1fr); }
 }
 .ls-diff-line.add {
   background: var(--success-bg);
@@ -336,3 +355,23 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ===== Kết nối: thẻ trạng thái, khung chờ, chip ===== */
+.ls-h2 { margin: 0 0 12px; font-size: 18px; color: var(--navy); }
+.ls-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.ls-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs); min-width: 0; }
+.ls-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-secondary); }
+.ls-card-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ls-card-head h3 { margin: 0; font-size: 17px; color: var(--navy); overflow-wrap: anywhere; }
+.ls-card-ico { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--navy); color: var(--cta); }
+.ls-badge { display: inline-flex; align-items: center; gap: 6px; }
+.ls-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ls-chips li { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface-subtle); color: var(--muted); font-size: 14px; }
+.ls-chips li.on { border-color: transparent; background: var(--success-bg); color: var(--success); font-weight: 600; }
+.ls-msg { font-size: 14px; font-weight: 600; }
+.ls-msg.ok { color: var(--success); }
+.ls-msg.bad { color: var(--danger); }
+.ls-cta { display: flex; justify-content: flex-start; }
+.ls-skel { min-height: 150px; border-radius: 16px; background: linear-gradient(90deg, var(--surface-subtle), var(--surface), var(--surface-subtle)); background-size: 200% 100%; animation: ls-shimmer 1.4s linear infinite; }
+@keyframes ls-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ls-skel { animation: none; } }

@@ -6,6 +6,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
 import { LessonField, LessonMultiField } from '@/components/agent/LessonField';
+import { AriaTabs, panelProps } from '@/components/kho/AriaTabs';
+import { useMe } from '@/components/kho/useMe';
+import { formatApiError } from '@/lib/ui/soanBai';
 import { QuestionSet, type Section } from '@/components/kiem-tra/QuestionSet';
 import { QuizView } from '@/components/kiem-tra/QuizView';
 import { ExamExport } from '@/components/kiem-tra/ExamExport';
@@ -54,10 +57,23 @@ interface Exam {
   approvals?: { reviewer?: string; decision: string; note: string; at: string }[];
 }
 
+/** Lỗi đã việt hoá, an toàn để hiện cho giáo viên (không lộ chi tiết kỹ thuật). */
+class UiError extends Error {}
+const friendly = (e: unknown, fallback: string) => (e instanceof UiError ? e.message : fallback);
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.ok === false) throw new Error(reviewerErrorText(res.status, data.error));
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch {
+    throw new UiError('Không kết nối được máy chủ. Cô/thầy kiểm tra mạng rồi thử lại nhé.');
+  }
+  const data = (await res.json().catch(() => null)) as ({ ok?: boolean; error?: string } & Record<string, unknown>) | null;
+  if (!res.ok || !data || data.ok === false) {
+    const serverMsg = typeof data?.error === 'string' ? data.error : undefined;
+    const isReviewerGate = res.status === 503 || (res.status === 403 && /mã người duyệt/i.test(serverMsg ?? ''));
+    throw new UiError(isReviewerGate ? reviewerErrorText(res.status, serverMsg) : formatApiError(res.status, serverMsg));
+  }
   return data as T;
 }
 const post = (url: string, body: unknown, actor?: string, reviewerKey?: string) =>
@@ -181,7 +197,7 @@ function QuizTab() {
     try {
       const r = await api<{ quiz: { items: QuizItem[]; notes: string[] } }>('/api/assessment/quiz', post('/api/assessment/quiz', { atomId: lesson?.id ?? '', bloomLevels: bloom, language, style, count }));
       setQuiz({ items: r.quiz.items, notes: r.quiz.notes });
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Lỗi'); setQuiz(null); } finally { setBusy(false); }
+    } catch (e) { setErr(friendly(e, 'Chưa sinh được quiz. Cô/thầy thử lại nhé.')); setQuiz(null); } finally { setBusy(false); }
   };
 
   return (
@@ -222,6 +238,8 @@ function QuizTab() {
 }
 
 function ExamTab() {
+  const me = useMe();
+  const sessionMode = !me.useKey;
   const [actor, setActor] = useState('');
   const [lessons, setLessons] = useState<AtomLite[]>([]);
   const [bloom, setBloom] = useState<string[]>(['Nhớ', 'Hiểu', 'Vận dụng']);
@@ -240,7 +258,7 @@ function ExamTab() {
 
   const guard = async (fn: () => Promise<void>) => {
     setBusy(true); setErr(''); setMsg('');
-    try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : 'Lỗi'); } finally { setBusy(false); }
+    try { await fn(); } catch (e) { setErr(friendly(e, 'Có lỗi xảy ra. Cô/thầy thử lại nhé.')); } finally { setBusy(false); }
   };
 
   const load = useCallback(async (examId: string, who: string) => {
@@ -253,6 +271,14 @@ function ExamTab() {
     const savedActor = readActor();
     if (savedActor) setActor((cur) => cur || savedActor);
   }, []);
+
+  // Đăng nhập thật: tên người soạn và người duyệt lấy từ tài khoản.
+  useEffect(() => {
+    if (sessionMode && me.user?.name) {
+      setActor(me.user.name);
+      setReviewer(me.user.name);
+    }
+  }, [sessionMode, me.user?.name]);
 
   const fetchList = useCallback(async () => {
     const r = await api<{ exams: Exam[] }>('/api/assessment/exams', { headers: reviewerHeaders(reviewerKey) });
@@ -284,7 +310,8 @@ function ExamTab() {
 
   const review = (decision: 'duyet' | 'tu_choi') => guard(async () => {
     if (!exam) return;
-    await api('/api/assessment/exam/review', (saveReviewerKey(reviewerKey.trim()), post('/api/assessment/exam/review', { examId: exam.examId, reviewer: reviewer.trim(), decision, note }, reviewer.trim(), reviewerKey)));
+    if (!sessionMode) saveReviewerKey(reviewerKey.trim());
+    await api('/api/assessment/exam/review', post('/api/assessment/exam/review', { examId: exam.examId, reviewer: reviewer.trim(), decision, note }, reviewer.trim(), sessionMode ? '' : reviewerKey));
     await load(exam.examId, reviewer.trim());
     setMsg(decision === 'duyet' ? 'Đã duyệt đề.' : 'Đã từ chối đề.');
     fetchList().catch(() => {});
@@ -299,7 +326,9 @@ function ExamTab() {
             <div>
               Đề chỉ người soạn và tổ chuyên môn được xem, mọi lần xem đều được ghi lại.
               Câu đã dùng trong đề được duyệt không bị rút lại trong 3 năm.
-              Lưu ý trung thực: hệ thống chưa có đăng nhập thật, tên người soạn chỉ là tên khai báo nên chưa chống được người cố tình mạo danh.
+              {sessionMode
+                ? 'Tên người soạn và người duyệt lấy từ tài khoản trường của cô/thầy nên không thể khai báo thay người khác.'
+                : 'Lưu ý trung thực: chế độ đăng nhập thật chưa bật, tên người soạn chỉ là tên khai báo nên chưa chống được người cố tình mạo danh.'}
             </div>
           </div>
           <div className="ag-field-row kt-row">
@@ -309,6 +338,7 @@ function ExamTab() {
                 id="e-actor"
                 className="ag-field"
                 value={actor}
+                readOnly={sessionMode}
                 onChange={(e) => {
                   setActor(e.target.value);
                   writeActor(e.target.value);
@@ -404,16 +434,34 @@ function ExamTab() {
               <div className="ag-card kt-act">
                 <h3>Bước 3. Tổ chuyên môn duyệt</h3>
                 <p className="ag-note">Người soạn không tự duyệt đề của mình.</p>
-                <label htmlFor="e-reviewer" className="ag-field-label">Người duyệt</label>
-                <input id="e-reviewer" className="ag-field" value={reviewer} onChange={(e) => setReviewer(e.target.value)} />
-                <label htmlFor="e-key" className="ag-field-label">Mã người duyệt</label>
-                <input id="e-key" type="password" className="ag-field" value={reviewerKey} onChange={(e) => setReviewerKey(e.target.value)} autoComplete="off" />
-                <label htmlFor="e-note" className="ag-field-label">Ý kiến (bắt buộc khi từ chối)</label>
-                <textarea id="e-note" rows={3} className="ag-field" value={note} onChange={(e) => setNote(e.target.value)} />
-                <div className="ag-actions">
-                  <button type="button" className="ag-btn dark" onClick={() => void review('duyet')} disabled={busy || !reviewer.trim() || !reviewerKey.trim()}>Duyệt đề</button>
-                  <button type="button" className="ag-btn" onClick={() => void review('tu_choi')} disabled={busy || !reviewer.trim() || !reviewerKey.trim()}>Từ chối</button>
-                </div>
+                {sessionMode && me.ready && !me.canReview ? (
+                  <div className="ag-alert info" role="note">
+                    <Icon name="info" size={18} />
+                    <div>Chỉ người duyệt hoặc quản trị viên mới duyệt được đề. Cô/thầy nhờ tổ trưởng chuyên môn xem đề này, hoặc báo quản trị viên cấp vai trò người duyệt.</div>
+                  </div>
+                ) : (
+                  <>
+                    {sessionMode ? (
+                      <div className="kt-whoami" role="note">
+                        <Icon name="shield" size={18} />
+                        <span>Duyệt với tư cách <b>{me.user?.name}</b></span>
+                      </div>
+                    ) : (
+                      <>
+                        <label htmlFor="e-reviewer" className="ag-field-label">Người duyệt</label>
+                        <input id="e-reviewer" className="ag-field" value={reviewer} onChange={(e) => setReviewer(e.target.value)} />
+                        <label htmlFor="e-key" className="ag-field-label">Mã người duyệt</label>
+                        <input id="e-key" type="password" className="ag-field" value={reviewerKey} onChange={(e) => setReviewerKey(e.target.value)} autoComplete="off" />
+                      </>
+                    )}
+                    <label htmlFor="e-note" className="ag-field-label">Ý kiến (bắt buộc khi từ chối)</label>
+                    <textarea id="e-note" rows={3} className="ag-field" value={note} onChange={(e) => setNote(e.target.value)} />
+                    <div className="ag-actions">
+                      <button type="button" className="ag-btn dark" onClick={() => void review('duyet')} disabled={busy || !reviewer.trim() || (!sessionMode && !reviewerKey.trim())}>Duyệt đề</button>
+                      <button type="button" className="ag-btn" onClick={() => void review('tu_choi')} disabled={busy || !reviewer.trim() || (!sessionMode && !reviewerKey.trim()) || !note.trim()}>Từ chối</button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -470,31 +518,20 @@ function ExamTab() {
   );
 }
 
+type KtTab = 'A' | 'B' | 'C';
+const KT_TABS = [
+  { id: 'A' as const, label: 'Quiz củng cố', sub: 'Không cần duyệt' },
+  { id: 'B' as const, label: 'Đề định kỳ', sub: 'Cần tổ chuyên môn duyệt' },
+  { id: 'C' as const, label: 'Ngân hàng câu hỏi', sub: 'Xem và lọc câu' },
+];
+
 export default function KiemTraPage() {
-  const [tab, setTab] = useState<'A' | 'B' | 'C'>('A');
-  const tabBtn = (id: 'A' | 'B' | 'C', label: string, sub: string) => (
-    <button
-      type="button"
-      role="tab"
-      id={`tab-${id}`}
-      aria-selected={tab === id}
-      aria-controls={`panel-${id}`}
-      className="ag-tab kt-tab"
-      onClick={() => setTab(id)}
-    >
-      {label}
-      <small>{sub}</small>
-    </button>
-  );
+  const [tab, setTab] = useState<KtTab>('A');
   return (
     <Shell title="Kiểm tra và đề thi" subtitle="Quiz nhanh trong giờ, đề định kỳ có tổ chuyên môn duyệt, và ngân hàng câu hỏi.">
       <div className="kt-page">
-        <div role="tablist" aria-label="Loại bài kiểm tra" className="ag-tabs kt-tabs">
-          {tabBtn('A', 'Quiz củng cố', 'Không cần duyệt')}
-          {tabBtn('B', 'Đề định kỳ', 'Cần tổ chuyên môn duyệt')}
-          {tabBtn('C', 'Ngân hàng câu hỏi', 'Xem và lọc câu')}
-        </div>
-        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        <AriaTabs tabs={KT_TABS} value={tab} onChange={setTab} label="Loại bài kiểm tra" prefix="kt" className="ag-tabs kt-tabs" tabClassName="ag-tab kt-tab" />
+        <div {...panelProps('kt', tab)} className="kt-panel">
           {tab === 'A' ? <QuizTab /> : tab === 'B' ? <ExamTab /> : <BankTab />}
         </div>
       </div>

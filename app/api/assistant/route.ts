@@ -5,6 +5,7 @@ import { answerPedagogicalAssistant } from '@/lib/engine/smartGenerator';
 import { getNodeById } from '@/lib/knowledge-graph';
 import { requireAccess } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { withUsage } from '@/lib/usage/quota';
 import { recordUsageEvent } from '@/lib/server/store';
 import type { GeneratedResource } from '@/lib/types';
 
@@ -63,12 +64,22 @@ export async function POST(request: Request) {
     const classProfile = getClassById(body.classId);
     const primaryNode = getNodeById(body.knowledgeNodeId);
 
-    const result = await answerPedagogicalAssistant({
-      question,
-      classProfile,
-      primaryNode,
-      currentResource: body.currentResource as unknown as GeneratedResource | undefined,
-    });
+    const metered = await withUsage(
+      request,
+      { workflow: 'assistant', declaredUser: body.teacherEmail || body.teacherName },
+      async (h) => ({
+        result: await answerPedagogicalAssistant({
+          question,
+          classProfile,
+          primaryNode,
+          currentResource: body.currentResource as unknown as GeneratedResource | undefined,
+        }),
+        exceeded: h.exceeded,
+      }),
+    );
+    const ex = metered.exceeded();
+    if (ex) return NextResponse.json({ ok: false, error: ex.message }, { status: 429 });
+    const result = metered.result;
 
     await recordUsageEvent({
       nguoi: {

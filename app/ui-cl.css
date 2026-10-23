@@ -312,3 +312,213 @@
     transition: none;
   }
 }
+
+/* ====== Nâng cấp giao diện: chỉ số chính, tín hiệu, giải thích ====== */
+.cl-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+  padding: 24px 28px;
+  border-radius: var(--ag-radius);
+  background: linear-gradient(160deg, var(--navy) 0%, var(--navy-700) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  border-top: 3px solid var(--cta);
+}
+.cl-hero h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: #fff;
+}
+.cl-hero-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  font-size: 16.5px;
+}
+.cl-hero-hint {
+  margin: 0 0 6px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: #fff;
+}
+.cl-hero-def {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--navy-100);
+}
+.cl-gauge {
+  display: block;
+  flex: none;
+}
+.cl-gauge-bg {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+.cl-gauge-fg {
+  stroke: var(--cta);
+  transition: stroke-dasharray 0.6s;
+}
+.cl-gauge.low .cl-gauge-fg {
+  stroke: #ff9b8f;
+}
+.cl-gauge.good .cl-gauge-fg {
+  stroke: #6ee7a3;
+}
+.cl-gauge-txt {
+  font-size: 28px;
+  font-weight: 800;
+  fill: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.cl-sig {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 99px;
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--navy-50);
+  color: var(--navy);
+}
+.cl-sig.good {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.cl-sig.ok {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.cl-sig.low {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.cl-hero .cl-sig {
+  border: 1px solid transparent;
+}
+.cl-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.cl-tile {
+  border-top: 3px solid var(--navy-100);
+}
+.cl-tile-label {
+  font-size: 15px;
+}
+.cl-tile-num {
+  font-size: 36px;
+}
+.cl-tile-sub {
+  font-weight: 700;
+}
+.cl-tile-sub.good {
+  color: var(--success);
+}
+.cl-tile-sub.ok {
+  color: var(--warn);
+}
+.cl-tile-sub.low {
+  color: var(--danger);
+}
+.cl-tile-hint {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.cl-tile.warnt {
+  border-top-color: var(--warn);
+}
+.cl-sec-sub {
+  font-size: 15px;
+}
+.cl-saved {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--ag-radius-sm);
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 15.5px;
+}
+.cl-saved b {
+  color: var(--ink);
+}
+.cl-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 24px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--ag-radius);
+  color: var(--muted);
+  text-align: center;
+}
+.cl-empty svg {
+  color: var(--navy-600);
+}
+.cl-empty p {
+  margin: 0;
+  font-size: 15.5px;
+}
+.cl-bar.big {
+  height: 14px;
+}
+.cl-bar.good > i {
+  background: var(--success);
+}
+.cl-bar.ok > i {
+  background: var(--warn);
+}
+.cl-bar.low > i {
+  background: var(--danger);
+}
+.cl-row-name small {
+  font-size: 14px;
+}
+.cl-tap {
+  min-height: 44px;
+}
+.ag-field:focus-visible,
+.cl-scale label:focus-within {
+  box-shadow: var(--ag-focus);
+}
+@media (max-width: 900px) {
+  .cl-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cl-hero {
+    padding: 20px;
+    gap: 18px;
+  }
+}
+@media (max-width: 560px) {
+  .cl-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+  .cl-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cl-tile.warnt {
+    grid-column: auto;
+  }
+  .cl-tile-num {
+    font-size: 30px;
+  }
+  .cl-hero h2 {
+    font-size: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-gauge-fg {
+    transition: none;
+  }
+}

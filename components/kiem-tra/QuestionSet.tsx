@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Icon } from '@/components/ui/icons';
-import { buildDocxBlob, downloadBlob } from '@/lib/export/docx';
+import { useWordExport } from './useWordExport';
 import { MathText } from '@/components/MathText';
 import { classifyLine } from '@/components/agent/Canvas';
 
@@ -73,10 +73,13 @@ export function QuestionSet({ sections, docTitle, showTools = true }: { sections
   const { notes, questions, others } = parseSections(sections);
   const [open, setOpen] = useState(false);
 
-  const exportDocx = async () => {
-    const blob = await buildDocxBlob({ title: docTitle.toUpperCase(), subtitle: [], sections });
-    downloadBlob(blob, `${docTitle.replace(/[^\w\-]+/g, '-').slice(0, 40) || 'de'}.docx`);
-  };
+  const word = useWordExport();
+  const exportDocx = () =>
+    word.run(async () => {
+      const { buildDocxBlob } = await import('@/lib/export/docx');
+      const blob = await buildDocxBlob({ title: docTitle.toUpperCase(), subtitle: [], sections });
+      return { blob, filename: `${docTitle.replace(/[^\w\-]+/g, '-').slice(0, 40) || 'de'}.docx` };
+    });
 
   return (
     <div className="kt-set">
@@ -85,12 +88,18 @@ export function QuestionSet({ sections, docTitle, showTools = true }: { sections
           <button type="button" className="ag-btn small" onClick={() => setOpen((v) => !v)} aria-pressed={open}>
             {open ? 'Ẩn tất cả đáp án' : 'Hiện tất cả đáp án'}
           </button>
-          <button type="button" className="ag-btn small" onClick={() => void exportDocx()}>
-            <Icon name="download" size={16} /> Tải .docx
+          <button type="button" className="ag-btn small" onClick={() => void exportDocx()} disabled={word.busy}>
+            {word.busy ? <span className="ag-spin" aria-hidden="true" /> : <Icon name="download" size={16} />} Tải .docx
           </button>
           <button type="button" className="ag-btn small" onClick={() => window.print()}>
             <Icon name="print" size={16} /> In
           </button>
+        </div>
+      )}
+      {word.error && (
+        <div className="ag-alert bad" role="alert">
+          <Icon name="alert" size={18} />
+          <div>{word.error}</div>
         </div>
       )}
       {notes.length > 0 && (

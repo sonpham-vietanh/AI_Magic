@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '@/app/ui-modal.css';
 import { getCategoryMeta, SUBJECTS } from '@/lib/catalog';
@@ -7,6 +8,7 @@ import { cleanPedagogicalText } from '@/lib/text/clean';
 import { CLASS_PROFILES } from '@/lib/classes';
 import { pickDefaultClass } from '@/lib/classes/pickDefaultClass';
 import { Icon } from '@/components/ui/icons';
+import { formatApiError } from '@/lib/ui/soanBai';
 import { DocBody } from '@/components/studio/DocBody';
 import { QuestionBank } from '@/components/studio/QuestionBank';
 import { useDialog } from '@/components/studio/useDialog';
@@ -246,7 +248,7 @@ export function ToolStudioModal({
           throw new Error(
             r.status === 429
               ? 'Hệ thống đang quá tải, vui lòng thử lại sau ít phút.'
-              : data?.error || `Không tải được danh sách bài học (${r.status}).`,
+              : formatApiError(r.status, r.status >= 500 ? undefined : data?.error),
           );
         }
         return data;
@@ -270,7 +272,7 @@ export function ToolStudioModal({
         if (ctrl.signal.aborted) return;
         setSbAtoms([]);
         setBankError(
-          err instanceof Error ? err.message : 'Không tải được danh sách bài học.',
+          err instanceof Error ? err.message : 'Chưa tải được danh sách bài học.',
         );
       });
     return () => ctrl.abort();
@@ -294,7 +296,7 @@ export function ToolStudioModal({
           throw new Error(
             r.status === 429
               ? 'Hệ thống đang quá tải, vui lòng thử lại sau ít phút.'
-              : data?.error || `Không tải được ngân hàng câu hỏi (${r.status}).`,
+              : formatApiError(r.status, r.status >= 500 ? undefined : data?.error),
           );
         }
         return data;
@@ -418,7 +420,7 @@ export function ToolStudioModal({
             if (!applyDone(evt)) setSaveNotice('Không thể tạo học liệu.');
           } else if (evt.type === 'error') {
             finished = true;
-            setSaveNotice(evt.error || 'Không thể tạo học liệu.');
+            setSaveNotice('Chưa tạo được học liệu. Cô/thầy thử lại sau ít phút nhé.');
           }
         };
         for (;;) {
@@ -447,11 +449,11 @@ export function ToolStudioModal({
       } else if (response.status === 401) {
         setSaveNotice('Phiên làm việc đã hết hạn, vui lòng tải lại trang rồi thử lại.');
       } else {
-        setSaveNotice(data.error || 'Không thể tạo học liệu.');
+        setSaveNotice(formatApiError(response.status, response.status >= 500 ? undefined : data.error));
       }
     } catch {
       setSaveNotice(
-        ctrl.signal.aborted ? 'Đã hủy biên soạn.' : 'Lỗi kết nối máy chủ.',
+        ctrl.signal.aborted ? 'Đã hủy biên soạn.' : 'Không kết nối được máy chủ. Cô/thầy kiểm tra mạng rồi thử lại nhé.',
       );
     } finally {
       if (abortRef.current === ctrl) {
@@ -686,7 +688,7 @@ export function ToolStudioModal({
         </header>
 
         {/* BƯỚC (điện thoại) */}
-        <div className="md-steps no-print" role="tablist" aria-label="Các bước">
+        <div className="md-steps no-print" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Các bước">
           <button
             type="button"
             role="tab"
@@ -948,7 +950,7 @@ export function ToolStudioModal({
           {/* PHẢI: KẾT QUẢ */}
           <section className="md-result-pane" aria-label="Kết quả">
             <div className="md-tabbar no-print">
-              <div className="ag-tabs" role="tablist">
+              <div className="ag-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown}>
                 <button
                   type="button"
                   role="tab"

@@ -14,6 +14,13 @@ import {
   structureSummary,
   type AgentResult,
 } from '@/lib/agent/result';
+import {
+  GAMMA_GUIDE,
+  NOTEBOOKLM_GUIDE,
+  buildGammaOutline,
+  buildNotebookSource,
+  exportFileName,
+} from '@/lib/agent/exportText';
 import { WORKFLOW_LABELS } from './types';
 
 type Tab = 'doc' | 'cautruc' | 'soi' | 'chuan';
@@ -74,6 +81,7 @@ export function ResultPanel(p: ResultPanelProps) {
   const [accepting, setAccepting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sel, setSel] = useState(0);
+  const [exported, setExported] = useState<null | { kind: 'gamma' | 'notebook'; copied: boolean }>(null);
 
   const artifacts = useMemo(() => getArtifacts(r), [r]);
   const structure = useMemo(() => getStructure(r), [r]);
@@ -131,6 +139,44 @@ export function ResultPanel(p: ResultPanelProps) {
       setExportError('Trình duyệt không cho phép sao chép tự động. Cô/thầy bôi đen văn bản để chép.');
     }
   };
+
+  /** Xuất văn bản để dán vào Gamma / thêm vào NotebookLM: sao chép + tải .md, không gọi API ngoài. */
+  const exportTo = async (kind: 'gamma' | 'notebook') => {
+    if (blocked) return;
+    setExportError('');
+    const input = {
+      title: p.title,
+      formatText: p.formatText,
+      lessonTitle: r.standard?.title ?? p.lessonTitle,
+      bloomLevels: r.bloomLevels ?? [],
+      text: p.text,
+      sections,
+      artifacts,
+    };
+    const body = kind === 'gamma' ? buildGammaOutline(input) : buildNotebookSource(input);
+    let copiedOk = false;
+    try {
+      await navigator.clipboard.writeText(body);
+      copiedOk = true;
+    } catch {
+      /* vẫn tải tệp */
+    }
+    try {
+      const url = URL.createObjectURL(new Blob([body], { type: 'text/markdown;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = exportFileName(p.title, kind === 'gamma' ? 'gamma' : 'notebooklm');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch {
+      if (!copiedOk) setExportError('Chưa xuất được văn bản. Cô/thầy dùng nút Sao chép ở bên cạnh nhé.');
+    }
+    setExported({ kind, copied: copiedOk });
+  };
+
+  const canExport = p.text.trim().length > 0 || artifacts.length > 0;
 
   const tabs: [Tab, string][] = [
     ['doc', 'Bản soạn'],
@@ -384,6 +430,22 @@ export function ResultPanel(p: ResultPanelProps) {
           <span>{exportError}</span>
         </div>
       )}
+      {exported && (
+        <div className="ag-alert info ag-export-guide" role="status" style={{ margin: '0 16px 12px' }}>
+          <Icon name="info" size={18} />
+          <div>
+            <strong>
+              {exported.kind === 'gamma' ? 'Đã tạo dàn ý cho Gamma' : 'Đã tạo nguồn cho NotebookLM'}
+              {exported.copied ? ': đã sao chép và tải tệp .md.' : ': đã tải tệp .md (trình duyệt chặn sao chép tự động).'}
+            </strong>
+            <ol>
+              {(exported.kind === 'gamma' ? GAMMA_GUIDE : NOTEBOOKLM_GUIDE).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      )}
       {p.accepted && (
         <div className="ag-alert ok" role="status" style={{ margin: '0 16px 12px' }}>
           <Icon name="check" size={18} />
@@ -429,6 +491,30 @@ export function ResultPanel(p: ResultPanelProps) {
             <Icon name={copied ? 'check' : 'clipboard'} />
             {copied ? 'Đã chép' : 'Sao chép'}
           </button>
+        )}
+        {canExport && (
+          <>
+            <button
+              type="button"
+              className="ag-btn"
+              onClick={() => void exportTo('gamma')}
+              disabled={blocked}
+              title={blocked ? 'Cần người duyệt trước khi xuất' : 'Tạo dàn ý slide để dán vào Gamma'}
+            >
+              <Icon name="slides" />
+              Xuất sang Gamma
+            </button>
+            <button
+              type="button"
+              className="ag-btn"
+              onClick={() => void exportTo('notebook')}
+              disabled={blocked}
+              title={blocked ? 'Cần người duyệt trước khi xuất' : 'Tạo văn bản nguồn để thêm vào NotebookLM'}
+            >
+              <Icon name="book" />
+              Xuất sang NotebookLM
+            </button>
+          </>
         )}
         {!cur && (
           <>

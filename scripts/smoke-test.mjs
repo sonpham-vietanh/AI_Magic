@@ -154,7 +154,7 @@ if (base) {
     if (r.status !== 200) return `HTTP ${r.status}`;
     const j = await r.json();
     if (j.ok !== true) return 'ok khác true';
-    const extra = Object.keys(j).filter((k) => k !== 'ok' && k !== 'time');
+    const extra = Object.keys(j).filter((k) => !['ok', 'time', 'uptimeSec', 'dataDirWritable'].includes(k));
     return extra.length ? `lộ thêm trường: ${extra.join(', ')}` : null;
   });
   for (const p of ['/api/usage', '/api/resources', '/api/integrations/status', '/api/supabase/knowledge?mode=overview', '/api/versions']) {

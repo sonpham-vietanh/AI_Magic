@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAccess } from "@/lib/server/guard";
 import { rateLimit } from "@/lib/server/rateLimit";
+import { withUsage } from "@/lib/usage/quota";
 import { getToolById } from "@/lib/catalog";
 import { getClassById } from "@/lib/classes";
 import { withLlmDeltaSink } from "@/lib/engine/llmClient";
@@ -383,13 +384,27 @@ export async function POST(request: Request) {
     );
   }
 
+  // Đo token/chi phí theo người dùng + hạn mức ngày (chỉ chặn khi cần gọi AI thật).
+  const executeMetered = () =>
+    withUsage(
+      request,
+      { workflow: "generate", declaredUser: parsed.data.teacherEmail || parsed.data.teacherName },
+      async (h) => {
+        const r = await executeGenerate(parsed.data);
+        const ex = h.exceeded();
+        return ex
+          ? { status: 429, payload: { ok: false as const, error: ex.message } }
+          : r;
+      },
+    );
+
   const wantsStream =
     parsed.data.stream === true ||
     (request.headers.get("accept") || "").includes("text/event-stream");
 
   if (!wantsStream) {
     try {
-      const result = await executeGenerate(parsed.data);
+      const result = await executeMetered();
       return NextResponse.json(result.payload, { status: result.status });
     } catch (err) {
       console.error("[generate] error:", err);
@@ -416,7 +431,7 @@ export async function POST(request: Request) {
       try {
         const result = await withLlmDeltaSink(
           (text) => send({ type: "delta", text }),
-          () => executeGenerate(parsed.data),
+          () => executeMetered(),
         );
         if (result.status === 200 && result.payload.ok) {
           const { ok: _ok, ...rest } = result.payload;

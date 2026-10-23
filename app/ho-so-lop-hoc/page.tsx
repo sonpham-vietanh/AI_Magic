@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import { useState } from 'react';
 import { Shell } from '@/components/Shell';
 import { ClassesView } from '@/components/lop-hoc/ClassesView';
@@ -21,7 +22,7 @@ export default function ClassProfilesPage() {
   return (
     <Shell title="Lớp học & chương trình" subtitle="Hiểu lớp mình dạy để soạn bài sát hơn.">
       <div className="hs-wrap">
-        <div className="hs-tabs" role="tablist" aria-label="Nội dung trang">
+        <div className="hs-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Nội dung trang">
           {TABS.map((t) => (
             <button
               key={t.id}

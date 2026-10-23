@@ -6,6 +6,7 @@ import { getClassById, buildClassPedagogicalContext } from '@/lib/classes';
 import { requireAccess } from '@/lib/server/guard';
 import { effectiveActor } from '@/lib/server/identity';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { withUsage } from '@/lib/usage/quota';
 import { getOrgId } from '@/lib/server/org';
 import { getStandardLesson } from '@/lib/kho';
 import { generateQuiz, draftExam } from '@/lib/assessment';
@@ -381,8 +382,20 @@ export async function POST(request: Request) {
   const orgId = getOrgId(request);
   const wantsStream = (request.headers.get('accept') ?? '').includes('text/event-stream');
 
+  // Đo token/chi phí theo người dùng + hạn mức ngày; chỉ chặn khi thật sự cần gọi AI (lượt lấy từ Kho không tính).
+  const runMetered = (hooks?: RunHooks): Promise<RunOutcome> =>
+    withUsage(
+      request,
+      { workflow: `wf:${routeWorkflow(params.formatDauRa)}`, declaredUser: params.teacher?.email || params.teacher?.name },
+      async (h) => {
+        const o = await executeWorkflow(params, orgId, hooks);
+        const ex = h.exceeded();
+        return ex ? ({ ok: false, status: 429, error: ex.message, extra: { quota: { used: ex.used, limit: ex.limit } } } as RunOutcome) : o;
+      },
+    );
+
   if (!wantsStream) {
-    const out = await executeWorkflow(params, orgId);
+    const out = await runMetered();
     if (!out.ok) return fail(out.status, out.error, out.extra);
     return NextResponse.json({ ok: true, result: out.result });
   }
@@ -398,7 +411,7 @@ export async function POST(request: Request) {
         }
       };
 
-      const out = await executeWorkflow(params, orgId, {
+      const out = await runMetered({
         onStage(stage, message) {
           send({ type: 'stage', stage, message });
         },

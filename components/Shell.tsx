@@ -11,9 +11,13 @@ import {
   loadHistory,
   type HistoryItem,
 } from '@/lib/agent/history';
+import { readActor } from '@/lib/agent/actor';
 import { AssistantDrawer } from './AssistantDrawer';
+import { AccountMenu } from './ui/AccountMenu';
 import { Icon, type IconName } from './ui/icons';
+import { parseMe, quotaLeft, type MeState } from './ui/uiLogic';
 import '../app/ui-ls.css';
+import '../app/ui-shell.css';
 
 export interface ShellProps {
   children: React.ReactNode;
@@ -34,25 +38,28 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Menu theo mục "Web App" của sơ đồ v2.1.
+// Menu gom theo việc cô/thầy làm, dùng từ ngữ quen thuộc với giáo viên.
 const WORK_NAV: NavItem[] = [
   { href: '/', label: 'Trợ lý soạn bài', icon: 'sparkles', exact: true },
-  { href: '/kho', label: 'Thư viện tiết học', icon: 'library' },
+  { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', icon: 'clipboard' },
   { href: '/kiem-tra', label: 'Kiểm tra & Đề thi', icon: 'exam' },
+];
+
+const MINE_NAV: NavItem[] = [
+  { href: '/thu-vien', label: 'Học liệu đã lưu', icon: 'folder' },
   { href: '/lich-su', label: 'Lịch sử của tôi', icon: 'clock' },
+];
+
+const EXTRA_NAV: NavItem[] = [
+  { href: '/kho', label: 'Thư viện tiết học', icon: 'library' },
+  { href: '/cong-cu', label: 'Bộ công cụ sư phạm', icon: 'grid' },
+  { href: '/so-do-lien-mon', label: 'Sơ đồ liên môn', icon: 'graph' },
+  { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', icon: 'users' },
 ];
 
 const BUILD_NAV: NavItem[] = [
   { href: '/duyet', label: 'Duyệt học liệu mẫu', icon: 'shield' },
   { href: '/chat-luong', label: 'Chất lượng bài soạn', icon: 'chart' },
-];
-
-const EXTRA_NAV: NavItem[] = [
-  { href: '/cong-cu', label: 'Kho 82 công cụ', icon: 'grid' },
-  { href: '/thu-vien', label: 'Học liệu đã lưu', icon: 'folder' },
-  { href: '/so-do-lien-mon', label: 'Sơ đồ liên môn', icon: 'graph' },
-  { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', icon: 'users' },
-  { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', icon: 'clipboard' },
   { href: '/ket-noi', label: 'Kết nối dịch vụ ngoài', icon: 'plug' },
 ];
 
@@ -100,6 +107,10 @@ export function Shell({
   const [navOpen, setNavOpen] = useState(false);
   const [recent, setRecent] = useState<HistoryItem[]>([]);
   const [extraOpen, setExtraOpen] = useState(true);
+  const [me, setMe] = useState<MeState>({ ssoEnabled: false, user: null });
+  const [meLoaded, setMeLoaded] = useState(false);
+  const [quota, setQuota] = useState<number | null>(null);
+  const [declared, setDeclared] = useState('');
 
   const mode = variant ?? 'page';
   const menuBtnRef = useRef<HTMLButtonElement>(null);
@@ -121,6 +132,31 @@ export function Shell({
   useEffect(() => {
     setNavOpen(false);
   }, [pathname]);
+
+  // Danh tính và hạn mức: chịu được chưa đăng nhập, API chưa có (404) hoặc lỗi mạng.
+  useEffect(() => {
+    const ctl = new AbortController();
+    setDeclared(readActor());
+    (async () => {
+      let next: MeState = { ssoEnabled: false, user: null };
+      try {
+        const r = await fetch('/api/me', { credentials: 'same-origin', signal: ctl.signal, cache: 'no-store' });
+        if (r.ok) next = parseMe(await r.json());
+      } catch {
+        /* giữ trạng thái mặc định */
+      }
+      if (ctl.signal.aborted) return;
+      setMe(next);
+      setMeLoaded(true);
+      try {
+        const r = await fetch('/api/usage/me', { credentials: 'same-origin', signal: ctl.signal, cache: 'no-store' });
+        if (r.ok && !ctl.signal.aborted) setQuota(quotaLeft(await r.json()));
+      } catch {
+        /* bỏ qua êm */
+      }
+    })();
+    return () => ctl.abort();
+  }, []);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -248,8 +284,11 @@ export function Shell({
         </div>
 
         <div className="ag-rail-scroll">
-          <div className="ag-label">Soạn và dùng</div>
-          {renderNav(WORK_NAV, 'Soạn và dùng')}
+          <div className="ag-label">Soạn bài</div>
+          {renderNav(WORK_NAV, 'Soạn bài')}
+
+          <div className="ag-label">Của tôi</div>
+          {renderNav(MINE_NAV, 'Của tôi')}
 
           <button
             type="button"
@@ -258,17 +297,17 @@ export function Shell({
             aria-controls="ls-nav-extra"
             onClick={toggleExtra}
           >
-            <span>Công cụ &amp; Học liệu</span>
+            <span>Khám phá kho học liệu</span>
             <Icon name="chevronDown" size={18} />
           </button>
           {extraOpen && (
             <div id="ls-nav-extra">
-              {renderNav(EXTRA_NAV, 'Công cụ và học liệu')}
+              {renderNav(EXTRA_NAV, 'Khám phá kho học liệu')}
             </div>
           )}
 
-          <div className="ag-label">Duyệt và chất lượng</div>
-          {renderNav(BUILD_NAV, 'Duyệt và chất lượng')}
+          <div className="ag-label">Duyệt và cài đặt</div>
+          {renderNav(BUILD_NAV, 'Duyệt và cài đặt')}
 
           {recent.length > 0 && (
             <>
@@ -286,6 +325,7 @@ export function Shell({
         </div>
 
         <div className="ag-rail-foot">
+          <AccountMenu me={me} loaded={meLoaded} quota={quota} declaredName={declared} onNavigate={() => setNavOpen(false)} />
           <button type="button" className="ag-assist-btn" onClick={openAssistant}>
             <Icon name="book" />
             Hỏi đáp chuyên môn

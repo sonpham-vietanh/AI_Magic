@@ -2,11 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { readActor, writeActor, writeReviewerKey } from '@/lib/agent/actor';
+import { isReviewerRole, roleLabel } from '@/lib/agent/prefs';
+import { useMe } from './useMe';
 
 /** Tên cô/thầy lưu ở localStorage 'va.actor' kết hợp phiên chữ ký số `/api/auth/session`. */
 export function useActor(): [string, (v: string) => void, boolean] {
   const [name, setName] = useState('');
   const [ready, setReady] = useState(false);
+  const [me] = useMe();
+  const ssoName = me.ssoEnabled && me.user ? me.user.name : '';
+  useEffect(() => {
+    if (!ssoName) return;
+    setName(ssoName);
+    writeActor(ssoName);
+  }, [ssoName]);
   useEffect(() => {
     const local = readActor();
     setName(local);
@@ -26,6 +35,7 @@ export function useActor(): [string, (v: string) => void, boolean] {
       .catch(() => undefined);
   }, []);
   const save = (v: string) => {
+    if (ssoName) return; // đăng nhập email trường: tên lấy từ phiên, không sửa tay
     const clean = v.trim().slice(0, 100);
     setName(clean);
     writeActor(clean);
@@ -58,6 +68,7 @@ export function TeacherName({
   const [role, setRole] = useState<'teacher' | 'reviewer'>('teacher');
   const [authMsg, setAuthMsg] = useState('');
   const [ssoUser, setSsoUser] = useState<{ name: string; email?: string } | null>(null);
+  const [me, meReady] = useMe();
 
   useEffect(() => {
     let alive = true;
@@ -78,7 +89,10 @@ export function TeacherName({
     };
   }, [value]);
 
-  if (!ready) return null;
+  if (!ready || !meReady) return null;
+
+  // Khi SSO bật: tên và quyền lấy từ phiên; ẩn hẳn ô nhập tên và ô mã người duyệt.
+  const sso = me.ssoEnabled && me.user ? me.user : null;
 
   async function logout() {
     try {
@@ -89,13 +103,16 @@ export function TeacherName({
     window.location.assign('/dang-nhap');
   }
 
-  if (ssoUser) {
+  if (sso || ssoUser) {
+    const shownName = sso?.name ?? ssoUser?.name ?? '';
+    const shownEmail = sso?.email ?? ssoUser?.email;
+    const shownRole = sso ? sso.role : role;
     return (
-      <span className="ag-who-pill" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+      <span className="ag-who-pill ag-who-sso">
         <span className="ag-who-dot" aria-hidden="true" />
-        <span title={ssoUser.email}>
-          {ssoUser.name}
-          {role === 'reviewer' ? ' · Người duyệt' : ''}
+        <span title={shownEmail}>
+          {shownName}
+          {isReviewerRole(shownRole) ? <em className="ag-who-role">{roleLabel(shownRole)}</em> : null}
         </span>
         <button type="button" className="ag-link" onClick={logout} aria-label="Đăng xuất">
           Đăng xuất

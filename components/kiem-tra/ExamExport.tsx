@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/icons';
-import { downloadBlob } from '@/lib/export/docx';
 import { buildExamDocument, examPrintHtml } from '@/lib/assessment/examDoc';
 import type { ExamItemSnapshot } from '@/lib/assessment/types';
-import { buildExamDocxBlob } from './examDocx';
+import { useWordExport } from './useWordExport';
 import { printHtml } from './printFrame';
 
 interface Props {
@@ -21,20 +20,17 @@ export function ExamExport({ examId, examDate, items, rows, shortfall }: Props) 
   const [subject, setSubject] = useState('');
   const [grade, setGrade] = useState('');
   const [minutes, setMinutes] = useState(45);
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useWordExport();
   const doc = useMemo(
     () => buildExamDocument(items, rows, shortfall, { examId, examDate, subject, grade, minutes }),
     [items, rows, shortfall, examId, examDate, subject, grade, minutes],
   );
   const empty = doc.questions.length === 0;
-  const word = async () => {
-    setBusy(true);
-    try {
-      downloadBlob(await buildExamDocxBlob(doc), `${examId}.docx`);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const word = () =>
+    run(async () => {
+      const { buildExamDocxBlob } = await import('./examDocx');
+      return { blob: await buildExamDocxBlob(doc), filename: `${examId}.docx` };
+    });
   return (
     <section className="ag-card kt-act" aria-label="Xuất đề">
       <h3>Xuất đề trọn bộ</h3>
@@ -57,7 +53,7 @@ export function ExamExport({ examId, examDate, items, rows, shortfall }: Props) 
       </div>
       <div className="ag-actions">
         <button type="button" className="ag-btn dark" onClick={() => void word()} disabled={empty || busy}>
-          <Icon name="download" size={18} /> Tải đề (.docx)
+          {busy ? <span className="ag-spin" aria-hidden="true" /> : <Icon name="download" size={18} />} Tải đề (.docx)
         </button>
         <button type="button" className="ag-btn" onClick={() => printHtml(examPrintHtml(doc, 'de'))} disabled={empty}>
           <Icon name="print" size={18} /> In / Lưu PDF đề
@@ -66,6 +62,12 @@ export function ExamExport({ examId, examDate, items, rows, shortfall }: Props) 
           <Icon name="print" size={18} /> In / Lưu PDF đáp án
         </button>
       </div>
+      {error && (
+        <div className="ag-alert bad" role="alert">
+          <Icon name="alert" size={18} />
+          <div>{error}</div>
+        </div>
+      )}
       {empty && <p className="ag-note">Đề chưa có câu nào nên chưa xuất được.</p>}
     </section>
   );

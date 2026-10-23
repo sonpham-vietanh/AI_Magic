@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CompleteLessonPack,
@@ -584,7 +585,7 @@ export function DashboardClient({
           </div>
         )}
 
-        <div className="ag-tabs cc-main-tabs" role="tablist" aria-label="Khu vực làm việc">
+        <div className="ag-tabs cc-main-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Khu vực làm việc">
           {tabs.map((t) => (
             <button
               key={t.id}

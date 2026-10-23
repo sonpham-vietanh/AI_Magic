@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/icons';
 import { MathText } from '@/components/MathText';
-import { buildDocxBlob, downloadBlob } from '@/lib/export/docx';
+import { useWordExport } from './useWordExport';
 import { initPresent, presentKey, presentReduce } from '@/lib/assessment/present';
 import { quizPlainSections, quizPrintHtml, type QuizItem } from '@/lib/assessment/examDoc';
 import { printHtml } from './printFrame';
@@ -89,10 +89,13 @@ function Present({ items, onClose }: { items: QuizItem[]; onClose: () => void })
 export function QuizView({ items, notes, title }: { items: QuizItem[]; notes: string[]; title: string }) {
   const [open, setOpen] = useState(false);
   const [present, setPresent] = useState(false);
-  const docx = async () => {
-    const blob = await buildDocxBlob({ title: title.toUpperCase(), subtitle: [], sections: quizPlainSections(items) });
-    downloadBlob(blob, `${title.replace(/[^\w\-]+/g, '-').slice(0, 40) || 'quiz'}.docx`);
-  };
+  const word = useWordExport();
+  const docx = () =>
+    word.run(async () => {
+      const { buildDocxBlob } = await import('@/lib/export/docx');
+      const blob = await buildDocxBlob({ title: title.toUpperCase(), subtitle: [], sections: quizPlainSections(items) });
+      return { blob, filename: `${title.replace(/[^\w\-]+/g, '-').slice(0, 40) || 'quiz'}.docx` };
+    });
   return (
     <div className="kt-set">
       <div className="kt-set-tools">
@@ -102,8 +105,8 @@ export function QuizView({ items, notes, title }: { items: QuizItem[]; notes: st
         <button type="button" className="ag-btn small" onClick={() => setOpen((v) => !v)} aria-pressed={open}>
           {open ? 'Ẩn tất cả đáp án' : 'Hiện tất cả đáp án'}
         </button>
-        <button type="button" className="ag-btn small" onClick={() => void docx()} disabled={!items.length}>
-          <Icon name="download" size={16} /> Tải .docx
+        <button type="button" className="ag-btn small" onClick={() => void docx()} disabled={!items.length || word.busy}>
+          {word.busy ? <span className="ag-spin" aria-hidden="true" /> : <Icon name="download" size={16} />} Tải .docx
         </button>
         <button type="button" className="ag-btn small" onClick={() => printHtml(quizPrintHtml(items, title, false))} disabled={!items.length}>
           <Icon name="print" size={16} /> In câu hỏi

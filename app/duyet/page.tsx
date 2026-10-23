@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Shell } from '@/components/Shell';
 import { Icon } from '@/components/ui/icons';
+import { useMe } from '@/components/kho/useMe';
+import { fetchJson, friendlyError, readJson } from '@/lib/ui/fetchJson';
 import { GRADES, SUBJECTS } from '@/lib/catalog';
 import { RUBRIC_6 } from '@/lib/eval/rubric';
 import { approveHint, evaluateReview, formatScore, MIN_CRITERION } from '@/lib/ui/review';
@@ -39,13 +41,13 @@ interface QueueItem {
 const STATUS_META: Record<KhoStatus, { label: string; cls: string }> = {
   approved: { label: 'Đã duyệt', cls: 'ok' },
   chua_duyet: { label: 'Chưa duyệt', cls: 'draft' },
-  khong_co: { label: 'Không có gói', cls: 'none' },
+  khong_co: { label: 'Chưa có gói kiến thức', cls: 'none' },
 };
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'chua_duyet', label: 'Chưa duyệt' },
   { id: 'approved', label: 'Đã duyệt' },
-  { id: 'khong_co', label: 'Không có gói' },
+  { id: 'khong_co', label: 'Chưa có gói kiến thức' },
 ];
 
 const NAME_KEY = 'va-reviewer-name';
@@ -73,6 +75,7 @@ export default function DuyetPage() {
   const [submitting, setSubmitting] = useState(false);
   const [assets, setAssets] = useState<AssetView[]>([]);
   const [message, setMessage] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
+  const me = useMe();
 
   useEffect(() => {
     try {
@@ -90,14 +93,12 @@ export default function DuyetPage() {
       setError('');
       try {
         const qs = new URLSearchParams({ subject, grade, limit: '100' });
-        const res = await fetch(`/api/kho/queue?${qs.toString()}`, { signal });
-        const data = (await res.json()) as { ok?: boolean; items?: QueueItem[]; error?: string };
-        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const data = await fetchJson<{ items?: QueueItem[] }>(`/api/kho/queue?${qs.toString()}`, { signal });
         setItems(data.items || []);
         setLoaded(true);
       } catch (e) {
         if (signal?.aborted) return;
-        setError(e instanceof Error ? e.message : 'Không tải được hàng chờ duyệt.');
+        setError(friendlyError(e, 'Không tải được hàng chờ duyệt. Cô/thầy thử lại nhé.'));
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
@@ -122,12 +123,11 @@ export default function DuyetPage() {
     setNote('');
     setLessonLoading(true);
     try {
-      const res = await fetch(`/api/kho/standard?atomId=${encodeURIComponent(atomId)}`);
-      const data = (await res.json()) as { ok?: boolean; lesson?: Lesson; error?: string };
-      if (!res.ok || !data.ok || !data.lesson) throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await fetchJson<{ lesson?: Lesson }>(`/api/kho/standard?atomId=${encodeURIComponent(atomId)}`);
+      if (!data.lesson) throw new Error('empty');
       setLesson(data.lesson);
     } catch (e) {
-      setMessage({ kind: 'bad', text: e instanceof Error ? e.message : 'Không tải được bản chuẩn.' });
+      setMessage({ kind: 'bad', text: friendlyError(e, 'Không tải được bản chuẩn. Cô/thầy thử chọn lại bài nhé.') });
     } finally {
       setLessonLoading(false);
     }
@@ -162,7 +162,9 @@ export default function DuyetPage() {
   }, [lesson, assets, items]);
 
   const ev = useMemo(() => evaluateReview(scores), [scores]);
-  const nameOk = reviewer.trim().length > 0 && reviewerKey.trim().length > 0;
+  const sessionMode = !me.useKey; // đăng nhập thật: danh tính và quyền lấy từ phiên
+  const reviewerName = sessionMode ? me.user?.name ?? '' : reviewer;
+  const nameOk = sessionMode ? me.canReview && reviewerName.trim().length > 0 : reviewer.trim().length > 0 && reviewerKey.trim().length > 0;
   const canApprove = ev.canApprove && nameOk && !submitting;
   const canReject = ev.complete && nameOk && note.trim().length > 0 && !submitting;
 
@@ -171,29 +173,35 @@ export default function DuyetPage() {
     setSubmitting(true);
     setMessage(null);
     try {
-      try {
-        localStorage.setItem(NAME_KEY, reviewer.trim());
-      } catch {
-        /* bỏ qua */
+      if (!sessionMode) {
+        try {
+          localStorage.setItem(NAME_KEY, reviewer.trim());
+        } catch {
+          /* bỏ qua */
+        }
+        saveReviewerKey(reviewerKey.trim());
       }
-      saveReviewerKey(reviewerKey.trim());
       const res = await fetch('/api/kho/review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...reviewerHeaders(reviewerKey) },
-        body: JSON.stringify({ atomId: selectedId, reviewer, scores, decision, note: note.trim() || undefined }),
+        headers: { 'Content-Type': 'application/json', ...(sessionMode ? {} : reviewerHeaders(reviewerKey)) },
+        body: JSON.stringify({ atomId: selectedId, reviewer: reviewerName, scores, decision, note: note.trim() || undefined }),
       });
-      const data = (await res.json()) as { ok?: boolean; review?: Review & { version?: number }; error?: string };
-      if (!res.ok || !data.ok) {
-        setMessage({ kind: 'bad', text: reviewerErrorText(res.status, data.error) });
+      const data = await readJson<{ ok?: boolean; review?: Review & { version?: number }; error?: string }>(res);
+      if (!res.ok || !data || !data.ok) {
+        if (sessionMode && (res.status === 401 || res.status === 403)) {
+          setMessage({ kind: 'bad', text: 'Tài khoản của cô/thầy chưa có quyền duyệt. Cô/thầy nhờ quản trị viên cấp vai trò người duyệt nhé.' });
+          return;
+        }
+        setMessage({ kind: 'bad', text: reviewerErrorText(res.status, data?.error) });
         return;
       }
       const text =
         decision === 'approve'
-          ? `Đã duyệt. Bộ tài nguyên đã đóng băng thành bản chuẩn${data.review?.version ? ` v${data.review.version}` : ''} trong Kho.` : 'Đã ghi nhận từ chối. Bài chưa vào Kho.';
+          ? `Đã duyệt. Bộ tài nguyên đã đóng băng thành bản chuẩn${data?.review?.version ? ` v${data.review.version}` : ''} trong Kho.` : 'Đã ghi nhận từ chối. Bài chưa vào Kho.';
       await Promise.all([loadQueue(), openItem(selectedId, true)]);
       setMessage({ kind: 'ok', text });
     } catch (e) {
-      setMessage({ kind: 'bad', text: e instanceof Error ? e.message : 'Không gửi được kết quả duyệt.' });
+      setMessage({ kind: 'bad', text: 'Không gửi được kết quả duyệt. Cô/thầy kiểm tra mạng rồi thử lại nhé.' });
     } finally {
       setSubmitting(false);
     }
@@ -210,6 +218,16 @@ export default function DuyetPage() {
           và không tiêu chí nào dưới {MIN_CRITERION}.
         </div>
       </div>
+
+      {sessionMode && me.ready && !me.canReview && (
+        <div className="ag-alert info du-rule" role="note">
+          <Icon name="info" size={20} />
+          <div>
+            <strong>Cô/thầy đang xem với vai trò giáo viên.</strong> Cô/thầy xem được hàng chờ và nội dung từng bài, còn việc chấm điểm và duyệt vào Kho
+            do người duyệt hoặc quản trị viên thực hiện. Nếu cô/thầy cần quyền này, xin báo quản trị viên của trường.
+          </div>
+        </div>
+      )}
 
       <div className={`du-layout${selectedId ? ' has-sel' : ''}`}>
         <section className="du-panel du-queue" aria-label="Hàng chờ duyệt">
@@ -297,7 +315,7 @@ export default function DuyetPage() {
               {loaded && !error && visible.length === 0 && (
                 <li className="du-empty">
                   <strong>
-                    {filter === 'chua_duyet' ? 'Không còn bài chờ duyệt' : filter === 'approved' ? 'Chưa có bài đã duyệt' : 'Mọi bài đều có gói'}
+                    {filter === 'chua_duyet' ? 'Không còn bài chờ duyệt' : filter === 'approved' ? 'Chưa có bài đã duyệt' : 'Mọi bài đều có gói kiến thức'}
                   </strong>
                   Thử đổi môn hoặc khối khác.
                 </li>
@@ -324,7 +342,8 @@ export default function DuyetPage() {
             </button>
 
             {!selectedId && (
-              <div className="du-empty">
+              <div className="du-empty du-empty-big">
+                <Icon name="clipboard" size={32} />
                 <strong>Chọn một bài ở bên trái</strong>
                 Cô/thầy sẽ xem nội dung gói kiến thức và chấm điểm tại đây.
               </div>
@@ -446,6 +465,14 @@ export default function DuyetPage() {
                       );
                     })}
 
+                    {sessionMode && me.ready && !me.canReview ? (
+                      <div className="kh-card du-locked" id="kh-sec-4">
+                        <h3 className="du-h3" style={{ margin: 0 }}>Bước 4. Người duyệt</h3>
+                        <p className="ag-note" style={{ margin: '6px 0 0' }}>
+                          Phiếu chấm 6 tiêu chí chỉ mở cho người duyệt và quản trị viên. Tài khoản {me.user?.email ? <b>{me.user.email}</b> : 'của cô/thầy'} đang là giáo viên nên chỉ được xem.
+                        </p>
+                      </div>
+                    ) : (
                     <form id="kh-sec-4" aria-label="Phiếu chấm 6 tiêu chí" onSubmit={(e) => e.preventDefault()}>
                       <h3 className="du-h3">Bước 4. Người duyệt: chấm 6 tiêu chí</h3>
                       <p className="ag-note">
@@ -482,6 +509,16 @@ export default function DuyetPage() {
                       })}
 
                       <div className="du-ident">
+                        {sessionMode ? (
+                          <div className="du-whoami" role="note">
+                            <Icon name="shield" size={18} />
+                            <span>
+                              Duyệt với tư cách <b>{me.user?.name}</b>
+                              {me.user?.email ? <small>{me.user.email}</small> : null}
+                            </span>
+                          </div>
+                        ) : (
+                          <>
                         <div>
                           <label className="ag-field-label" htmlFor="du-reviewer">
                             Tên người duyệt
@@ -509,6 +546,8 @@ export default function DuyetPage() {
                             autoComplete="off"
                           />
                         </div>
+                          </>
+                        )}
                         <div>
                           <label className="ag-field-label" htmlFor="du-note">
                             Ghi chú (bắt buộc nếu từ chối)
@@ -537,7 +576,7 @@ export default function DuyetPage() {
                           <Icon name={ev.canApprove ? 'check' : 'info'} size={18} />
                           <div>
                             {approveHint(ev)}
-                            {ev.canApprove && !nameOk ? ' Cô/thầy nhập tên người duyệt để tiếp tục.' : ''}
+                            {ev.canApprove && !nameOk ? (sessionMode ? ' Tài khoản chưa có quyền duyệt.' : ' Cô/thầy nhập tên và mã người duyệt để tiếp tục.') : ''}
                           </div>
                         </div>
                         <div className="ag-actions" style={{ marginTop: 12 }}>
@@ -551,6 +590,7 @@ export default function DuyetPage() {
                         </div>
                       </div>
                     </form>
+                    )}
                   </>
                 )}
 

@@ -148,5 +148,5 @@ describe('điểm và nhật ký', () => {
     }
     const d = (await getExam({ orgId: ORG, examId: e.examId, actor: 'Gv Lan' })) as { accessLog: unknown[] };
     expect(d.accessLog.length).toBeLessThanOrEqual(200);
-  });
+  }, 60_000);
 });

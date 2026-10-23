@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import { useState } from 'react';
 import { Icon } from '@/components/ui/icons';
 import { MathText } from '@/components/MathText';
@@ -182,7 +183,7 @@ export function LessonWorkbench({
               ))}
             </div>
 
-            <div className="ag-tabs cc-tabs" role="tablist" aria-label="Nội dung bài">
+            <div className="ag-tabs cc-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Nội dung bài">
               {tabs.map((t) => (
                 <button
                   key={t.id}

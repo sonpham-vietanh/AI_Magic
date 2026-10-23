@@ -15,34 +15,50 @@ export {
   type UserRole,
 } from './sessionToken';
 
-interface SessionAuditStore {
-  sessions: {
-    name: string;
-    email?: string;
-    role: UserRole;
-    updatedAt: string;
-  }[];
+interface SessionAuditRow {
+  name: string;
+  email?: string;
+  role: UserRole;
+  /** Lần đăng nhập gần nhất (giữ tên cũ để tương thích dữ liệu đã có). */
+  updatedAt: string;
+  firstSeen?: string;
+  loginCount?: number;
 }
 
+interface SessionAuditStore {
+  sessions: SessionAuditRow[];
+}
+
+const SESSION_STORE_LIMIT = 5000;
 const sessionStoreMutex = createMutex();
 
-function sessionStorePath(): string {
+export function sessionStorePath(): string {
   return process.env.TEACHER_SESSION_STORE_PATH || join(process.cwd(), '.data', 'teacher-sessions.json');
 }
 
+/**
+ * Ghi nhận một lần đăng nhập thành danh bạ: mỗi email một dòng (không email thì theo tên) với firstSeen, lastSeen
+ * (= updatedAt), loginCount. Dữ liệu cũ thiếu firstSeen/loginCount vẫn đọc được.
+ */
 export async function recordTeacherSessionAudit(session: TeacherSession): Promise<void> {
   await sessionStoreMutex(async () => {
     const file = sessionStorePath();
     const store = await readJsonStrict<SessionAuditStore>(file, () => ({ sessions: [] }));
     const list = Array.isArray(store.sessions) ? store.sessions : [];
-    const normName = session.name.toLowerCase();
-    const filtered = list.filter((x) => x.name.toLowerCase() !== normName);
-    filtered.unshift({
+    const email = session.email?.trim().toLowerCase();
+    const sameKey = (x: SessionAuditRow) =>
+      email ? x.email?.trim().toLowerCase() === email : !x.email && x.name.toLowerCase() === session.name.toLowerCase();
+    const prev = list.find(sameKey);
+    const now = new Date().toISOString();
+    const row: SessionAuditRow = {
       name: session.name,
-      ...(session.email ? { email: session.email } : {}),
+      ...(email ? { email } : {}),
       role: session.role,
-      updatedAt: new Date().toISOString(),
-    });
-    await writeJsonAtomic(file, { sessions: filtered.slice(0, 200) });
+      updatedAt: now,
+      firstSeen: prev?.firstSeen ?? prev?.updatedAt ?? now,
+      loginCount: (typeof prev?.loginCount === 'number' && prev.loginCount > 0 ? prev.loginCount : prev ? 1 : 0) + 1,
+    };
+    const rest = list.filter((x) => !sameKey(x));
+    await writeJsonAtomic(file, { sessions: [row, ...rest].slice(0, SESSION_STORE_LIMIT) });
   });
 }

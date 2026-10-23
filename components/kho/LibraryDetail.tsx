@@ -3,17 +3,16 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/icons';
+import { useDialog } from '@/components/studio/useDialog';
 import { ArtifactView } from '@/components/resources/ArtifactView';
 import { availableFormats, EXPORT_LABELS, exportArtifact, type ExportFormat } from '@/lib/export/artifact';
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import { ARTIFACT_LABELS, type Artifact } from '@/lib/resources/types';
+import { AriaTabs, panelProps, type TabDef } from './AriaTabs';
+import { useMe } from './useMe';
 import { FIELD_LABELS, FIELD_ORDER, whenText, type LessonView } from './types';
 
 type Tab = 'tom_tat' | 'tai_nguyen' | 'cau_hoi';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'tom_tat', label: 'Tóm tắt bản chuẩn' },
-  { id: 'tai_nguyen', label: 'Tài nguyên' },
-  { id: 'cau_hoi', label: 'Câu hỏi' },
-];
 
 function ExportButtons({ artifact }: { artifact: Artifact }) {
   const [busy, setBusy] = useState<ExportFormat | null>(null);
@@ -24,8 +23,8 @@ function ExportButtons({ artifact }: { artifact: Artifact }) {
     setErr('');
     try {
       await exportArtifact(artifact, f, artifact.title);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Không tải được tệp.');
+    } catch {
+      setErr('Không tạo được tệp tải về. Cô/thầy thử lại, hoặc chọn định dạng khác nhé.');
     } finally {
       setBusy(null);
     }
@@ -55,7 +54,8 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<Tab>('tom_tat');
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const me = useMe();
 
   useEffect(() => {
     const c = new AbortController();
@@ -65,12 +65,11 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
     setTab('tom_tat');
     (async () => {
       try {
-        const res = await fetch(`/api/kho/standard?atomId=${encodeURIComponent(atomId)}`, { signal: c.signal });
-        const data = (await res.json()) as { ok?: boolean; lesson?: LessonView; error?: string };
-        if (!res.ok || !data.ok || !data.lesson) throw new Error(data.error || `HTTP ${res.status}`);
+        const data = await fetchJson<{ lesson?: LessonView }>(`/api/kho/standard?atomId=${encodeURIComponent(atomId)}`, { signal: c.signal });
+        if (!data.lesson) throw new Error('empty');
         setLesson(data.lesson);
       } catch (e) {
-        if (!c.signal.aborted) setError(e instanceof Error ? e.message : 'Không tải được bản chuẩn.');
+        if (!c.signal.aborted) setError(friendlyError(e, 'Không tải được bản chuẩn. Cô/thầy đóng rồi mở lại bài này nhé.'));
       } finally {
         if (!c.signal.aborted) setLoading(false);
       }
@@ -78,14 +77,20 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
     return () => c.abort();
   }, [atomId]);
 
+  // Bẫy focus, ESC đóng, trả focus về thẻ bài khi đóng.
+  useDialog(dialogRef, true, () => {
+    onClose();
+    return true;
+  });
+
+  // Khoá cuộn nền khi hộp thoại mở.
   useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
 
   const approved = lesson?.status === 'approved';
   const title = lesson?.title || fallbackTitle;
@@ -105,25 +110,35 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
     if (k) byLevel.set(k, (byLevel.get(k) || 0) + 1);
   }
 
+  const tabs: TabDef<Tab>[] = [
+    { id: 'tom_tat', label: 'Tóm tắt' },
+    { id: 'tai_nguyen', label: `Tài nguyên (${artifacts.length})` },
+    { id: 'cau_hoi', label: `Câu hỏi (${lesson?.questions.length ?? 0})` },
+  ];
+
   return (
     <div className="kh-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="kh-detail" role="dialog" aria-modal="true" aria-label={`Chi tiết tiết học: ${title}`}>
+      <div ref={dialogRef} tabIndex={-1} className="kh-detail" role="dialog" aria-modal="true" aria-labelledby="kh-detail-title">
         <div className="kh-detail-head">
-          <div>
-            <h2>{title}</h2>
-            <p>
-              {lesson?.atomCode}
-              {lesson?.version ? ` · Bản chuẩn v${lesson.version}` : ''}
-            </p>
+          <div className="kh-detail-titles">
+            <div className="kh-detail-eyebrow">
+              {lesson?.atomCode && <span className="kh-code">{lesson.atomCode}</span>}
+              {approved && (
+                <span className="ag-status ok">
+                  Đã duyệt chuẩn{lesson?.version ? `, v${lesson.version}` : ''}
+                </span>
+              )}
+            </div>
+            <h2 id="kh-detail-title">{title}</h2>
           </div>
-          <button ref={closeRef} type="button" className="ag-iconbtn" aria-label="Đóng chi tiết" onClick={onClose}>
+          <button type="button" className="ag-iconbtn" aria-label="Đóng chi tiết" onClick={onClose}>
             <Icon name="x" size={20} />
           </button>
         </div>
 
         <div className="kh-detail-body" aria-busy={loading}>
           {loading && (
-            <div>
+            <div aria-label="Đang tải bản chuẩn" role="status">
               <div className="kh-skel-card" style={{ height: 44, marginBottom: 10 }} />
               <div className="kh-skel-card" style={{ marginBottom: 10 }} />
               <div className="kh-skel-card" />
@@ -140,42 +155,41 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
             <div className="ag-alert warn" role="status">
               <Icon name="alert" size={18} />
               <div>
-                <strong>Chưa có bản chuẩn đã duyệt.</strong> Bài này chưa qua người duyệt nên nội dung chưa được đưa ra cho giáo viên.
-                Cô/thầy báo người phụ trách duyệt ở trang Dựng kho.
+                <strong>Bài này chưa có bản chuẩn đã duyệt.</strong> Nội dung chưa qua người duyệt nên chưa được đưa ra cho giáo viên.{' '}
+                {me.canReview && me.ready ? (
+                  <>
+                    Cô/thầy có thể vào{' '}
+                    <Link className="ag-link kh-tap" href="/duyet">
+                      trang Duyệt học liệu
+                    </Link>{' '}
+                    để dựng và duyệt.
+                  </>
+                ) : (
+                  'Cô/thầy nhờ người phụ trách duyệt bài này nhé.'
+                )}
               </div>
             </div>
           )}
 
           {lesson && approved && (
             <>
-              <div className="kh-tabs" role="tablist" aria-label="Nội dung bản chuẩn">
-                {TABS.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === t.id}
-                    className="kh-tab"
-                    onClick={() => setTab(t.id)}
-                  >
-                    {t.label}
-                    {t.id === 'tai_nguyen' ? ` (${artifacts.length})` : t.id === 'cau_hoi' ? ` (${lesson.questions.length})` : ''}
-                  </button>
-                ))}
-              </div>
+              <AriaTabs tabs={tabs} value={tab} onChange={setTab} label="Nội dung bản chuẩn" prefix="kh-d" className="kh-tabs" tabClassName="kh-tab" />
 
               {tab === 'tom_tat' && (
-                <div role="tabpanel" aria-label="Tóm tắt bản chuẩn">
+                <div {...panelProps('kh-d', 'tom_tat')} className="kh-panel">
                   {lesson.review && lesson.review.decision === 'approve' && (
-                    <p className="ag-note" style={{ fontSize: 16, marginTop: 0 }}>
-                      Duyệt bởi {lesson.review.reviewer}
-                      {whenText(lesson.review.reviewedAt) ? `, ${whenText(lesson.review.reviewedAt)}` : ''}.
+                    <p className="kh-reviewed">
+                      <Icon name="shield" size={18} />
+                      <span>
+                        Duyệt bởi <strong>{lesson.review.reviewer}</strong>
+                        {whenText(lesson.review.reviewedAt) ? `, ${whenText(lesson.review.reviewedAt)}` : ''}.
+                      </span>
                     </p>
                   )}
                   {entries.length === 0 && <p className="ag-note">Gói kiến thức chưa có nội dung hiển thị.</p>}
                   {entries.map(([k, v]) => (
                     <div key={k} className="kh-field">
-                      <h4>{FIELD_LABELS[k] || k}</h4>
+                      <h3>{FIELD_LABELS[k] || k}</h3>
                       <div>{v}</div>
                     </div>
                   ))}
@@ -183,11 +197,11 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
               )}
 
               {tab === 'tai_nguyen' && (
-                <div role="tabpanel" aria-label="Tài nguyên đã duyệt">
+                <div {...panelProps('kh-d', 'tai_nguyen')} className="kh-panel">
                   {artifacts.length === 0 ? (
                     <div className="ag-alert info">
                       <Icon name="info" size={18} />
-                      <div>Phiên bản chuẩn này chưa kèm tài nguyên nào. Tài nguyên được sinh và duyệt ở trang Dựng kho.</div>
+                      <div>Phiên bản chuẩn này chưa kèm tài nguyên nào. Tài nguyên được sinh và duyệt ở trang Duyệt học liệu.</div>
                     </div>
                   ) : (
                     <ul className="kh-assets">
@@ -197,7 +211,7 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
                           <ExportButtons artifact={a} />
                           <details className="kh-preview" open={artifacts.length === 1}>
                             <summary>
-                              Xem
+                              Xem trước
                               <Icon name="chevronDown" size={18} />
                             </summary>
                             <div className="kh-preview-body">
@@ -212,11 +226,19 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
               )}
 
               {tab === 'cau_hoi' && (
-                <div role="tabpanel" aria-label="Câu hỏi của bài">
-                  <p style={{ fontSize: 16, margin: 0 }}>
-                    Ngân hàng có <strong>{lesson.questions.length}</strong> câu hỏi cho bài này
-                    {byLevel.size ? `: ${[...byLevel].map(([k, n]) => `${k} (${n})`).join(', ')}` : ''}.
+                <div {...panelProps('kh-d', 'cau_hoi')} className="kh-panel">
+                  <p className="kh-qcount">
+                    Ngân hàng có <strong>{lesson.questions.length}</strong> câu hỏi cho bài này.
                   </p>
+                  {byLevel.size > 0 && (
+                    <ul className="kh-row kh-levels" aria-label="Số câu theo mức">
+                      {[...byLevel].map(([k, n]) => (
+                        <li key={k} className="kh-pill">
+                          {k}: <b>{n}</b>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <Link className="ag-link kh-tap" href="/kiem-tra">
                     Soạn đề từ ngân hàng câu hỏi
                   </Link>
@@ -237,11 +259,7 @@ export function LibraryDetail({ atomId, fallbackTitle, onClose }: { atomId: stri
               Soạn bài từ bản chuẩn này
             </button>
           )}
-          {!approved && lesson && (
-            <span className="ag-note" style={{ fontSize: 16, margin: 0 }}>
-              Cần có bản chuẩn đã duyệt.
-            </span>
-          )}
+          {!approved && lesson && <span className="kh-foot-note">Cần có bản chuẩn đã duyệt.</span>}
         </div>
       </div>
     </div>

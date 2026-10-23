@@ -98,11 +98,26 @@ export function buildParams(f: SoanBaiForm, extra: { regenerationOf?: string; te
   return params;
 }
 
+const AI_AUTH_RE =
+  /ai_auth|llm_auth|auth_expired|token (has )?expired|expired token|invalid[_ ]token|oauth|not logged in|please (log ?in|login)|chưa đăng nhập|hết hạn đăng nhập|phiên (ai )?hết hạn|invalid[_ ]api[_ ]key|api key/i;
+
+/** Lỗi do dịch vụ AI chưa đăng nhập hoặc phiên đăng nhập AI đã hết hạn (khác lỗi chung của hệ thống). */
+export function isAiAuthError(status: number, error?: string): boolean {
+  const detail = (error || '').trim();
+  return AI_AUTH_RE.test(detail);
+}
+
+export const AI_AUTH_MESSAGE =
+  'Dịch vụ AI chưa đăng nhập hoặc phiên đăng nhập AI đã hết hạn. Đây không phải lỗi của cô/thầy: xin báo quản trị viên đăng nhập lại cho AI, rồi cô/thầy bấm thử lại.';
+
 export function formatApiError(status: number, error?: string): string {
   const detail = (error || '').trim();
+  if (status !== 422 && status !== 400 && isAiAuthError(status, detail)) return AI_AUTH_MESSAGE;
   switch (status) {
     case 400:
       return `Thông tin chưa hợp lệ${detail ? `: ${detail}` : '.'} Vui lòng kiểm tra lại biểu mẫu.`;
+    case 401:
+      return 'Phiên đăng nhập của cô/thầy đã hết hạn hoặc chưa đăng nhập. Cô/thầy đăng nhập lại bằng email của trường rồi thử lại nhé.';
     case 403:
       return 'Cô/thầy chưa có quyền thực hiện thao tác này.';
     case 404:

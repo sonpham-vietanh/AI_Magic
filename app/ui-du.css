@@ -375,3 +375,98 @@
     transition: none;
   }
 }
+
+/* ====== Nâng cấp giao diện hàng chờ và phiếu duyệt ====== */
+.du-rule {
+  border-radius: var(--ag-radius);
+}
+.du-queue-head {
+  background: linear-gradient(180deg, var(--gold-soft), var(--surface));
+  border-radius: var(--ag-radius) var(--ag-radius) 0 0;
+}
+.du-item {
+  border-radius: var(--ag-radius-sm);
+  border-left: 3px solid transparent;
+}
+.du-item:focus-visible,
+.du-chip:focus-visible,
+.du-scale label:focus-within {
+  outline: none;
+  box-shadow: var(--ag-focus);
+}
+.du-item[aria-current='true'] {
+  border-left-color: var(--gold);
+  box-shadow: var(--shadow-xs);
+}
+.du-item-title {
+  font-size: 16px;
+}
+.du-item-code {
+  font-size: 14px;
+}
+.du-empty svg {
+  color: var(--navy-600);
+}
+.du-sheet-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.du-sheet-head p {
+  font-size: 15px;
+}
+.du-history {
+  border-left: 3px solid var(--navy);
+}
+.du-whoami {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--ag-radius-sm);
+  background: var(--navy-50);
+  color: var(--navy);
+  font-size: 16px;
+}
+.du-whoami svg {
+  flex: none;
+}
+.du-whoami small {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+}
+.du-locked {
+  border-left: 4px solid var(--line-strong);
+}
+.du-crit {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--ag-radius-sm);
+  background: var(--cream);
+}
+.du-crit-desc {
+  font-size: 15px;
+}
+.du-scale-hint {
+  font-size: 14px;
+}
+.du-summary {
+  box-shadow: 0 -6px 16px rgba(20, 21, 58, 0.06);
+}
+@media (max-width: 900px) {
+  .du-queue-head {
+    border-radius: var(--ag-radius) var(--ag-radius) 0 0;
+  }
+}
+.du-empty-big {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 56px 18px;
+}
+.du-empty-big svg {
+  color: var(--navy-600);
+}

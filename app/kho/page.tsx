@@ -26,9 +26,9 @@ interface Row {
 type Filter = 'all' | 'ready' | 'approved' | 'pending';
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Tất cả' },
-  { id: 'ready', label: 'Đã có gói gốc' },
+  { id: 'ready', label: 'Có gói kiến thức' },
   { id: 'approved', label: 'Đã duyệt chuẩn' },
-  { id: 'pending', label: 'Chưa có gói' },
+  { id: 'pending', label: 'AI soạn từ dữ liệu cơ bản' },
 ];
 
 const norm = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd').toLowerCase();
@@ -147,6 +147,30 @@ export default function KhoPage() {
         ))}
       </div>
 
+      {!loading && !error && rows.length > 0 && (
+        <div className="kh-summary" role="group" aria-label="Tổng quan môn và khối đang chọn">
+          <div className="kh-sum-main">
+            <b>{counts.approved}</b>
+            <span>
+              trên {counts.all} bài đã có bản chuẩn được duyệt ({Math.round((counts.approved / Math.max(1, counts.all)) * 100)}%)
+            </span>
+          </div>
+          <div
+            className="kh-sum-bar"
+            role="progressbar"
+            aria-label="Tỷ lệ bài đã duyệt chuẩn"
+            aria-valuemin={0}
+            aria-valuemax={counts.all}
+            aria-valuenow={counts.approved}
+          >
+            <i style={{ width: `${(counts.approved / Math.max(1, counts.all)) * 100}%` }} />
+          </div>
+          <p>
+            Bài chưa có bản chuẩn vẫn soạn được: AI sẽ soạn từ dữ liệu cơ bản của chương trình, và cô/thầy nên rà lại trước khi dùng.
+          </p>
+        </div>
+      )}
+
       {error && (
         <div className="ag-alert bad" role="alert">
           <Icon name="alert" size={18} />
@@ -168,9 +192,22 @@ export default function KhoPage() {
       ) : (
         <>
           {!error && chapters.length === 0 && (
-            <div className="du-empty">
+            <div className="du-empty kh-empty">
+              <Icon name="library" size={32} />
               <strong>{rows.length === 0 ? 'Chưa có bài nào cho môn và khối này' : 'Không có bài khớp bộ lọc'}</strong>
               {rows.length === 0 ? 'Thử đổi môn hoặc khối khác.' : 'Thử bỏ bớt từ khoá hoặc đổi trạng thái lọc.'}
+              {rows.length > 0 && (
+                <button
+                  type="button"
+                  className="ag-btn small"
+                  onClick={() => {
+                    setQ('');
+                    setFilter('all');
+                  }}
+                >
+                  Xoá bộ lọc
+                </button>
+              )}
             </div>
           )}
           {chapters.map(([chapter, list], idx) => {
@@ -179,10 +216,13 @@ export default function KhoPage() {
             return (
               <details key={chapter} className="kh-chap" open={searching || idx < 2}>
                 <summary>
-                  <span>{chapter}</span>
+                  <span className="kh-chap-name">
+                    <Icon name="chevron" size={18} className="kh-chev" />
+                    {chapter}
+                  </span>
                   <small>
                     {approvedCount > 0
-                      ? `${approvedCount}/${list.length} đã duyệt · ${readyCount} có gói gốc`
+                      ? `${approvedCount}/${list.length} đã duyệt · ${readyCount} có gói kiến thức`
                       : `${readyCount}/${list.length} bài có gói kiến thức`}
                   </small>
                 </summary>
@@ -200,9 +240,9 @@ export default function KhoPage() {
                         {r.status === 'approved' ? (
                           <span className="ag-status ok">Đã duyệt chuẩn{r.version ? `, v${r.version}` : ''}</span>
                         ) : r.status === 'chua_duyet' ? (
-                          <span className="ag-status draft">Có gói gốc · Chờ duyệt</span>
+                          <span className="ag-status draft">Có gói kiến thức · Chờ duyệt</span>
                         ) : (
-                          <span className="ag-status none">Soạn bằng AI theo chương trình</span>
+                          <span className="ag-status none">AI soạn từ dữ liệu cơ bản</span>
                         )}
                       </span>
                       {r.kinds.length > 0 && (

@@ -1,0 +1,416 @@
+/* Trợ lý soạn bài: màn hình chào, "Gần đây của tôi", hạn mức, nhãn quyền, hướng dẫn xuất.
+   Nạp từ AgentApp; ghi đè/bổ sung cho phần .ag-* trong ui.css. */
+
+/* ---------- Màn hình chào ---------- */
+.ag-hero.ag-hero2 {
+  max-width: 940px;
+  padding: clamp(14px, 3vh, 32px) 0 12px;
+  container-type: inline-size;
+  container-name: aghero;
+}
+.ag-hero-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.ag-hero-art {
+  display: none;
+}
+.ag-art-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+}
+.ag-hero2 h1 {
+  font-size: clamp(26px, 5.4cqw, 38px);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.ag-hero2 .ag-h1-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--navy-600);
+  font-weight: 700;
+  font-size: 0.78em;
+  position: relative;
+  width: fit-content;
+}
+.ag-hero2 .ag-h1-sub::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--cta), rgba(232, 196, 10, 0));
+}
+.ag-hero2 .ag-hero-copy > p {
+  margin-top: 18px;
+  font-size: 16px;
+  max-width: 56ch;
+}
+.ag-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.ag-hero-meta:empty {
+  display: none;
+}
+
+@container aghero (min-width: 700px) {
+  .ag-hero-top {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    gap: 20px;
+  }
+  .ag-hero-art {
+    display: block;
+  }
+}
+
+/* minh hoạ chuyển động nhẹ */
+.ag-art-float {
+  transform-box: fill-box;
+  animation: ag-float 6s ease-in-out infinite;
+}
+.ag-art-float.b {
+  animation-delay: -2s;
+}
+.ag-art-float.c {
+  animation-delay: -4s;
+}
+.ag-art-spark {
+  animation: ag-twinkle 4s ease-in-out infinite;
+}
+@keyframes ag-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -6px;
+  }
+}
+@keyframes ag-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-art-float,
+  .ag-art-spark,
+  .ag-quick-card,
+  .ag-recent-item {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* chip hạn mức / quyền */
+.ag-quota,
+.ag-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 99px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}
+.ag-quota strong {
+  font-weight: 800;
+}
+.ag-quota-bar {
+  position: relative;
+  width: 56px;
+  height: 6px;
+  border-radius: 6px;
+  background: var(--navy-100);
+  overflow: hidden;
+}
+.ag-quota-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 6px;
+  background: var(--success);
+}
+.ag-quota.low {
+  border-color: #d9a441;
+  background: var(--warn-bg);
+  color: #6b3a05;
+}
+.ag-quota.low .ag-quota-bar i {
+  background: var(--warn);
+}
+.ag-quota.out {
+  border-color: #e3a3a0;
+  background: var(--danger-bg);
+  color: #8f1f17;
+}
+.ag-quota.out .ag-quota-bar i {
+  background: var(--danger);
+}
+.ag-role-chip {
+  background: var(--gold-soft);
+  border-color: rgba(232, 196, 10, 0.6);
+}
+
+/* thẻ bắt đầu nhanh */
+.ag-quick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 26px;
+}
+.ag-quick-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 88px;
+  padding: 16px 16px 16px 16px;
+  text-align: left;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--ag-radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--ag-ease), box-shadow var(--ag-ease), transform var(--ag-ease);
+}
+.ag-quick-card:hover {
+  border-color: var(--navy);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.ag-quick-card:active {
+  transform: translateY(0);
+}
+.ag-quick-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: var(--navy);
+  color: var(--cta);
+  box-shadow: 0 6px 14px rgba(20, 21, 58, 0.16);
+}
+.tone-gold .ag-quick-ico {
+  background: linear-gradient(180deg, #f9dd0e, #e8c40a);
+  color: var(--navy);
+  box-shadow: 0 6px 14px rgba(224, 185, 12, 0.35);
+}
+.tone-teal .ag-quick-ico {
+  background: #1e7f4f;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(30, 127, 79, 0.28);
+}
+.tone-rose .ag-quick-ico {
+  background: #26275d;
+  color: #fff;
+}
+.ag-quick-txt {
+  min-width: 0;
+  flex: 1;
+}
+.ag-quick-txt strong {
+  display: block;
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.ag-quick-txt .ag-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.ag-quick-go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--navy);
+  background: var(--navy-50);
+  transition: background var(--ag-ease), transform var(--ag-ease);
+}
+.ag-quick-card:hover .ag-quick-go {
+  background: var(--cta);
+  transform: translateX(2px);
+}
+
+/* Gần đây của tôi */
+.ag-recent {
+  margin-top: 22px;
+  padding: 16px 18px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--ag-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+.ag-recent h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.ag-recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ag-recent li + li {
+  border-top: 1px solid var(--line);
+}
+.ag-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--ag-ease);
+}
+.ag-recent-item:hover {
+  background: var(--cream);
+}
+.ag-recent-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--navy-50);
+  color: var(--navy);
+}
+.ag-recent-txt {
+  min-width: 0;
+  flex: 1;
+}
+.ag-recent-txt strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-recent-txt span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-recent-open {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--surface);
+}
+.ag-recent-item:hover .ag-recent-open {
+  background: var(--cta);
+  border-color: var(--cta-hover);
+}
+
+/* ---------- Nhãn tài khoản ---------- */
+.ag-who-sso {
+  cursor: default;
+  gap: 8px;
+}
+.ag-who-sso:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+.ag-who-role {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--gold-soft);
+  border: 1px solid rgba(232, 196, 10, 0.6);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+/* ---------- Danh sách bài: nhãn dài phải xuống dòng, không tràn ---------- */
+.ag-lesson {
+  gap: 10px;
+}
+.ag-lesson .ag-status {
+  flex: none;
+  max-width: 46%;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+/* ---------- Hướng dẫn sau khi xuất ---------- */
+.ag-export-guide ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.ag-export-guide li {
+  margin: 2px 0;
+}
+.ag-canvas-foot {
+  flex-wrap: wrap;
+}
+
+/* ---------- Hẹp ---------- */
+@media (max-width: 640px) {
+  .ag-quick {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .ag-quick-card {
+    min-height: 76px;
+  }
+  .ag-recent-open {
+    display: none;
+  }
+  .ag-thread {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

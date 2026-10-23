@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fetchJson } from '@/lib/ui/fetchJson';
 import { Icon } from '@/components/ui/icons';
 
 interface Person {
@@ -26,11 +27,7 @@ export function TeamPanel() {
 
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch('/api/supabase/knowledge?mode=overview', { signal: ctrl.signal })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as { overview?: { users?: Person[] } };
-      })
+    fetchJson<{ overview?: { users?: Person[] } }>('/api/supabase/knowledge?mode=overview', { signal: ctrl.signal })
       .then((j) => {
         const people = (j.overview?.users || []).filter(
           (u) => u.name && u.name.trim() !== '' && u.name !== 'Người dùng',

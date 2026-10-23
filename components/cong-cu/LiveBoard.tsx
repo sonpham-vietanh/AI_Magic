@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import { useEffect, useState } from 'react';
 import { MathText } from '@/components/MathText';
 import { Icon } from '@/components/ui/icons';
@@ -72,7 +73,7 @@ export function LiveBoard({
       title={lessonTitle || 'Bài học tương tác'}
       onClose={onClose}
     >
-      <div className="ag-tabs cc-tabs cc-tabs-flush" role="tablist" aria-label="Chế độ chiếu">
+      <div className="ag-tabs cc-tabs cc-tabs-flush" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Chế độ chiếu">
         {tabs.map((t) => (
           <button
             key={t.id}

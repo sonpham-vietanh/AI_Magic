@@ -35,7 +35,11 @@ const ALLOWED_STORE_KEYS = new Set([
   'user-roles',
   'usage-ledger',
   'audit-log',
+  'ops-log',
 ]);
+
+/** Danh sách khóa kho chuẩn (dùng cho sao lưu và xuất dữ liệu). */
+export const STORE_KEYS: readonly string[] = [...ALLOWED_STORE_KEYS];
 
 function getSupabaseCreds(): { url: string; key: string } | null {
   // Trong môi trường chạy unit test (Vitest), mặc định tắt tự động gọi mạng trừ khi bài test bật cờ riêng.

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CLASS_PROFILES } from '@/lib/classes/profiles';
 import { Icon } from '@/components/ui/icons';
+import { fetchJson } from '@/lib/ui/fetchJson';
 import { LessonField } from '@/components/agent/LessonField';
 import { ResultPanel } from '@/components/agent/ResultPanel';
 import { ResourceChecklist } from '@/components/agent/ResourcePicker';
@@ -98,9 +99,8 @@ export function SoanBaiView() {
       if (bai) {
         setLesson({ id: bai, code: bai, title: baiTitle || bai });
         if (!baiTitle) {
-          fetch(`/api/supabase/knowledge?atomId=${encodeURIComponent(bai)}`)
-            .then((r) => r.json())
-            .then((d: { ok?: boolean; atom?: AtomLite }) => {
+          fetchJson<{ ok?: boolean; atom?: AtomLite }>(`/api/supabase/knowledge?atomId=${encodeURIComponent(bai)}`)
+            .then((d) => {
               if (d.ok && d.atom) setLesson(d.atom);
             })
             .catch(() => {});
@@ -121,9 +121,8 @@ export function SoanBaiView() {
     setStdStatus('');
     if (!form.baiDayId) return;
     const c = new AbortController();
-    fetch(`/api/kho/standard?atomId=${encodeURIComponent(form.baiDayId)}`, { signal: c.signal })
-      .then((r) => r.json())
-      .then((d: { ok?: boolean; lesson?: { status?: string } }) => {
+    fetchJson<{ ok?: boolean; lesson?: { status?: string } }>(`/api/kho/standard?atomId=${encodeURIComponent(form.baiDayId)}`, { signal: c.signal })
+      .then((d) => {
         if (d.ok && d.lesson?.status) setStdStatus(d.lesson.status);
       })
       .catch(() => {});

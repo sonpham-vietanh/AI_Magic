@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { fetchJson } from '@/lib/ui/fetchJson';
 import { Icon } from '@/components/ui/icons';
 
 interface TreeNode {
@@ -15,9 +16,7 @@ interface TreeNode {
 type Load = { state: 'loading' } | { state: 'error' } | { state: 'ok'; nodes: TreeNode[] };
 
 async function fetchNodes(qs: string, signal?: AbortSignal): Promise<TreeNode[]> {
-  const r = await fetch(`/api/supabase/knowledge?mode=tree&${qs}`, { signal });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const j = (await r.json()) as { nodes?: TreeNode[] };
+  const j = await fetchJson<{ nodes?: TreeNode[] }>(`/api/supabase/knowledge?mode=tree&${qs}`, { signal });
   return j.nodes || [];
 }
 

@@ -230,7 +230,7 @@ export function LessonPicker({ subject, grade, onSubject, onGrade, suggestions, 
         )}
         {!loading && atoms.map((a) => <LessonRow key={a.id} atom={a} onPick={onPick} />)}
       </div>
-      <p className="ag-note">Bài có nhãn “Có bản chuẩn” đã có gói kiến thức dựng sẵn: kết quả sẽ sát chương trình hơn.</p>
+      <p className="ag-note">Bài có nhãn “Có gói kiến thức” đã có gói kiến thức dựng sẵn trong Kho nên kết quả sát chương trình hơn. Bài có nhãn “AI soạn từ dữ liệu cơ bản” vẫn soạn được, nhưng cô/thầy nên đọc kỹ hơn.</p>
     </div>
   );
 }
@@ -243,9 +243,9 @@ function LessonRow({ atom, onPick }: { atom: AtomLite; onPick: (a: AtomLite) => 
         <span className="ag-lesson-code">{atom.code}</span>
       </span>
       {atom.hasFactoryPackage ? (
-        <span className="ag-status ok">Có bản chuẩn</span>
+        <span className="ag-status ok">Có gói kiến thức</span>
       ) : (
-        <span className="ag-status none">Chưa có gói</span>
+        <span className="ag-status none">AI soạn từ dữ liệu cơ bản</span>
       )}
     </button>
   );

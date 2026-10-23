@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import '@/app/ui.css';
@@ -316,7 +317,7 @@ export default function ResourceLibraryPage() {
         </div>
       )}
 
-      <div className="tv-tabs" role="tablist" aria-label="Thư viện">
+      <div className="tv-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Thư viện">
         <button
           type="button"
           role="tab"

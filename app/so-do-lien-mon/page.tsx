@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import '@/app/ui-sd.css';
@@ -16,20 +17,12 @@ import type {
   SupabaseSocratic,
 } from '@/lib/supabase';
 import { classifySearchQuery } from '@/lib/ui/searchQuery';
+import { readJson } from '@/lib/ui/fetchJson';
+import { formatApiError } from '@/lib/ui/soanBai';
 
 async function readApiJson<T>(res: Response): Promise<T> {
-  let body: (T & { error?: string }) | null = null;
-  try {
-    body = (await res.json()) as T & { error?: string };
-  } catch {
-    body = null;
-  }
-  if (!res.ok || !body) {
-    if (res.status === 429) {
-      throw new Error('Hệ thống đang quá tải, vui lòng thử lại sau ít phút.');
-    }
-    throw new Error(body?.error || `Máy chủ trả về lỗi (${res.status}). Vui lòng thử lại sau.`);
-  }
+  const body = await readJson<T & { error?: string }>(res);
+  if (!res.ok || !body) throw new Error(formatApiError(res.status, body?.error));
   return body;
 }
 
@@ -207,7 +200,7 @@ export default function KnowledgeGraphPage() {
   return (
     <Shell title="Sơ đồ liên môn" subtitle="Chọn một bài để xem các bài liên quan và soạn kế hoạch tích hợp.">
       <div className="sd">
-        <div className="sd-tabs" role="tablist" aria-label="Chế độ xem">
+        <div className="sd-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Chế độ xem">
           <button
             type="button"
             role="tab"

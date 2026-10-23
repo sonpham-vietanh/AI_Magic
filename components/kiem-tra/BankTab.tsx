@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/icons';
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import { MathText } from '@/components/MathText';
 import { LessonMultiField } from '@/components/agent/LessonField';
 import type { AtomLite } from '@/components/agent/types';
@@ -29,11 +30,9 @@ function BankCard({ item }: { item: PublicBankItem }) {
     if (full) { setFull(null); return; }
     setBusy(true); setErr('');
     try {
-      const res = await fetch(`/api/assessment/bank/item?atomId=${encodeURIComponent(item.atomId)}&id=${encodeURIComponent(item.id)}`);
-      const j = await res.json();
-      if (!res.ok || j.ok === false) throw new Error(j.error || 'Không tải được câu hỏi.');
-      setFull(j.item as Full);
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Lỗi'); } finally { setBusy(false); }
+      const j = await fetchJson<{ item: Full }>(`/api/assessment/bank/item?atomId=${encodeURIComponent(item.atomId)}&id=${encodeURIComponent(item.id)}`);
+      setFull(j.item);
+    } catch (e) { setErr(friendlyError(e, 'Không tải được câu hỏi này. Cô/thầy thử lại nhé.')); } finally { setBusy(false); }
   };
   const band = difficultyBand(item.difficultyMeasured);
   return (
@@ -81,14 +80,12 @@ export function BankTab() {
     setBusy(true); setErr('');
     Promise.all(
       key.split('|').map(async (id) => {
-        const res = await fetch(`/api/assessment/bank?atomId=${encodeURIComponent(id)}`);
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || j.ok === false) throw new Error(j.error || `Lỗi HTTP ${res.status}`);
-        return (j.items as PublicBankItem[]) ?? [];
+        const j = await fetchJson<{ items?: PublicBankItem[] }>(`/api/assessment/bank?atomId=${encodeURIComponent(id)}`);
+        return j.items ?? [];
       }),
     )
       .then((all) => { if (live) setItems(all.flat()); })
-      .catch((e) => { if (live) { setErr(e instanceof Error ? e.message : 'Lỗi'); setItems([]); } })
+      .catch((e) => { if (live) { setErr(friendlyError(e, 'Không tải được ngân hàng câu hỏi. Cô/thầy thử chọn lại bài nhé.')); setItems([]); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [key]);

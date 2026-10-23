@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import '@/app/ui-modal.css';
 import { cleanPedagogicalText } from '@/lib/text/clean';
 import { Icon } from '@/components/ui/icons';
+import { formatApiError } from '@/lib/ui/soanBai';
 import { useDialog } from '@/components/studio/useDialog';
 import type { ClassProfile, GeneratedResource, KnowledgeNode } from '@/lib/types';
 
@@ -108,7 +109,7 @@ export function AssistantDrawer({
             ? 'Trợ lý đang quá tải, cô/thầy vui lòng thử lại sau ít phút.'
             : res.status === 401
               ? 'Phiên làm việc đã hết hạn, vui lòng tải lại trang rồi thử lại.'
-              : data.error || `Trợ lý gặp lỗi (${res.status}), vui lòng thử lại sau.`;
+              : formatApiError(res.status, res.status >= 500 ? undefined : data.error);
         setHistory((prev) => [...prev, { role: 'assistant', text: msg, error: true }]);
         return;
       }
@@ -129,7 +130,7 @@ export function AssistantDrawer({
         ...prev,
         {
           role: 'assistant',
-          text: 'Không kết nối được máy chủ, vui lòng thử lại.',
+          text: 'Cô/thầy kiểm tra kết nối mạng rồi hỏi lại giúp em nhé.',
           error: true,
         },
       ]);

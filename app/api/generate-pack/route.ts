@@ -5,6 +5,7 @@ import { callLiveLlm, withLlmDeltaSink } from '@/lib/engine/llmClient';
 import { cleanPedagogicalText as basePedagogicalClean } from '@/lib/text/clean';
 import { requireAccess } from '@/lib/server/guard';
 import { rateLimit } from '@/lib/server/rateLimit';
+import { withUsage } from '@/lib/usage/quota';
 import { cleanFactoryText, fetchSupabaseAtomDetail } from '@/lib/supabase';
 
 function cleanPedagogicalText(raw: string): string {
@@ -605,8 +606,14 @@ export async function POST(request: Request) {
           }
         };
         try {
-          const pack = await run(emit);
-          emit({ type: 'done', pack });
+          const metered = await withUsage(
+            request,
+            { workflow: 'generate-pack', declaredUser: body.teacherName },
+            async (h) => ({ pack: await run(emit), exceeded: h.exceeded }),
+          );
+          const ex = metered.exceeded();
+          if (ex) emit({ type: 'error', error: ex.message });
+          else emit({ type: 'done', pack: metered.pack });
         } catch (err) {
           console.error('[generate-pack] stream failed:', err);
           emit({
@@ -640,8 +647,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const pack = await run(() => {});
-    return NextResponse.json({ ok: true, pack });
+    const metered = await withUsage(
+      request,
+      { workflow: 'generate-pack', declaredUser: body.teacherName },
+      async (h) => ({ pack: await run(() => {}), exceeded: h.exceeded }),
+    );
+    const ex = metered.exceeded();
+    if (ex) return NextResponse.json({ ok: false, error: ex.message }, { status: 429 });
+    return NextResponse.json({ ok: true, pack: metered.pack });
   } catch (err) {
     console.error('[generate-pack] failed:', err);
     return NextResponse.json(

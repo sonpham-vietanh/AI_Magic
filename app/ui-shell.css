@@ -1,0 +1,602 @@
+/* Khung giao diện dùng chung: menu tài khoản (ui-acct, ui-menu), thanh bên bổ sung, và các mẫu dùng chung
+   (ui-tabs, ui-empty, ui-skel, ui-toast, ui-dialog). Chỉ dùng biến thương hiệu trong globals.css. */
+
+.ui-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Thanh bên: chân trang ---------- */
+.ag-rail-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- Menu tài khoản ---------- */
+.ui-acct {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ui-quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 2px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(249, 221, 14, 0.16);
+  border: 1px solid rgba(249, 221, 14, 0.42);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ui-quota svg {
+  color: var(--cta);
+}
+.ui-quota.is-out {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.ui-acct-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ag-ease), border-color var(--ag-ease);
+}
+.ui-acct-btn:hover,
+.ui-acct-btn[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+.ui-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--cta);
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1;
+}
+.ui-avatar.is-guest {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.ui-acct-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.ui-acct-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-acct-role {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-acct-chev {
+  flex: none;
+  color: rgba(255, 255, 255, 0.78);
+  transform: rotate(180deg);
+  transition: transform var(--ag-ease);
+}
+.ui-acct-chev.open {
+  transform: none;
+}
+
+.ui-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  animation: ui-pop 140ms var(--ag-ease) both;
+}
+.ui-menu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.ui-menu-head strong {
+  color: var(--navy);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.ui-menu-head span {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.ui-menu-group {
+  padding: 6px 10px 2px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ui-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
+}
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.ui-menu-item svg {
+  flex: none;
+  color: var(--navy);
+}
+.ui-menu-item:hover,
+.ui-menu-item:focus-visible {
+  background: var(--navy-50);
+}
+.ui-menu-item.is-out,
+.ui-menu-item.is-out svg {
+  color: var(--danger);
+}
+.ui-menu-item:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.ui-menu-err {
+  margin: 4px 10px 6px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ---------- Thanh bên: trạng thái mục đang chọn rõ hơn ---------- */
+.ag-rail .ag-nav-item.active {
+  background: rgba(249, 221, 14, 0.16);
+  box-shadow: inset 3px 0 0 var(--cta);
+}
+.ag-rail .ag-label {
+  color: rgba(255, 255, 255, 0.72);
+}
+.ag-rail .ag-nav-item {
+  color: rgba(255, 255, 255, 0.92);
+}
+.ag-rail :focus-visible {
+  box-shadow: 0 0 0 3px var(--cta);
+}
+
+/* ---------- Tabs ---------- */
+.ui-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.ui-tablist {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line-strong);
+  scrollbar-width: thin;
+}
+.ui-tab {
+  flex: none;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: color var(--ag-ease), border-color var(--ag-ease), background var(--ag-ease);
+}
+.ui-tab:hover:not(:disabled) {
+  color: var(--navy);
+  background: var(--navy-50);
+}
+.ui-tab[aria-selected='true'] {
+  color: var(--navy);
+  border-bottom-color: var(--gold);
+}
+.ui-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ui-tab:focus-visible,
+.ui-tabpanel:focus-visible {
+  outline: none;
+  box-shadow: var(--ag-focus);
+  border-radius: 8px;
+}
+
+/* ---------- Trạng thái trống ---------- */
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.ui-empty-art {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 4px;
+}
+.ui-empty-bg {
+  fill: var(--gold-soft);
+  stroke: var(--gold);
+  stroke-width: 1.5;
+}
+.ui-empty-dot {
+  fill: var(--gold);
+}
+.ui-empty-dot2 {
+  fill: var(--navy-100);
+}
+.ui-empty-ico {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+}
+.ui-empty.is-error {
+  border-style: solid;
+  border-color: var(--danger);
+}
+.ui-empty.is-error .ui-empty-bg {
+  fill: var(--danger-bg);
+  stroke: var(--danger);
+}
+.ui-empty.is-error .ui-empty-ico {
+  color: var(--danger);
+}
+.ui-empty-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+.ui-empty-desc {
+  max-width: 52ch;
+  color: var(--ink-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.ui-empty-action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* ---------- Khung chờ tải ---------- */
+.ui-skel {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-subtle) 0%, var(--line) 50%, var(--surface-subtle) 100%);
+  background-size: 220% 100%;
+  animation: ui-shimmer 1.3s linear infinite;
+}
+.ui-skel.is-circle {
+  border-radius: var(--radius-full);
+}
+.ui-skel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* ---------- Thông báo nổi ---------- */
+.ui-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.ui-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 6px 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  animation: ui-pop 160ms var(--ag-ease) both;
+}
+.ui-toast > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.ui-toast.is-info {
+  border-left-color: var(--navy);
+}
+.ui-toast.is-success {
+  border-left-color: var(--success);
+}
+.ui-toast.is-success > svg {
+  color: var(--success);
+}
+.ui-toast.is-error {
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
+}
+.ui-toast.is-error > svg {
+  color: var(--danger);
+}
+.ui-toast-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 1px;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.ui-toast-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 36px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ui-toast-x:hover {
+  background: var(--navy-50);
+  color: var(--navy);
+}
+
+/* ---------- Hộp thoại xác nhận ---------- */
+.ui-dialog-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.ui-dialog-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 21, 58, 0.5);
+}
+.ui-dialog {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: ui-pop 160ms var(--ag-ease) both;
+}
+.ui-dialog:focus {
+  outline: none;
+}
+.ui-dialog-title {
+  font-size: 19px;
+  font-weight: 800;
+}
+.ui-dialog-desc {
+  margin-top: 8px;
+  color: var(--ink-secondary);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+.ui-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.ag-btn.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+.ag-btn.danger:hover:not(:disabled) {
+  background: #A82219;
+  border-color: #A82219;
+}
+
+@keyframes ui-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+@keyframes ui-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .ui-toasts {
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-menu,
+  .ui-toast,
+  .ui-dialog {
+    animation: none;
+  }
+  .ui-skel {
+    animation: none;
+    background: var(--line);
+  }
+  .ui-acct-chev {
+    transition: none;
+  }
+}
+
+/* ---------- Trang trạng thái toàn màn hình (404, lỗi) ---------- */
+.ui-status {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background-color: var(--cream);
+  background-image: radial-gradient(rgba(20, 21, 58, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.ui-status:focus {
+  outline: none;
+}
+.ui-status-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(520px, 100%);
+  padding: 36px 28px 32px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--gold);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.ui-status-crest {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+.ui-status-code {
+  font-family: var(--font-manrope), 'Manrope', Arial, sans-serif;
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--navy);
+}
+.ui-status-code.is-error {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  color: var(--gold-text);
+}
+.ui-status-card h1 {
+  font-size: 24px;
+  font-weight: 800;
+}
+.ui-status-desc {
+  color: var(--ink-secondary);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.ui-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ui-status .ag-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ag-focus);
+}
+
+.ag-rail-foot {
+  padding: 10px 12px 12px;
+  gap: 8px;
+}
+.ui-acct {
+  gap: 6px;
+}
+@media (max-height: 760px) {
+  .ag-rail-head .ag-brand {
+    padding-bottom: 8px;
+  }
+  .ag-rail .ag-label {
+    padding-top: 10px;
+  }
+}

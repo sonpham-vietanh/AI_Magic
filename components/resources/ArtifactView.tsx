@@ -2,6 +2,7 @@
 
 // Hiển thị từng loại sản phẩm (slide, phiếu học tập, bài đọc, sơ đồ tư duy, infographic, podcast, tranh luận, video)
 // kèm thanh xuất tệp. Toàn bộ nội dung đi qua React text node, không dùng innerHTML.
+import { rovingRef, rovingKeyDown } from './roving';
 import '@/app/ui-res.css';
 import { useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
@@ -269,7 +270,7 @@ function WorksheetView({ artifact }: { artifact: Artifact }) {
   let n = 0;
   return (
     <div className="rs-ws">
-      <div className="rs-tabs" role="tablist" aria-label="Phiếu học sinh và đáp án">
+      <div className="rs-tabs" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Phiếu học sinh và đáp án">
         <button type="button" role="tab" id={`${id}-hs`} aria-selected={tab === 'hs'} aria-controls={`${id}-p`} className={tab === 'hs' ? 'on' : ''} onClick={() => setTab('hs')}>
           Phiếu học sinh
         </button>

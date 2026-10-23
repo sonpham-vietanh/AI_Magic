@@ -1,3 +1,6 @@
+import { getUsageContext, type UsageContext } from '@/lib/usage/context';
+import { estimateTokens } from '@/lib/usage/pricing';
+
 export interface LlmCallResult {
   ok: boolean;
   content?: string;
@@ -157,11 +160,33 @@ function abortable<T>(p: Promise<T>, signal: AbortSignal | undefined): Promise<T
   });
 }
 
+/** Thông tin đo lường thu thập trong lúc gọi; chỉ dùng để ghi sổ, không ảnh hưởng kết quả gọi. */
+interface Meter {
+  ctx?: UsageContext;
+  attempted: boolean;
+  /** true nếu bị chặn do hết hạn mức (không có lời gọi mạng nào). */
+  blocked: boolean;
+  provider?: string;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
+type OpenAiUsage = { prompt_tokens?: number; completion_tokens?: number; x_groq?: { usage?: OpenAiUsage } };
+function readUsageInto(meter: Meter | undefined, u: OpenAiUsage | undefined | null) {
+  if (!meter || !u) return;
+  const src = typeof u.prompt_tokens === 'number' || typeof u.completion_tokens === 'number' ? u : u.x_groq?.usage;
+  if (!src) return;
+  if (typeof src.prompt_tokens === 'number') meter.promptTokens = src.prompt_tokens;
+  if (typeof src.completion_tokens === 'number') meter.completionTokens = src.completion_tokens;
+}
+
 /** Đọc SSE tăng dần từ body; hỗ trợ CRLF và dòng bị cắt giữa các chunk. */
 async function readOpenAiStream(
   response: Response,
   onDelta: DeltaHandler,
   signal?: AbortSignal,
+  meter?: Meter,
 ): Promise<string> {
   const pieces: string[] = [];
   const handleLine = (line: string) => {
@@ -175,7 +200,10 @@ async function readOpenAiStream(
           delta?: { content?: string };
           message?: { content?: string };
         }[];
+        usage?: OpenAiUsage;
+        x_groq?: { usage?: OpenAiUsage };
       };
+      readUsageInto(meter, parsed.usage ?? (parsed.x_groq?.usage ? { x_groq: parsed.x_groq } : undefined));
       const piece =
         parsed.choices?.[0]?.delta?.content ??
         parsed.choices?.[0]?.message?.content ??
@@ -232,12 +260,13 @@ async function readOpenAiStream(
   return pieces.join('').trim();
 }
 
-export const callLiveLlmStream = async (
+const callLiveLlmStreamInner = async (
   systemPrompt: string,
   userPrompt: string,
   preferredModel: string | undefined,
   opts: LlmOpts | undefined,
   onDelta: DeltaHandler,
+  meter: Meter,
 ): Promise<LlmCallResult> => {
   const maxTokens = opts?.maxTokens && opts.maxTokens > 0 ? opts.maxTokens : 4000;
   const timeoutMs = opts?.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : undefined;
@@ -261,6 +290,20 @@ export const callLiveLlmStream = async (
         content: hit.content,
         modelUsed: `${hit.modelUsed} (Cache 0 token)`,
       };
+    }
+  }
+
+  // Hạn mức theo lượt soạn: chỉ kiểm khi sắp gọi AI thật (lượt trúng cache ở trên không tốn hạn mức).
+  if (meter.ctx?.gate) {
+    let allowed = true;
+    try {
+      allowed = await meter.ctx.gate();
+    } catch (e) {
+      console.error('[usage] kiểm hạn mức lỗi, cho phép gọi:', e instanceof Error ? e.message : e);
+    }
+    if (!allowed) {
+      meter.blocked = true;
+      return { ok: false, modelUsed: TEMPLATE_LABEL, error: 'Đã hết hạn mức lượt soạn bằng AI trong ngày.' };
     }
   }
 
@@ -289,6 +332,7 @@ export const callLiveLlmStream = async (
       opts?.signal?.addEventListener('abort', () => controller.abort(), {
         once: true,
       });
+      meter.attempted = true;
       try {
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -309,7 +353,18 @@ export const callLiveLlmStream = async (
         if (response.ok) {
           const data = (await response.json()) as {
             candidates?: { content?: { parts?: { text?: string }[] } }[];
+            usageMetadata?: {
+              promptTokenCount?: number;
+              candidatesTokenCount?: number;
+              thoughtsTokenCount?: number;
+            };
           };
+          if (data.usageMetadata) {
+            meter.promptTokens = data.usageMetadata.promptTokenCount;
+            // Token "suy nghĩ" của Gemini 2.5 được tính phí như token ra.
+            meter.completionTokens =
+              (data.usageMetadata.candidatesTokenCount ?? 0) + (data.usageMetadata.thoughtsTokenCount ?? 0);
+          }
           const text = data.candidates?.[0]?.content?.parts
             ?.map((p) => p.text ?? '')
             .join('\n')
@@ -317,6 +372,8 @@ export const callLiveLlmStream = async (
           if (text) {
             onDelta(text);
             const modelUsed = `Google Gemini (${model})`;
+            meter.provider = 'gemini';
+            meter.model = `google/${model}`;
             saveCache(text, modelUsed);
             return { ok: true, content: text, modelUsed };
           }
@@ -347,6 +404,9 @@ export const callLiveLlmStream = async (
       opts?.signal?.addEventListener('abort', () => controller.abort(), {
         once: true,
       });
+      meter.attempted = true;
+      meter.promptTokens = undefined;
+      meter.completionTokens = undefined;
       try {
         const response = await abortable(
           fetch(baseUrl, {
@@ -364,15 +424,23 @@ export const callLiveLlmStream = async (
               temperature: 0.45,
               max_tokens: maxTokens,
               stream: true,
+              // OpenAI chỉ trả usage khi được yêu cầu; các cổng khác bỏ qua tham số này.
+              ...(baseUrl.includes('api.openai.com') ? { stream_options: { include_usage: true } } : {}),
             }),
             signal: controller.signal,
           }),
           controller.signal,
         );
         if (response.ok) {
-          const text = await readOpenAiStream(response, onDelta, controller.signal);
+          const text = await readOpenAiStream(response, onDelta, controller.signal, meter);
           if (text) {
             const modelUsed = `${labelPrefix} (${model})`;
+            meter.provider = labelPrefix.startsWith('Groq')
+              ? 'groq'
+              : baseUrl.includes('openrouter')
+                ? 'openrouter'
+                : 'openai';
+            meter.model = labelPrefix.startsWith('Groq') ? `groq/${model}` : model;
             saveCache(text, modelUsed);
             return { ok: true, content: text, modelUsed };
           }
@@ -442,6 +510,48 @@ export const callLiveLlmStream = async (
   }
 
   return { ok: false, modelUsed: TEMPLATE_LABEL, error: lastError };
+};
+
+export const callLiveLlmStream = async (
+  systemPrompt: string,
+  userPrompt: string,
+  preferredModel: string | undefined,
+  opts: LlmOpts | undefined,
+  onDelta: DeltaHandler,
+): Promise<LlmCallResult> => {
+  const meter: Meter = { ctx: getUsageContext(), attempted: false, blocked: false };
+  const started = Date.now();
+  let result: LlmCallResult | undefined;
+  let thrown: unknown;
+  try {
+    result = await callLiveLlmStreamInner(systemPrompt, userPrompt, preferredModel, opts, onDelta, meter);
+  } catch (e) {
+    thrown = e;
+  }
+  // Ghi sổ: nuốt mọi lỗi, không bao giờ làm chậm hay làm hỏng lời gọi AI.
+  const ctx = meter.ctx;
+  const fromCache = result?.modelUsed?.includes('Cache 0 token');
+  if (ctx?.record && meter.attempted && !meter.blocked && !fromCache) {
+    try {
+      const out = result?.content ?? '';
+      const real = typeof meter.promptTokens === 'number' && typeof meter.completionTokens === 'number';
+      await Promise.resolve(
+        ctx.record({
+          provider: meter.provider ?? 'unknown',
+          model: meter.model ?? result?.modelUsed ?? 'unknown',
+          promptTokens: meter.promptTokens ?? estimateTokens(systemPrompt + userPrompt),
+          completionTokens: meter.completionTokens ?? estimateTokens(out),
+          estimated: !real,
+          latencyMs: Date.now() - started,
+          ok: !thrown && Boolean(result?.ok),
+        }),
+      ).catch((e: unknown) => console.error('[usage] ghi sổ lỗi:', e instanceof Error ? e.message : e));
+    } catch (e) {
+      console.error('[usage] ghi sổ lỗi:', e instanceof Error ? e.message : e);
+    }
+  }
+  if (thrown) throw thrown;
+  return result as LlmCallResult;
 };
 
 /** Async generator trả về từng đoạn text khi LLM sinh ra; giá trị return là LlmCallResult. */

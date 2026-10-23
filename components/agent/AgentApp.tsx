@@ -33,7 +33,11 @@ import { getClassById } from '@/lib/classes';
 import { FORMAT_ITEMS } from '@/lib/agent/flow';
 
 const FORMAT_VALUES = FORMAT_ITEMS.map((f) => f.value);
+import { applyPrefs } from '@/lib/agent/prefs';
 import { Shell } from '../Shell';
+import '../../app/ui-agent.css';
+import { Hero, useRecent, type RecentItem } from './Hero';
+import { useMe, useUsage } from './useMe';
 import { Canvas } from './Canvas';
 import { BloomChoices, ConfirmCard, FormatChoices, LessonPicker, ResourceChoices, RunCard, StyleChoices } from './Cards';
 import { TeacherName, useActor } from './TeacherName';
@@ -48,23 +52,6 @@ import {
 } from './types';
 
 type Standard = 'approved' | 'chua_duyet' | 'khong_co';
-
-const SUGGESTIONS: { format: FormatValue; icon: IconName; title: string; desc: string }[] = [
-  { format: 'ke_hoach', icon: 'book', title: 'Soạn kế hoạch bài dạy', desc: 'Theo Công văn 5512, nâng cấp từ bản chuẩn của Kho' },
-  { format: 'quiz', icon: 'quiz', title: 'Quiz củng cố trong tiết', desc: 'Bộ câu hỏi trắc nghiệm nhanh kèm giải thích chi tiết' },
-  { format: 'slide', icon: 'slides', title: 'Soạn slide bài giảng', desc: 'Bộ slide trình chiếu tải ngay về PowerPoint (.pptx)' },
-  { format: 'worksheet', icon: 'file', title: 'Soạn phiếu học tập', desc: 'Phiếu giao cho học sinh, đáp án riêng cho giáo viên' },
-];
-
-const EXTRA_FORMAT_CHIPS: { format: FormatValue; icon: IconName; label: string }[] = [
-  { format: 'de_kiem_tra', icon: 'exam', label: 'Đề kiểm tra & Ma trận TT22' },
-  { format: 'infographic', icon: 'layers', label: 'Infographic bài học' },
-  { format: 'mindmap', icon: 'graph', label: 'Sơ đồ tư duy (Mindmap)' },
-  { format: 'podcast', icon: 'podcast', label: 'Podcast đối thoại' },
-  { format: 'video', icon: 'video', label: 'Kịch bản Video tình huống' },
-  { format: 'tranh_luan', icon: 'users', label: 'Tranh luận 2 chuyên gia' },
-  { format: 'tai_nguyen_6_dang', icon: 'sparkles', label: 'Trọn bộ 6 tài nguyên' },
-];
 
 const COMMAND_LINKS: Partial<Record<CommandId, { href: string; label: string; desc: string }>> = {
   duyet: { href: '/duyet', label: 'Duyệt bản chuẩn', desc: 'Chấm 6 tiêu chí để đưa bài vào Kho' },
@@ -85,6 +72,10 @@ export function AgentApp() {
   const [suggestions, setSuggestions] = useState<AtomLite[]>([]);
   const [standard, setStandard] = useState<Record<string, Standard>>({});
   const [actor, saveActor, actorReady] = useActor();
+  const [me, meReady] = useMe();
+  const prefsRef = useRef(me.prefs);
+  prefsRef.current = me.prefs;
+  const prefsApplied = useRef(false);
   const actorRef = useRef(actor);
   actorRef.current = actor;
 
@@ -97,6 +88,8 @@ export function AgentApp() {
   const threadRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
+  const usage = useUsage(Object.keys(results).length);
+  const recent = useRecent(actor, me.ssoEnabled && Boolean(me.user), Object.keys(results).length);
   const busy = Object.values(runs).some((r) => r.status === 'running');
   const canvasEntry = canvasId ? results[canvasId] : undefined;
   const hasResults = Object.keys(results).length > 0;
@@ -389,7 +382,11 @@ export function AgentApp() {
     setCanvasId(null);
     setSuggestions([]);
     const base = initialSlots();
-    const keep = { ...base, subject: slotsRef.current.subject, grade: slotsRef.current.grade };
+    const keep = applyPrefs(
+      { ...base, subject: slotsRef.current.subject, grade: slotsRef.current.grade },
+      prefsRef.current,
+      { keepSubjectGrade: true },
+    );
     slotsRef.current = keep;
     setSlots(keep);
   }, []);
@@ -417,12 +414,11 @@ export function AgentApp() {
   const anotherLesson = () => {
     if (busy) return;
     const base = slotsRef.current;
-    const next: AgentSlots = {
-      ...initialSlots(),
-      subject: base.subject,
-      grade: base.grade,
-      ngonNgu: base.ngonNgu,
-    };
+    const next: AgentSlots = applyPrefs(
+      { ...initialSlots(), subject: base.subject, grade: base.grade, ngonNgu: base.ngonNgu },
+      prefsRef.current,
+      { keepSubjectGrade: true },
+    );
     slotsRef.current = next;
     setSlots(next);
     userSay('Soạn bài khác');
@@ -574,9 +570,28 @@ export function AgentApp() {
 
   const runCommandLink = (href: string) => href;
 
+  const openRecent = (item: RecentItem) => {
+    if (item.kind === 'version') void openVersion(item.id);
+    else openHistory(item.id);
+  };
+
+  /* Áp tuỳ chọn mặc định (môn, khối, phong cách) một lần, khi chưa có lựa chọn nào từ liên kết hay hội thoại. */
+  useEffect(() => {
+    if (!meReady || prefsApplied.current) return;
+    prefsApplied.current = true;
+    const cur = slotsRef.current;
+    const next = applyPrefs(cur, me.prefs, { keepSubjectGrade: Boolean(cur.classId || cur.baiDayId) });
+    const patch: Partial<AgentSlots> = {};
+    if (next.subject !== cur.subject) patch.subject = next.subject;
+    if (next.grade !== cur.grade) patch.grade = next.grade;
+    if (next.phongCach !== cur.phongCach) patch.phongCach = next.phongCach;
+    if (Object.keys(patch).length > 0) apply(patch);
+  }, [meReady, me.prefs, apply]);
+
   /* ---------- hiệu ứng ---------- */
   useEffect(() => {
     // Cuộn sau khi bố cục ổn định: thẻ xác nhận còn dài thêm khi tải trạng thái bản chuẩn.
+    if (msgs.length === 0) return; // màn hình chào luôn hiện từ đầu
     const id = requestAnimationFrame(() => {
       const el = threadRef.current;
       if (el) el.scrollTo({ top: el.scrollHeight });
@@ -859,51 +874,14 @@ export function AgentApp() {
 
           <div className="ag-thread" ref={threadRef}>
             {msgs.length === 0 ? (
-              <div className="ag-hero">
-                <div className="ag-hero-badge">
-                  <Icon name="sparkles" size={15} />
-                  <span>Trợ lý Sư phạm AI · Chuẩn GDPT 2018 &amp; Công văn 5512</span>
-                </div>
-                <h1>Chào cô/thầy, hôm nay mình soạn gì?</h1>
-                <p>
-                  Hệ thống tự động đối chiếu gói kiến thức chuẩn trong Kho của Trường Việt Anh, phân hóa theo năng lực lớp học,
-                  mức tư duy Bloom và phong cách giảng dạy của cô/thầy.
-                </p>
-                <div className="ag-suggest">
-                  {SUGGESTIONS.map((s) => (
-                    <button key={s.format} type="button" className="ag-suggest-card" onClick={() => startWithFormat(s.format)}>
-                      <span className="ag-suggest-ico">
-                        <Icon name={s.icon} />
-                      </span>
-                      <span>
-                        <strong>{s.title}</strong>
-                        <span className="ag-sub">{s.desc}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div className="ag-hero-more">
-                  <div className="ag-hero-more-head">
-                    <span>Hoặc chọn nhanh định dạng chuyên sâu ( đủ 11 sản phẩm ):</span>
-                    <button type="button" className="ag-link" onClick={showAllFormats}>
-                      Mở bảng mô tả chi tiết →
-                    </button>
-                  </div>
-                  <div className="ag-hero-chips">
-                    {EXTRA_FORMAT_CHIPS.map((item) => (
-                      <button
-                        key={item.format}
-                        type="button"
-                        className="ag-chip"
-                        onClick={() => startWithFormat(item.format)}
-                      >
-                        <Icon name={item.icon} size={16} />
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <Hero
+                me={me}
+                usage={usage}
+                recent={recent}
+                onStart={startWithFormat}
+                onShowAll={showAllFormats}
+                onOpenRecent={openRecent}
+              />
             ) : (
               <div className="ag-thread-inner" role="log" aria-live="polite" aria-relevant="additions">
                 {msgs.map((m) =>

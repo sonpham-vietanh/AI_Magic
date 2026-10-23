@@ -1,4 +1,6 @@
 import type { SVGProps } from 'react';
+import { readJson } from '@/lib/ui/fetchJson';
+import { formatApiError } from '@/lib/ui/soanBai';
 import type { SubjectCode } from '@/lib/types';
 
 // Bản sao cục bộ để không kéo lib/supabase.ts (xử lý khoá bí mật) vào bundle client.
@@ -21,23 +23,8 @@ export function mapSupabaseSubjectToCode(subjectName?: string): SubjectCode {
 }
 
 export async function readApiJson<T>(res: Response): Promise<T> {
-  let body: (T & { error?: string }) | null = null;
-  try {
-    body = (await res.json()) as T & { error?: string };
-  } catch {
-    body = null;
-  }
-  if (!res.ok || !body) {
-    if (res.status === 429) {
-      throw new Error('Hệ thống đang quá tải, vui lòng thử lại sau ít phút.');
-    }
-    if (res.status === 401) {
-      throw new Error('Phiên làm việc đã hết hạn, vui lòng tải lại trang rồi thử lại.');
-    }
-    throw new Error(
-      body?.error || `Máy chủ trả về lỗi (${res.status}). Vui lòng thử lại sau.`,
-    );
-  }
+  const body = await readJson<T & { error?: string }>(res);
+  if (!res.ok || !body) throw new Error(formatApiError(res.status, body?.error));
   return body;
 }
 

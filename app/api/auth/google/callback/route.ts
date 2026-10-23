@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { OAUTH_COOKIE_NAME, SsoError, completeLogin, isSsoEnabled, publicUrl, roleForEmail } from '@/lib/server/googleAuth';
+import { OAUTH_COOKIE_NAME, SsoError, completeLogin, isSsoEnabled, publicUrl } from '@/lib/server/googleAuth';
 import { SESSION_COOKIE_NAME, createSessionToken, parseCookieValue, recordTeacherSessionAudit } from '@/lib/server/auth';
+import { getEffectiveRoleAsync, isBlockedAsync } from '@/lib/users/roles';
 import { rateLimit } from '@/lib/server/rateLimit';
 
 export const runtime = 'nodejs';
@@ -29,10 +30,13 @@ export async function GET(request: Request) {
       state,
       parseCookieValue(request.headers.get('cookie'), OAUTH_COOKIE_NAME),
     );
+    // Tài khoản bị quản trị chặn thì từ chối ngay, không cấp phiên.
+    if (await isBlockedAsync(identity.email)) return back(request, 'blocked');
+    const role = await getEffectiveRoleAsync(identity.email);
     const { token, session } = createSessionToken({
       name: identity.name,
       email: identity.email,
-      role: roleForEmail(identity.email),
+      role,
       via: 'google',
     });
     await recordTeacherSessionAudit(session).catch(() => undefined);

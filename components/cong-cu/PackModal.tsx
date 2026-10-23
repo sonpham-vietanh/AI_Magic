@@ -1,5 +1,6 @@
 'use client';
 
+import { rovingRef, rovingKeyDown } from '@/components/resources/roving';
 import { useEffect, useRef } from 'react';
 import type { CompleteLessonPack, LessonPackSection } from '@/app/api/generate-pack/route';
 import { Icon } from '@/components/ui/icons';
@@ -158,7 +159,7 @@ export function PackModal({
               <span>{notice}</span>
             </div>
           )}
-          <div className="ag-tabs cc-tabs no-print" role="tablist" aria-label="Các phần của hồ sơ">
+          <div className="ag-tabs cc-tabs no-print" role="tablist" ref={rovingRef} onKeyDown={rovingKeyDown} aria-label="Các phần của hồ sơ">
             {pack.sections.map((sec) => (
               <button
                 key={sec.id}

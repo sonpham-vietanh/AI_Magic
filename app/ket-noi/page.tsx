@@ -1,141 +1,269 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Shell } from '@/components/Shell';
-import type { ServiceStatus } from '@/lib/integrations/catalog';
+import { Icon, type IconName } from '@/components/ui/icons';
+import { fetchJson, friendlyError } from '@/lib/ui/fetchJson';
 import '../ui-ls.css';
 
-const BADGE: Record<ServiceStatus['state'], { cls: string; text: string }> = {
-  dang_dung: { cls: 'ok', text: 'Đã cấu hình và đang dùng' },
-  da_cau_hinh_chua_noi: { cls: 'mid', text: 'Đã cấu hình nhưng hệ thống chưa nối' },
-  chua_cau_hinh: { cls: 'off', text: 'Chưa cấu hình' },
-};
-
-interface CloudStoreInfo {
+interface ServiceInfo {
+  id: string;
+  name: string;
+  state: 'dang_dung' | 'da_cau_hinh_chua_noi' | 'chua_cau_hinh';
+}
+interface StatusPayload {
+  services: ServiceInfo[];
+  ai: { openrouter: boolean; gemini: boolean; groq: boolean; openai: boolean; any: boolean };
+  login: { google: boolean };
+  cloud: { configured: boolean };
+}
+interface CloudStore {
   configured: boolean;
-  backend: 'dedicated_table' | 'isolated_kv' | 'disabled';
-  tableName: string;
-  isolatedCollection: string;
   keys: { key: string; updatedAt?: string }[];
+}
+interface MeInfo {
+  ssoEnabled?: boolean;
+  user?: { role?: string } | null;
+}
+
+type Tone = 'ok' | 'mid' | 'off';
+
+/** Dịch vụ bên thứ ba chưa nối: nói rõ cách dùng thay thế, không nhắc tên kỹ thuật. */
+const EXTERNAL: { id: string; name: string; icon: IconName; what: string; instead: string }[] = [
+  {
+    id: 'gamma',
+    name: 'Gamma',
+    icon: 'slides',
+    what: 'Dựng slide đẹp tự động từ dàn ý.',
+    instead: 'Trợ lý tự dựng tệp PowerPoint (.pptx) từ nội dung slide. Cô/thầy bấm Xuất ở trợ lý để tải về rồi chỉnh thêm.',
+  },
+  {
+    id: 'canva',
+    name: 'Canva',
+    icon: 'layers',
+    what: 'Ảnh minh hoạ và infographic thiết kế sẵn.',
+    instead: 'Trợ lý tự vẽ infographic và sơ đồ tư duy dạng ảnh. Cô/thầy bấm Xuất ở trợ lý để tải ảnh về.',
+  },
+  {
+    id: 'gemini-notebook',
+    name: 'NotebookLM',
+    icon: 'podcast',
+    what: 'Tạo podcast và tranh luận âm thanh từ tài liệu đã duyệt.',
+    instead: 'Trợ lý chỉ soạn kịch bản. Cô/thầy bấm Nghe thử để máy đọc to, chưa tạo được tệp âm thanh.',
+  },
+  {
+    id: 'tts-stt',
+    name: 'Giọng đọc (TTS)',
+    icon: 'video',
+    what: 'Giọng đọc chuyên nghiệp cho podcast và video.',
+    instead: 'Dùng giọng đọc có sẵn của trình duyệt trên máy cô/thầy. Video hiện chỉ có kịch bản phân cảnh.',
+  },
+];
+
+function Badge({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  const ico: IconName = tone === 'ok' ? 'check' : tone === 'mid' ? 'info' : 'alert';
+  return (
+    <span className={`ls-badge ${tone}`}>
+      <Icon name={ico} size={14} aria-hidden="true" />
+      {children}
+    </span>
+  );
 }
 
 export default function KetNoiPage() {
-  const [services, setServices] = useState<ServiceStatus[] | null>(null);
-  const [cloud, setCloud] = useState<CloudStoreInfo | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState('');
+  const [status, setStatus] = useState<StatusPayload | null>(null);
+  const [cloud, setCloud] = useState<CloudStore | null>(null);
+  const [me, setMe] = useState<MeInfo | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/integrations/status')
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return;
-        if (j.ok) setServices(j.services as ServiceStatus[]);
-        else setError(j.error || 'Không thể kiểm tra trạng thái dịch vụ.');
-      })
-      .catch(() => alive && setError('Không thể kết nối máy chủ để kiểm tra trạng thái.'));
-
-    fetch('/api/supabase/app-store')
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return;
-        if (j.ok && j.status) setCloud(j.status as CloudStoreInfo);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      alive = false;
-    };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setStatus(await fetchJson<StatusPayload>('/api/integrations/status'));
+    } catch (e) {
+      setError(friendlyError(e, 'Chưa kiểm tra được trạng thái kết nối. Cô/thầy thử lại sau ít phút nhé.'));
+    } finally {
+      setLoading(false);
+    }
+    fetchJson<{ status: CloudStore }>('/api/supabase/app-store')
+      .then((j) => setCloud(j.status))
+      .catch(() => setCloud(null));
+    fetchJson<MeInfo>('/api/me')
+      .then(setMe)
+      .catch(() => setMe(null));
   }, []);
 
-  async function handleSyncCloud() {
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const canSync = !me || me.ssoEnabled === false || me.user?.role === 'admin';
+
+  async function handleSync() {
     setSyncing(true);
-    setSyncMsg('');
+    setSyncMsg(null);
     try {
-      const r = await fetch('/api/supabase/app-store', { method: 'POST' });
-      const j = await r.json();
-      if (j.status) setCloud(j.status as CloudStoreInfo);
-      if (j.ok) {
-        const count = Array.isArray(j.sync?.synced) ? j.sync.synced.length : 0;
-        setSyncMsg(`Đã đồng bộ ${count} kho dữ liệu lên Supabase an toàn (không chạm dữ liệu gốc).`);
-      } else {
-        setSyncMsg(j.error || 'Chưa đồng bộ được toàn bộ kho dữ liệu.');
-      }
-    } catch {
-      setSyncMsg('Lỗi kết nối khi đồng bộ lên Supabase.');
+      const j = await fetchJson<{ sync?: { synced?: unknown[] }; status?: CloudStore }>('/api/supabase/app-store', {
+        method: 'POST',
+      });
+      if (j.status) setCloud(j.status);
+      const n = Array.isArray(j.sync?.synced) ? j.sync.synced.length : 0;
+      setSyncMsg({ ok: true, text: `Đã sao lưu ${n} kho dữ liệu lên đám mây. Dữ liệu gốc không bị thay đổi.` });
+    } catch (e) {
+      setSyncMsg({ ok: false, text: friendlyError(e, 'Chưa sao lưu được lên đám mây. Cô/thầy thử lại sau nhé.') });
     } finally {
       setSyncing(false);
     }
   }
 
+  const svc = (id: string) => status?.services.find((s) => s.id === id);
+  const lastSync = cloud?.keys
+    .map((k) => k.updatedAt)
+    .filter((x): x is string => !!x)
+    .sort()
+    .pop();
+
   return (
     <Shell
-      title="Kết nối dịch vụ ngoài"
-      subtitle="Danh bạ các dịch vụ AI chuyên biệt và phương thức dựng học liệu dự phòng của hệ thống."
+      title="Kết nối dịch vụ"
+      subtitle="Xem hệ thống đang nối với những dịch vụ nào, và cô/thầy dùng cách thay thế ra sao khi chưa nối."
     >
       <div className="ls">
         <div className="ag-alert info" role="note" style={{ marginTop: 0 }}>
+          <Icon name="info" size={18} aria-hidden="true" />
           <span>
-            Khi dịch vụ bên thứ ba chưa gắn khoá license riêng, hệ thống tự động sử dụng bộ dựng học liệu nội bộ (PowerPoint .pptx, SVG/PNG Infographic &amp; Sơ đồ tư duy, giọng đọc trình duyệt) để giáo viên luôn soạn bài liền mạch.
+            Dịch vụ nào chưa nối thì cô/thầy vẫn soạn bài bình thường: hệ thống tự dùng bộ dựng có sẵn (PowerPoint, ảnh
+            infographic, giọng đọc của trình duyệt).
           </span>
         </div>
-        {cloud && (
-          <div className="ls-svc" style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <h2 style={{ margin: 0 }}>Đồng bộ Đám mây Supabase (Cô lập an toàn)</h2>
-                <p className="ls-svc-sub" style={{ marginTop: 4 }}>
-                  Phân vùng đích:{' '}
-                  <code>{cloud.backend === 'dedicated_table' ? `public.${cloud.tableName}` : `studio_kv (${cloud.isolatedCollection})`}</code>
-                  {' · '}Đã lưu <strong>{cloud.keys.length}</strong> kho vận hành mà không tác động bảng dữ liệu gốc.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="ag-btn primary small"
-                disabled={syncing || !cloud.configured}
-                onClick={handleSyncCloud}
-              >
-                {syncing ? 'Đang đồng bộ…' : 'Đồng bộ ngay lên Supabase'}
-              </button>
-            </div>
-            {cloud.keys.length > 0 && (
-              <p className="ls-svc-sub" style={{ marginTop: 8 }}>
-                Các kho đã đồng bộ: {cloud.keys.map((k) => <code key={k.key} style={{ marginRight: 6 }}>{k.key}</code>)}
-              </p>
-            )}
-            {syncMsg && <p className="ls-svc-sub" style={{ marginTop: 8, fontWeight: 600 }}>{syncMsg}</p>}
+
+        {error && (
+          <div className="ls-error" role="alert">
+            {error}{' '}
+            <button type="button" className="ag-btn small" onClick={() => void load()}>
+              Thử lại
+            </button>
           </div>
         )}
-        {error && <p className="ls-error" role="alert">{error}</p>}
-        {!services && !error && <p>Đang kiểm tra…</p>}
-        {services && (
-          <ul className="ls-svc-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {services.map((s) => {
-              const b = BADGE[s.state];
-              return (
-                <li key={s.id} className="ls-svc">
-                  <h2>{s.name}</h2>
-                  <span className={`ls-badge ${b.cls}`}>{b.text}</span>
-                  <p>{s.purpose}</p>
-                  <p className="ls-svc-sub">Dùng cho: {s.products.join(' · ')}</p>
-                  <p className="ls-svc-fb">
-                    <strong>Hiện đang dùng thay thế:</strong> {s.fallback}
-                  </p>
-                  {s.note && <p className="ls-svc-sub">{s.note}</p>}
-                  {s.envNames.length > 0 && (
+
+        {loading && !status && (
+          <div className="ls-cards" aria-busy="true" aria-label="Đang kiểm tra kết nối">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="ls-skel" />
+            ))}
+          </div>
+        )}
+
+        {status && (
+          <>
+            <section aria-labelledby="kn-core">
+              <h2 id="kn-core" className="ls-h2">Nền tảng của hệ thống</h2>
+              <div className="ls-cards">
+                <article className="ls-card">
+                  <div className="ls-card-head">
+                    <span className="ls-card-ico"><Icon name="sparkles" size={22} aria-hidden="true" /></span>
+                    <h3>Trợ lý AI soạn bài</h3>
+                  </div>
+                  <Badge tone={status.ai.any ? 'ok' : 'mid'}>
+                    {status.ai.any ? 'Đã nối' : 'Đang dùng mẫu dựng sẵn'}
+                  </Badge>
+                  <p>Soạn kế hoạch bài dạy, slide, phiếu học tập, quiz và đề kiểm tra.</p>
+                  <ul className="ls-chips" aria-label="Các nguồn AI">
+                    <li className={status.ai.openrouter ? 'on' : ''}>OpenRouter: {status.ai.openrouter ? 'đã nối' : 'chưa nối'}</li>
+                    <li className={status.ai.gemini ? 'on' : ''}>Gemini: {status.ai.gemini ? 'đã nối' : 'chưa nối'}</li>
+                    <li className={status.ai.groq ? 'on' : ''}>Groq: {status.ai.groq ? 'đã nối' : 'chưa nối'}</li>
+                  </ul>
+                  {!status.ai.any && (
                     <p className="ls-svc-sub">
-                      Biến môi trường: {s.envNames.map((n) => (
-                        <code key={n}>{n}</code>
-                      )).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ' · ', el] : [el]), [])}
+                      Chưa nối AI nên hệ thống dùng bộ mẫu dựng sẵn, không gọi AI bên ngoài và không tốn phí.
                     </p>
                   )}
-                </li>
-              );
-            })}
-          </ul>
+                </article>
+
+                <article className="ls-card">
+                  <div className="ls-card-head">
+                    <span className="ls-card-ico"><Icon name="shield" size={22} aria-hidden="true" /></span>
+                    <h3>Đăng nhập Google của trường</h3>
+                  </div>
+                  <Badge tone={status.login.google ? 'ok' : 'off'}>
+                    {status.login.google ? 'Đã bật' : 'Chưa bật'}
+                  </Badge>
+                  <p>
+                    {status.login.google
+                      ? 'Cô/thầy đăng nhập bằng email của trường. Lịch sử và bài soạn được ghi đúng tên người dùng.'
+                      : 'Hiện chưa yêu cầu đăng nhập. Khi bật, mỗi người dùng đăng nhập bằng email Google Workspace của trường.'}
+                  </p>
+                  {me?.user && <Link href="/tai-khoan" className="ag-btn small">Mở trang tài khoản</Link>}
+                </article>
+
+                <article className="ls-card">
+                  <div className="ls-card-head">
+                    <span className="ls-card-ico"><Icon name="folder" size={22} aria-hidden="true" /></span>
+                    <h3>Kho lưu trên đám mây</h3>
+                  </div>
+                  <Badge tone={status.cloud.configured ? 'ok' : 'mid'}>
+                    {status.cloud.configured ? 'Đã nối' : 'Đang lưu trên máy chủ nhà trường'}
+                  </Badge>
+                  <p>
+                    {status.cloud.configured
+                      ? `${cloud && cloud.keys.length === 0 ? 'Chưa có bản sao lưu nào, cô/thầy bấm Sao lưu ngay để tạo bản đầu tiên' : `Bản sao lưu an toàn của dữ liệu vận hành${cloud ? `: ${cloud.keys.length} kho` : ''}`}${
+                          lastSync
+                            ? `, cập nhật ${new Date(lastSync).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })}`
+                            : ''
+                        }.`
+                      : 'Dữ liệu đang được lưu ngay trên máy chủ của trường. Có thể nối đám mây để có thêm bản sao lưu.'}
+                  </p>
+                  {status.cloud.configured && canSync && (
+                    <button type="button" className="ag-btn small primary" disabled={syncing} onClick={handleSync}>
+                      <Icon name="refresh" size={16} aria-hidden="true" />
+                      {syncing ? 'Đang sao lưu…' : 'Sao lưu ngay'}
+                    </button>
+                  )}
+                  {syncMsg && (
+                    <p className={`ls-msg ${syncMsg.ok ? 'ok' : 'bad'}`} role={syncMsg.ok ? 'status' : 'alert'}>
+                      {syncMsg.text}
+                    </p>
+                  )}
+                </article>
+              </div>
+            </section>
+
+            <section aria-labelledby="kn-ext">
+              <h2 id="kn-ext" className="ls-h2">Dịch vụ thiết kế và âm thanh bên ngoài</h2>
+              <div className="ls-cards">
+                {EXTERNAL.map((x) => {
+                  const tone: Tone = svc(x.id)?.state === 'dang_dung' ? 'ok' : 'off';
+                  return (
+                    <article key={x.id} className="ls-card">
+                      <div className="ls-card-head">
+                        <span className="ls-card-ico"><Icon name={x.icon} size={22} aria-hidden="true" /></span>
+                        <h3>{x.name}</h3>
+                      </div>
+                      <Badge tone={tone}>{tone === 'ok' ? 'Đã nối' : 'Chưa nối'}</Badge>
+                      <p>{x.what}</p>
+                      {tone !== 'ok' && (
+                        <div className="ls-svc-fb">
+                          <strong>Cô/thầy dùng thay thế:</strong> {x.instead}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <div className="ls-cta">
+              <Link href="/" className="ag-btn primary">
+                <Icon name="sparkles" size={18} aria-hidden="true" />
+                Mở trợ lý soạn bài
+              </Link>
+            </div>
+          </>
         )}
       </div>
     </Shell>
