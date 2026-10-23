@@ -2,7 +2,7 @@
 // Tại đây giữ ghi nhật ký phiên (cần đọc ghi tệp) và xuất lại các hàm cũ cho mã đang dùng.
 import { join } from 'node:path';
 import { createMutex, readJsonStrict, writeJsonAtomic } from './safeJson';
-import type { TeacherSession } from './sessionToken';
+import type { TeacherSession, UserRole } from './sessionToken';
 
 export {
   SESSION_COOKIE_NAME,
@@ -12,13 +12,14 @@ export {
   parseCookieValue,
   readSessionFromRequest,
   type TeacherSession,
+  type UserRole,
 } from './sessionToken';
 
 interface SessionAuditStore {
   sessions: {
     name: string;
     email?: string;
-    role: 'teacher' | 'reviewer';
+    role: UserRole;
     updatedAt: string;
   }[];
 }

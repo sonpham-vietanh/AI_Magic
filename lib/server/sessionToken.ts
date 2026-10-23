@@ -5,10 +5,12 @@ import { timingSafeEqualStr } from './guard';
 export const SESSION_COOKIE_NAME = 'va_session';
 export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 ngày
 
+export type UserRole = 'teacher' | 'reviewer' | 'admin';
+
 export interface TeacherSession {
   name: string;
   email?: string;
-  role: 'teacher' | 'reviewer';
+  role: UserRole;
   /** 'google' khi đăng nhập bằng email trường; 'name' khi chỉ tự khai tên (chế độ cũ). */
   via?: 'google' | 'name';
   iat: number;
@@ -56,7 +58,7 @@ export function randomToken(bytes = 24): string {
 export function createSessionToken(input: {
   name: string;
   email?: string;
-  role: 'teacher' | 'reviewer';
+  role: UserRole;
   via?: 'google' | 'name';
   nowMs?: number;
 }): { token: string; session: TeacherSession } {
@@ -75,7 +77,7 @@ export function createSessionToken(input: {
 export function verifySessionToken(token: string, nowMs?: number): TeacherSession | null {
   const parsed = verifyValue<Partial<TeacherSession>>('session', token);
   if (!parsed || typeof parsed.name !== 'string' || !parsed.name.trim()) return null;
-  if (parsed.role !== 'teacher' && parsed.role !== 'reviewer') return null;
+  if (parsed.role !== 'teacher' && parsed.role !== 'reviewer' && parsed.role !== 'admin') return null;
   if (typeof parsed.exp !== 'number' || parsed.exp <= (nowMs ?? Date.now())) return null;
   return {
     name: parsed.name.trim(),

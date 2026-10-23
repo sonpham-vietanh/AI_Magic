@@ -1,7 +1,7 @@
 // Đăng nhập bằng Google Workspace giới hạn email của trường (OAuth 2.0 Authorization Code + PKCE).
 // Chỉ bật khi có GOOGLE_CLIENT_ID và GOOGLE_CLIENT_SECRET. Chưa cấu hình thì ứng dụng giữ chế độ khai tên cũ.
 import { createHash } from 'node:crypto';
-import { randomToken, signValue, verifyValue } from './sessionToken';
+import { randomToken, signValue, verifyValue, type UserRole } from './sessionToken';
 
 export const OAUTH_COOKIE_NAME = 'va_oauth';
 const OAUTH_TTL_MS = 10 * 60 * 1000;
@@ -32,8 +32,21 @@ export function reviewerEmails(): Set<string> {
   );
 }
 
-export function roleForEmail(email: string): 'teacher' | 'reviewer' {
-  return reviewerEmails().has(email.trim().toLowerCase()) ? 'reviewer' : 'teacher';
+/** Email quản trị (ADMIN_EMAILS, cách nhau bằng dấu phẩy). Admin có mọi quyền của người duyệt cộng quyền quản trị. */
+export function adminEmails(): Set<string> {
+  return new Set(
+    (process.env.ADMIN_EMAILS || '')
+      .split(/[,\s;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+/** Vai trò mặc định theo biến môi trường. Vai trò do quản trị gán trong ứng dụng (lib/users) được cộng thêm ở nơi gọi. */
+export function roleForEmail(email: string): UserRole {
+  const e = email.trim().toLowerCase();
+  if (adminEmails().has(e)) return 'admin';
+  return reviewerEmails().has(e) ? 'reviewer' : 'teacher';
 }
 
 /** Địa chỉ gốc của ứng dụng, dùng làm redirect_uri. Ưu tiên APP_BASE_URL để không tin header do client gửi. */

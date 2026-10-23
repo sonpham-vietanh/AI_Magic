@@ -22,10 +22,18 @@ export function requireReviewer(request: Request): Response | null {
     return null;
   }
   const session = readSessionFromRequest(request);
-  if (session && session.role === 'reviewer') {
+  if (session && (session.role === 'reviewer' || session.role === 'admin')) {
     return null;
   }
   return Response.json({ ok: false, error: 'Cần mã người duyệt hợp lệ để thực hiện thao tác này.' }, { status: 403 });
+}
+
+/** Chỉ quản trị viên (email trong ADMIN_EMAILS hoặc được gán quyền admin). Trả null nếu hợp lệ, ngược lại Response 401/403. */
+export function requireAdmin(request: Request): Response | null {
+  const session = readSessionFromRequest(request);
+  if (!session) return Response.json({ ok: false, error: 'Cần đăng nhập.' }, { status: 401 });
+  if (session.role !== 'admin') return Response.json({ ok: false, error: 'Chỉ quản trị viên mới thực hiện được.' }, { status: 403 });
+  return null;
 }
 
 /** Chuẩn hoá tên người thao tác để so sánh (NFC, bỏ khoảng trắng thừa, không phân biệt hoa/thường). */

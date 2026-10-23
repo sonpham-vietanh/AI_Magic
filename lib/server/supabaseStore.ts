@@ -31,6 +31,10 @@ const ALLOWED_STORE_KEYS = new Set([
   'signals',
   'class-notes',
   'teacher-sessions',
+  'user-prefs',
+  'user-roles',
+  'usage-ledger',
+  'audit-log',
 ]);
 
 function getSupabaseCreds(): { url: string; key: string } | null {
