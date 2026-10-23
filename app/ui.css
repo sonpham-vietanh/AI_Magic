@@ -331,6 +331,7 @@
   border-radius: 11px;
 }
 .ag-iconbtn {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1283,6 +1284,7 @@ textarea.ag-field {
   }
   .ag-mobilebar .ag-brand {
     padding: 0;
+    min-height: 44px;
   }
   .ag-mobilebar .ag-iconbtn {
     color: #ffffff;

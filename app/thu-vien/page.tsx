@@ -301,7 +301,7 @@ export default function ResourceLibraryPage() {
 
   return (
     <Shell
-      title="Thư viện học liệu"
+      title="Học liệu đã lưu"
       subtitle="Học liệu cô/thầy đã lưu và nhật ký hoạt động."
       rightActions={
         <Link href="/" className="ag-btn primary">
@@ -560,9 +560,6 @@ export default function ResourceLibraryPage() {
             </>
           )}
 
-          <p className="tv-foot">
-            Quản trị: <a href="/api/usage" target="_blank" rel="noreferrer">dữ liệu nhật ký dạng JSON</a>
-          </p>
         </div>
 
         {showDetail && selected && <Detail key={selected.id} res={selected} onClose={closeDetail} />}

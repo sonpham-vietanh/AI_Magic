@@ -414,3 +414,65 @@
     padding-right: 16px;
   }
 }
+.ag-export-guide {
+  max-height: 34vh;
+  overflow: auto;
+}
+.ag-lesson > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ag-lessons {
+  overflow-x: hidden;
+}
+.ag-body {
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .ag-msg > .ag-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .ag-lesson .ag-status {
+    max-width: 38%;
+  }
+}
+
+/* Thanh trên của trợ lý: một hàng ở màn hình hẹp, nút phụ chỉ còn biểu tượng (có nhãn đọc màn hình). */
+@media (min-width: 901px) {
+  .ag-hero-meta .ag-quota {
+    display: none; /* thanh bên đã có chip hạn mức */
+  }
+}
+@media (max-width: 600px) {
+  .ag-chat-top {
+    flex-wrap: nowrap;
+    padding: 6px 12px;
+    min-height: 0;
+    gap: 8px;
+  }
+  .ag-chat-top-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .ag-chat-top-left .ag-top-select {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-right: 26px;
+  }
+  .ag-chat-top-right {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+  .ag-chat-top-right .ag-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .ag-top-label {
+    display: none;
+  }
+}

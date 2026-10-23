@@ -275,7 +275,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Dữ liệu của tôi được lưu ở đâu?',
-    a: 'Lịch sử soạn bài và tuỳ chọn của cô/thầy được lưu trên hệ thống do trường quản lý, gắn với email trường. Cô/thầy không nên nhập thông tin cá nhân của học sinh vào khung soạn.',
+    a: 'Học liệu đã lưu, lịch sử soạn bài và tuỳ chọn của cô/thầy được lưu trên hệ thống của trường: máy chủ riêng của trường và cơ sở dữ liệu Supabase do trường quản lý, gắn với email trường. Tài khoản chỉ dùng email trường, không dùng tài khoản cá nhân. Cô/thầy không nên nhập thông tin cá nhân của học sinh vào khung soạn.',
   },
   {
     q: 'AI có thay giáo viên không?',

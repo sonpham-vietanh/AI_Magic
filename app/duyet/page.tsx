@@ -210,7 +210,7 @@ export default function DuyetPage() {
   const showSkeleton = loading && !loaded;
 
   return (
-    <Shell title="Duyệt học liệu mẫu & Dựng Kho" subtitle="Kiểm định gói kiến thức, sinh 6 dạng tài nguyên chuẩn và phê duyệt đưa vào Kho của trường.">
+    <Shell title="Duyệt học liệu mẫu" subtitle="Kiểm định gói kiến thức, sinh 6 dạng tài nguyên chuẩn và phê duyệt đưa vào Kho của trường.">
       <div className="ag-alert info du-rule" role="note">
         <Icon name="shield" size={20} />
         <div>
@@ -378,7 +378,7 @@ export default function DuyetPage() {
                   </p>
                   <p className="ag-note" style={{ margin: '4px 0 0' }}>
                     {lesson.edges.length} liên kết trong đồ thị tri thức, {lesson.packages.length} gói kiến thức
-                    {lesson.atom?.bloom ? `, bậc Bloom: ${lesson.atom.bloom}` : ''}. Phân rã được làm ở Supabase, trang này chỉ đọc.
+                    {lesson.atom?.bloom ? `, bậc Bloom: ${lesson.atom.bloom}` : ''}. Phần phân rã do hệ thống kiến thức của trường chuẩn bị, trang này chỉ để xem.
                   </p>
                 </div>
 

@@ -7,9 +7,7 @@ import '../ui-qt.css';
 export default function QuanTriPage() {
   return (
     <Shell title="Quản trị người dùng" subtitle="Phân quyền giáo viên, người duyệt và quản trị viên; chặn tài khoản và xem nhật ký thao tác.">
-      <div className="va-workspace">
-        <AdminUsers />
-      </div>
+      <AdminUsers />
     </Shell>
   );
 }

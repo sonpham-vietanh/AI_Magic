@@ -2,7 +2,7 @@
 
 Nguồn: sơ đồ "Hệ thống Sinh Học liệu Giảng dạy — Trường Việt Anh" (v2.1) của anh Nguyễn Mạnh Dương.
 Tài liệu này thay thế các mô tả kiến trúc cũ trong `docs/` (xem ghi chú ở đầu từng file cũ). Bảng truy vết dưới đây ghi **trung thực**
-điều gì đã có trong mã, điều gì mới làm một phần, điều gì chưa. Cột "Trạng thái" là nhận định khi viết tài liệu (2026-10-21), dựa trên việc đọc mã và
+điều gì đã có trong mã, điều gì mới làm một phần, điều gì chưa. Cột "Trạng thái" là nhận định khi viết tài liệu (2026-10-21, các dòng về đăng nhập, quản trị, sao lưu cập nhật 2026-10-23), dựa trên việc đọc mã và
 chạy thử một số luồng; **chưa phải kết quả nghiệm thu chính thức**.
 
 ## 1. Tóm tắt sơ đồ (ba panel)
@@ -34,7 +34,7 @@ Quy ước: **Đạt** = có mã chạy được cho đúng ý sơ đồ; **Mộ
 | Pha A bước 1 — phân rã Knowledge Graph | `lib/knowledge-graph/*`; quy trình phân rã nằm ở bộ kỹ năng ngoài kho mã | Một phần: đồ thị có sẵn để tra; công cụ phân rã tự động không nằm trong ứng dụng này. |
 | Pha A bước 2 — sinh 6 dạng tài nguyên | `lib/kho/generate.ts`, `app/api/kho/resources/generate` | Một phần (xem workflow 6). |
 | Pha A bước 3 — ghép theo phân phối chương trình | `lib/kho`, dữ liệu chương trình trong `lib/catalog` và `/ho-so-lop-hoc` | Một phần: chưa có công cụ ghép tự động có kiểm tra phủ 4 bậc Bloom. |
-| Pha A bước 4 — người duyệt, rubric 6 tiêu chí 1–5 | `lib/eval/rubric.ts` (`RUBRIC_6`), `lib/kho/reviewStore.ts`, `app/api/kho/review`, trang `/duyet` | Một phần: có cổng và chấm điểm, nhưng cổng duyệt chỉ là mã dùng chung `REVIEWER_KEY` (header `x-reviewer-key`), không phải danh tính từng người; danh sách tên người duyệt (`ASSESSMENT_REVIEWERS`) chỉ là khai báo. **Chưa có đăng nhập thật.** |
+| Pha A bước 4 — người duyệt, rubric 6 tiêu chí 1–5 | `lib/eval/rubric.ts` (`RUBRIC_6`), `lib/kho/reviewStore.ts`, `app/api/kho/review`, trang `/duyet` | Một phần: có cổng và chấm điểm, cổng duyệt nhận người duyệt/quản trị đăng nhập Google (khi đã bật SSO) hoặc mã dùng chung `REVIEWER_KEY` (header `x-reviewer-key`, không phải danh tính từng người); danh sách tên người duyệt (`ASSESSMENT_REVIEWERS`) chỉ là khai báo. Khi SSO chưa bật thì không có danh tính thật. |
 | Pha A bước 5 — nhập kho, gắn org_id | `lib/server/org.ts` (`getOrgId`), các store trong `lib/kho` | Một phần: org_id luôn là `vietanh`; chưa lấy từ SSO. |
 | Pha A bước 6 — nạp Ngân hàng câu hỏi (5 nhãn) | `lib/assessment/bank.ts`, `app/api/assessment/bank` | Một phần: ngân hàng và nhập câu hỏi có; **chưa kiểm chứng đủ 5 nhãn theo đúng định nghĩa của sơ đồ** (cần anh Dương chốt danh sách nhãn). |
 | Guardrail thời sự | `lib/guardrails/news.ts` | Đạt: danh sách trắng nguồn, loại chủ đề nhạy cảm, không dùng sự kiện dưới 48 giờ. Chưa có bộ thu thập tin tự động. |
@@ -45,9 +45,10 @@ Quy ước: **Đạt** = có mã chạy được cho đúng ý sơ đồ; **Mộ
 | org_id (đa tổ chức) | `lib/server/org.ts`; `lib/versions/store.ts` tách theo org | Một phần: mọi bản ghi mới mang org_id nhưng chỉ có một tổ chức. |
 | Web App: biểu mẫu 7 tham số | `/` (trợ lý), `/soan-bai` | Đạt (hai đường vào). |
 | Web App: Thư viện tiết học | `/kho` | Một phần (xem Kho). |
-| Web App: Trang duyệt (Pha A) | `/duyet` | Một phần: chức năng có, nhưng truy cập duyệt dựa trên `REVIEWER_KEY` dùng chung, chưa phân quyền theo người. |
-| Web App: Lịch sử & phiên bản cá nhân | `/lich-su`, `app/api/versions`, `lib/versions/*` (lưu `.data/versions.json`) | Một phần: lưu, danh sách, so sánh, mở lại trong trợ lý đã chạy được. Nhóm theo tên khai báo, **không phải tài khoản**; ai biết id đều đọc được. |
-| Web App: SSO Google Workspace | — | **Chưa.** Hiện chỉ có rào chắn cùng nguồn (`lib/server/guard.ts`) và token tuỳ chọn; không phải xác thực người dùng. |
+| Web App: Trang duyệt (Pha A) | `/duyet` | Một phần: chức năng có; phân quyền theo người chỉ có khi bật SSO, nếu không thì dựa trên `REVIEWER_KEY` dùng chung. |
+| Web App: Lịch sử & phiên bản cá nhân | `/lich-su`, `app/api/versions`, `lib/versions/*` (lưu `.data/versions.json`) | Một phần: lưu, danh sách, so sánh, mở lại trong trợ lý đã chạy được. Khi chưa bật SSO nhóm theo tên khai báo, **không phải tài khoản**, và ai biết id đều đọc được; việc ràng theo email khi bật SSO do phần đăng nhập đảm nhiệm, chưa kiểm chứng riêng ở đây. |
+| Web App: SSO Google Workspace | `lib/server/googleAuth.ts`, `sessionToken.ts`, `auth.ts`, `accessPolicy.ts`, `proxy.ts`, trang `/dang-nhap` | **Một phần.** Đã có OAuth + PKCE, phiên ký HMAC trong cookie, cổng ở `proxy.ts`, danh tính từ email, vai trò giáo viên / người duyệt / quản trị. Có kiểm thử đơn vị; **chưa được người dùng thật dùng trên production** và chỉ bật khi đặt `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (chưa đặt thì ai vào cũng được). Cửa dự phòng `REVIEWER_KEY` dùng chung vẫn còn. |
+| Vận hành: quản trị dữ liệu và sao lưu | `app/quan-tri/du-lieu`, `app/api/admin/export`, `app/api/admin/data/*`, `lib/ops/*`, `scripts/backup-data.mjs`, `scripts/restore-data.mjs`, `scripts/check-rls.mjs`, `docs/VAN_HANH.md` | **Một phần.** Có trang xem kho, tải và kiểm tra bản sao lưu (có checksum), script sao lưu/khôi phục (khôi phục chỉ ghi đĩa), có kiểm thử. **Chưa có lịch sao lưu tự động**, chưa thử khôi phục lên Supabase, ảnh Docker chưa chứa thư mục `scripts/`. |
 | Dịch vụ ngoài | `lib/integrations/catalog.ts`, `/ket-noi`, `GET /api/integrations/status` | Danh bạ trung thực. Chỉ LLM và guardrail nguồn tin chạy thật. |
 | Hạ tầng | Xem mục 4 | Khác sơ đồ; một số bảo đảm (khoá ghi, RLS Supabase) chưa đủ, xem mục 4. |
 
@@ -71,13 +72,13 @@ Quy ước: **Đạt** = có mã chạy được cho đúng ý sơ đồ; **Mộ
 | Máy chủ ứng dụng | FastAPI | Next.js 16 (App Router, route handler) |
 | Cơ sở dữ liệu | PostgreSQL + pgvector | Supabase (có migration `supabase/migrations`) cho phần đồ thị tri thức; **dữ liệu vận hành lưu file JSON cục bộ trong `.data/`** (store, kho, đánh giá, tín hiệu, phiên bản). Không có tìm kiếm vector. |
 | Đóng gói | Docker | Có `Dockerfile`; deploy bằng Coolify. Volume cho `.data/` phải được gắn cố định, nếu không dữ liệu mất khi dựng lại. |
-| Đăng nhập | SSO Google Workspace | **Chưa có.** Không có tài khoản người dùng; rào chắn cùng nguồn (`guard.ts`) giả mạo được bằng client không phải trình duyệt. Cổng duyệt dùng `REVIEWER_KEY` chung. |
+| Đăng nhập | SSO Google Workspace | Đã cài (Google OAuth + phiên ký) nhưng **tùy chọn**: chỉ bật khi có cấu hình Google. Khi tắt, không có tài khoản người dùng và rào chắn cùng nguồn (`guard.ts`) giả mạo được bằng client không phải trình duyệt. Cổng duyệt còn cửa dự phòng `REVIEWER_KEY` chung. Chưa có bằng chứng vận hành thật. |
 | Khoá ghi file | (không nêu) | Mutex ghi file chỉ có hiệu lực **trong một tiến trình**. Vì vậy phải chạy **đúng 1 bản sao** và **tắt rolling deploy** (hai container cùng ghi một volume `.data/` sẽ ghi đè nhau). |
-| Supabase RLS | (không nêu) | **Chưa kiểm tra** chính sách RLS của các bảng trên Supabase; không nên coi dữ liệu ở đó là đã được cô lập. Ứng dụng đọc/ghi bằng khoá phía server. |
+| Supabase RLS | (không nêu) | Có script `scripts/check-rls.mjs` (chỉ đọc). Lần chạy 2026-10-23: dữ liệu học liệu gốc (`resources`, `atoms`, `edges`, `questions`, `socratic`) anon đọc được; bảng `va_app_store` **chưa tạo** (migration chưa áp dụng) nên kho vận hành nằm ở phân vùng `va_app_store_v2` của bảng dùng chung `studio_kv`, anon đọc ra 0 hàng nhưng chưa phân biệt được "trống" với "RLS chặn". Chưa khẳng định cô lập. Ứng dụng ghi bằng khoá secret phía server. |
 | Địa chỉ | — | https://magic.truongvietanh.com (sau Cloudflare + Traefik/Coolify; giới hạn tốc độ theo IP dựa vào giả định này, xem `lib/server/rateLimit.ts`). |
-| Kiểm tra sống | — | `GET /api/health` (không qua guard) và `HEALTHCHECK` trong `Dockerfile`. |
+| Kiểm tra sống | — | `GET /api/health` (không qua guard, không phụ thuộc Supabase; trả thêm `uptimeSec`, `dataDirWritable`) và `HEALTHCHECK` trong `Dockerfile`. |
 
-Hệ quả: file JSON chỉ phù hợp quy mô nhỏ, một tiến trình; chưa có sao lưu định kỳ và chưa có khoá chéo giữa nhiều tiến trình.
+Hệ quả: file JSON chỉ phù hợp quy mô nhỏ, một tiến trình; chưa có sao lưu theo lịch (chỉ có script và trang tải sao lưu, xem `docs/VAN_HANH.md`) và chưa có khoá chéo giữa nhiều tiến trình.
 
 Ghi chú phụ thuộc: cảnh báo về `image-size` đi kèm `pptxgenjs` không khai thác được trong ứng dụng này vì mã xuất PPTX không nhúng ảnh do người dùng cung cấp; vẫn nên cập nhật khi có bản vá.
 
@@ -92,7 +93,7 @@ Trạng thái "đã cấu hình" chỉ suy từ việc biến có giá trị kh�
 | Canva | Infographic, ảnh | `CANVA_API_KEY` (dự kiến) | Tự dựng SVG/PNG. **Chưa tích hợp.** |
 | Gemini Notebook API | Podcast, audio tranh luận | `GEMINI_NOTEBOOK_API_KEY` (dự kiến) | Chỉ kịch bản + giọng đọc của trình duyệt. Cần license Education Premium; **không dùng tích hợp phi chính thức.** **Chưa tích hợp.** |
 | TTS/STT | Giọng đọc, ghi chú giọng nói | `TTS_API_KEY`, `STT_API_KEY` (dự kiến) | Giọng đọc của trình duyệt; video chỉ có kịch bản phân cảnh. **Chưa tích hợp.** |
-| Cổng duyệt | Duyệt bản chuẩn, đề, ghi số liệu | `REVIEWER_KEY` (bắt buộc để duyệt; thiếu => 503), `ASSESSMENT_REVIEWERS` | Mã dùng chung, không phải danh tính cá nhân. |
+| Cổng duyệt | Duyệt bản chuẩn, đề, ghi số liệu | `REVIEWER_KEY` (bắt buộc để duyệt; thiếu => 503), `ASSESSMENT_REVIEWERS` | Mã dùng chung, không phải danh tính cá nhân; người duyệt đăng nhập Google (`REVIEWER_EMAILS`) không cần mã. |
 | Nguồn tin danh sách trắng | Sự kiện thời sự | không cần khoá | Giáo viên dán đường dẫn, guardrail kiểm tra. |
 
 ## 6. Phiên bản cá nhân (hợp đồng API)

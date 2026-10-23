@@ -44,6 +44,19 @@ function fmt(iso: string | null): string {
   return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/** Ngày trên, giờ dưới (chữ nhỏ) để cột ngày không quá rộng. */
+function FmtCell({ iso }: { iso: string | null }) {
+  const text = fmt(iso);
+  const [time, date] = text.split(' ');
+  if (!date) return <>{text}</>;
+  return (
+    <>
+      <span>{date}</span>
+      <small className="qt-time">{time}</small>
+    </>
+  );
+}
+
 function describe(a: AuditRow): string {
   if (a.action === 'block') return 'Chặn tài khoản';
   if (a.action === 'unblock') return 'Mở chặn tài khoản';
@@ -349,8 +362,12 @@ export function AdminUsers() {
                         <td>
                           <span className={`qt-badge ${u.blocked ? 'bad' : 'good'}`}>{u.blocked ? 'Bị chặn' : 'Hoạt động'}</span>
                         </td>
-                        <td>{fmt(u.firstSeen)}</td>
-                        <td>{fmt(u.lastSeen)}</td>
+                        <td className="qt-nowrap">
+                          <FmtCell iso={u.firstSeen} />
+                        </td>
+                        <td className="qt-nowrap">
+                          <FmtCell iso={u.lastSeen} />
+                        </td>
                         <td className="num">{u.loginCount}</td>
                         <td>
                           <button type="button" className={`ag-btn small${u.blocked ? '' : ' qt-danger'}`} disabled={locked} onClick={() => void save(u, { blocked: !u.blocked })}>
@@ -388,7 +405,9 @@ export function AdminUsers() {
                 <tbody>
                   {audit.map((a) => (
                     <tr key={a.id}>
-                      <td>{fmt(a.at)}</td>
+                      <td className="qt-nowrap">
+                          <FmtCell iso={a.at} />
+                        </td>
                       <td>{a.actor}</td>
                       <td><span className={`qt-badge ${a.action === 'block' ? 'bad' : a.action === 'unblock' ? 'good' : 'info'}`}>{describe(a)}</span></td>
                       <td>{a.target}</td>

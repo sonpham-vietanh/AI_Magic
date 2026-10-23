@@ -187,7 +187,7 @@ export function exportFileName(title: string, suffix: string): string {
 
 export const GAMMA_GUIDE = [
   'Mở gamma.app, chọn Tạo mới, rồi chọn “Dán văn bản” và dán nội dung vừa sao chép.',
-  'Chọn “Giữ nguyên cấu trúc” để mỗi mục “Slide” thành một thẻ; sau đó cô/thầy chọn giao diện và tạo.',
+  'Nếu Gamma hỏi, chọn giữ nguyên cấu trúc để mỗi mục “Slide” thành một thẻ, rồi chọn giao diện.',
 ];
 export const NOTEBOOKLM_GUIDE = [
   'Mở notebooklm.google.com, tạo hoặc mở một sổ tay, bấm “Thêm nguồn”.',

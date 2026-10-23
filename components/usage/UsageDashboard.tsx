@@ -174,7 +174,7 @@ export function UsageDashboard() {
                 <strong>{data.month.overBudget ? 'Đã vượt ngân sách AI của tháng này' : 'Dự báo sẽ vượt ngân sách AI của tháng này'}</strong>
                 <p>
                   Đã chi ước tính {usd(data.month.spentUsd)} trên ngân sách {usd(data.month.budgetUsd)}; theo đà hiện tại cuối tháng khoảng{' '}
-                  {usd(data.month.forecastUsd)}. Hệ thống chỉ cảnh báo, chưa tự chặn. Có thể giảm hạn mức lượt/ngày (USAGE_DAILY_LIMIT) nếu cần.
+                  {usd(data.month.forecastUsd)}. Hệ thống chỉ cảnh báo, chưa tự chặn. Có thể giảm hạn mức lượt/ngày trong cấu hình máy chủ nếu cần.
                 </p>
               </div>
             </div>

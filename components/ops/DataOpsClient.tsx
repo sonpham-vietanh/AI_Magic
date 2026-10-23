@@ -147,8 +147,7 @@ export function DataOpsClient() {
         </button>
       }
     >
-      <div className="va-workspace">
-        <div className="dl">
+      <div className="dl">
           {denied && (
             <div className="dl-note dl-note-warn" role="alert">
               <Icon name="shield" size={20} />
@@ -324,7 +323,6 @@ export function DataOpsClient() {
               </section>
             </>
           )}
-        </div>
       </div>
     </Shell>
   );

@@ -57,7 +57,7 @@ const COMMAND_LINKS: Partial<Record<CommandId, { href: string; label: string; de
   duyet: { href: '/duyet', label: 'Duyệt bản chuẩn', desc: 'Chấm 6 tiêu chí để đưa bài vào Kho' },
   chat_luong: { href: '/chat-luong', label: 'Chất lượng bài soạn', desc: 'Tỷ lệ sinh lại, mức chỉnh sửa, chấm mù' },
   cong_cu: { href: '/cong-cu', label: 'Kho 82 công cụ', desc: 'Các công cụ soạn học liệu riêng lẻ' },
-  thu_vien: { href: '/thu-vien', label: 'Thư viện học liệu', desc: 'Học liệu đã lưu và nhật ký hoạt động' },
+  thu_vien: { href: '/thu-vien', label: 'Học liệu đã lưu', desc: 'Học liệu đã lưu và nhật ký hoạt động' },
   lop: { href: '/ho-so-lop-hoc', label: 'Lớp học & chương trình', desc: 'Hồ sơ lớp và ghi chú chủ nhiệm' },
   bieu_mau: { href: '/soan-bai', label: 'Soạn bài bằng biểu mẫu', desc: 'Điền đủ 7 mục trong một màn hình' },
 };
@@ -841,7 +841,7 @@ export function AgentApp() {
                   title="Bắt đầu lại cuộc trò chuyện"
                 >
                   <Icon name="refresh" size={16} />
-                  Làm mới
+                  <span className="ag-top-label">Làm mới</span>
                 </button>
               )}
               {hasResults && !canvasEntry && (
@@ -851,7 +851,7 @@ export function AgentApp() {
                   onClick={() => setCanvasId(Object.keys(results)[Object.keys(results).length - 1])}
                 >
                   <Icon name="panel" size={16} />
-                  Mở bản soạn
+                  <span className="ag-top-label">Mở bản soạn</span>
                 </button>
               )}
               <Link
@@ -865,9 +865,10 @@ export function AgentApp() {
                   return qs ? `/soan-bai?${qs}` : '/soan-bai';
                 })()}
                 className="ag-btn small"
+                aria-label="Dùng biểu mẫu"
               >
                 <Icon name="clipboard" size={16} />
-                Dùng biểu mẫu
+                <span className="ag-top-label">Dùng biểu mẫu</span>
               </Link>
             </div>
           </div>

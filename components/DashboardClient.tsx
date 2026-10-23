@@ -489,7 +489,7 @@ export function DashboardClient({
 
   return (
     <Shell
-      title="Kho công cụ"
+      title="Bộ công cụ sư phạm"
       subtitle="Chế biến bài dạy, trộn đề và mở công cụ sư phạm theo từng việc."
       onOpenAssistant={() => setAssistantOpen(true)}
     >

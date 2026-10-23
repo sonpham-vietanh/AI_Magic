@@ -522,3 +522,9 @@
     transition: none;
   }
 }
+@media (max-width: 560px) {
+  .cl-gauge {
+    width: 96px;
+    height: 96px;
+  }
+}

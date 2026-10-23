@@ -375,3 +375,17 @@
 .qt-table.audit {
   min-width: 760px;
 }
+
+.qt-table td.qt-nowrap {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.qt-table td .qt-time {
+  display: block;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.qt-table .ag-btn.small {
+  white-space: nowrap;
+}

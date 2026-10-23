@@ -33,16 +33,6 @@ export default function ClassProfilesPage() {
               aria-controls={`hs-panel-${t.id}`}
               className="ag-tab"
               onClick={() => setTab(t.id)}
-              onKeyDown={(e) => {
-                const i = TABS.findIndex((x) => x.id === t.id);
-                const next =
-                  e.key === 'ArrowRight' ? TABS[(i + 1) % TABS.length] : e.key === 'ArrowLeft' ? TABS[(i + TABS.length - 1) % TABS.length] : null;
-                if (next) {
-                  e.preventDefault();
-                  setTab(next.id);
-                  document.getElementById(`hs-tab-${next.id}`)?.focus();
-                }
-              }}
               tabIndex={tab === t.id ? 0 : -1}
             >
               {t.label}

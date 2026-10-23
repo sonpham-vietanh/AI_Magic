@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { readActor, writeActor, writeReviewerKey } from '@/lib/agent/actor';
-import { isReviewerRole, roleLabel } from '@/lib/agent/prefs';
 import { useMe } from './useMe';
 
 /** Tên cô/thầy lưu ở localStorage 'va.actor' kết hợp phiên chữ ký số `/api/auth/session`. */
@@ -94,32 +93,9 @@ export function TeacherName({
   // Khi SSO bật: tên và quyền lấy từ phiên; ẩn hẳn ô nhập tên và ô mã người duyệt.
   const sso = me.ssoEnabled && me.user ? me.user : null;
 
-  async function logout() {
-    try {
-      await fetch('/api/auth/session', { method: 'DELETE' });
-    } catch {
-      /* vẫn chuyển về trang đăng nhập */
-    }
-    window.location.assign('/dang-nhap');
-  }
-
-  if (sso || ssoUser) {
-    const shownName = sso?.name ?? ssoUser?.name ?? '';
-    const shownEmail = sso?.email ?? ssoUser?.email;
-    const shownRole = sso ? sso.role : role;
-    return (
-      <span className="ag-who-pill ag-who-sso">
-        <span className="ag-who-dot" aria-hidden="true" />
-        <span title={shownEmail}>
-          {shownName}
-          {isReviewerRole(shownRole) ? <em className="ag-who-role">{roleLabel(shownRole)}</em> : null}
-        </span>
-        <button type="button" className="ag-link" onClick={logout} aria-label="Đăng xuất">
-          Đăng xuất
-        </button>
-      </span>
-    );
-  }
+  // Đã đăng nhập email trường: tên, vai trò và Đăng xuất nằm ở menu tài khoản trong thanh bên (Shell),
+  // không lặp lại ở thanh trên của trợ lý.
+  if (sso || ssoUser) return null;
 
   async function submitProfile(e: React.FormEvent) {
     e.preventDefault();

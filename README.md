@@ -72,9 +72,9 @@ Cấu trúc bám sơ đồ kiến trúc v2.1 của anh Nguyễn Mạnh Dương. 
 - `lib/versions/` — lịch sử & phiên bản cá nhân (`.data/versions.json`). `lib/integrations/` — danh bạ dịch vụ ngoài.
 - `lib/catalog/`, `lib/knowledge-graph/`, `lib/classes/`, `lib/engine/` — danh mục 82 công cụ, đồ thị tri thức GDPT 2018, hồ sơ lớp, bộ sinh học liệu.
 - `supabase/migrations/` — schema PostgreSQL/Supabase. `ops/major-os-mo-ta.md` — tích hợp Major OS v2.
-- `docs/` — [KIEN_TRUC_V2_1.md](docs/KIEN_TRUC_V2_1.md) (hiện hành); các file cũ (PRD, ARCHITECTURE_AND_KNOWLEDGE_GRAPH, MAGICSCHOOL_BENCHMARK, TOOL_AUDIT) chỉ còn giá trị tham khảo.
+- `docs/` — [VAN_HANH.md](docs/VAN_HANH.md) (sổ tay vận hành: biến môi trường, deploy, sao lưu, đổi khóa, sự cố), [KIEN_TRUC_V2_1.md](docs/KIEN_TRUC_V2_1.md) (hiện hành); các file cũ (PRD, ARCHITECTURE_AND_KNOWLEDGE_GRAPH, MAGICSCHOOL_BENCHMARK, TOOL_AUDIT) chỉ còn giá trị tham khảo.
 
-**Khác biệt hạ tầng so với sơ đồ:** sơ đồ ghi FastAPI + PostgreSQL pgvector + Docker; thực tế là Next.js + Supabase + file JSON cục bộ trong `.data/` (store, kho, đánh giá, tín hiệu, phiên bản, ghi chú lớp; không có sao lưu tự động; có `Dockerfile`). Khoá ghi file chỉ có trong một tiến trình nên phải chạy đúng 1 bản sao và tắt rolling deploy. Chưa có SSO Google Workspace. Chi tiết ở mục 4 của tài liệu kiến trúc.
+**Khác biệt hạ tầng so với sơ đồ:** sơ đồ ghi FastAPI + PostgreSQL pgvector + Docker; thực tế là Next.js + Supabase + file JSON cục bộ trong `.data/` (store, kho, đánh giá, tín hiệu, phiên bản, ghi chú lớp, vai trò, sổ sử dụng AI; có `Dockerfile`; chưa có sao lưu theo lịch, chỉ có script và trang tải sao lưu). Khoá ghi file chỉ có trong một tiến trình nên phải chạy đúng 1 bản sao và tắt rolling deploy. Đăng nhập Google Workspace đã có nhưng **chỉ bật khi đặt `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET`**; chưa bật thì ai vào cũng được. Chi tiết ở mục 4 của tài liệu kiến trúc và trong [docs/VAN_HANH.md](docs/VAN_HANH.md).
 
 **Dịch vụ ngoài:** chỉ LLM và guardrail nguồn tin chạy thật. Gamma, Canva, Gemini Notebook, TTS/STT **chưa tích hợp** (chưa có khoá/license); hệ thống tự dựng PPTX/DOCX/SVG và dùng giọng đọc của trình duyệt. Xem `/ket-noi`.
 
@@ -84,10 +84,23 @@ Cấu trúc bám sơ đồ kiến trúc v2.1 của anh Nguyễn Mạnh Dương. 
 
 - `GET /api/major-os/usage`: fail-closed (thiếu `MAJOR_OS_API_KEY` => 503, sai key => 401), đã gỡ `demo=1`, phân trang bằng `tu` / `den` / `trang_sau`. Xem `ops/major-os-mo-ta.md`.
 - API nội bộ mới `/api/usage`; caller ngoài dùng `APP_API_TOKEN`; có same-origin guard (chỉ là rào chắn, **không phải xác thực người dùng thật** — việc cần làm tiếp) và rate limit (vượt ngưỡng => 429).
-- `GET /api/health` không cần xác thực, chỉ trả `ok` và thời gian (dùng cho `HEALTHCHECK`). Có header bảo mật (nosniff, frame-ancestors, Referrer/Permissions-Policy); chưa đặt CSP `script-src`.
+- `GET /api/health` không cần xác thực, không phụ thuộc Supabase, chỉ trả `ok`, thời gian, `uptimeSec` và `dataDirWritable` (dùng cho `HEALTHCHECK`). Có header bảo mật (nosniff, frame-ancestors, Referrer/Permissions-Policy); chưa đặt CSP `script-src`.
 - Body của route POST có giới hạn kích thước (`lib/server/body.ts`, vượt => 413).
 - Rotate mọi khóa từng bị commit/chia sẻ; chỉ lưu khóa trong `.env.local` (đã ignore).
 - Không import `lib/supabase.ts` từ client component.
-- Phiên bản cá nhân (`/api/versions`) lưu trong `.data/versions.json` (ghi nguyên tử, sao lưu file hỏng). Tên người dùng chỉ là khai báo, **chưa có đăng nhập thật**; ai biết id phiên bản đều đọc được. Khi deploy cần gắn volume bền cho `.data/` (thư mục thuộc người dùng `node` trong ảnh Docker; nếu volume gắn vào bị root sở hữu thì cần `chown` cho uid 1000).
+- Phiên bản cá nhân (`/api/versions`) lưu trong `.data/versions.json` (ghi nguyên tử, sao lưu file hỏng). Khi chưa bật đăng nhập Google, tên người dùng chỉ là khai báo và ai biết id phiên bản đều đọc được; khi đã bật, danh tính lấy từ email trong phiên. Khi deploy cần gắn volume bền cho `.data/` (thư mục thuộc người dùng `node` trong ảnh Docker; nếu volume gắn vào bị root sở hữu thì cần `chown` cho uid 1000).
 - `GET /api/integrations/status` chỉ trả đúng/sai về việc đã có biến môi trường, không bao giờ trả giá trị khoá.
 - `npm run test:smoke` quét bí mật trong mã nguồn và tài liệu, fail nếu phát hiện.
+
+---
+
+## 🛠️ Dữ liệu, sao lưu và vận hành
+
+Chi tiết đầy đủ (bảng biến môi trường, deploy Coolify, đổi khóa, xử lý sự cố, giới hạn đã biết) ở **[docs/VAN_HANH.md](docs/VAN_HANH.md)**.
+
+- Trang **`/quan-tri/du-lieu`** (chỉ quản trị viên, email trong `ADMIN_EMAILS`): xem từng kho (kích thước, số bản ghi, lần ghi cuối, lưu ở đĩa hay Supabase), nút **Tải bản sao lưu** (`GET /api/admin/export`, JSON có checksum SHA-256, đã loại token/mã/khóa) và **Kiểm tra bản sao lưu** (chỉ xác thực, không khôi phục).
+- `node scripts/backup-data.mjs [--keep N] [--out thư-mục] [--supabase]`: sao lưu `.data/*.json` vào thư mục có dấu thời gian kèm checksum.
+- `node scripts/restore-data.mjs <thư-mục-sao-lưu>`: **mặc định chỉ xem thử**; `--apply` mới ghi, có hỏi xác nhận, giữ bản cũ. Chỉ ghi đĩa, không ghi lên Supabase.
+- `node scripts/check-rls.mjs --env-file .env.local`: thử đọc bằng khóa publishable để xem bảng nào anon đọc được (chỉ đọc).
+- Chưa có lịch sao lưu tự động; việc đặt lịch và chép bản sao lưu ra khỏi máy chủ là việc của người vận hành.
+- Biến mới: `ADMIN_EMAILS`, `USAGE_DAILY_LIMIT`, `USAGE_MONTHLY_BUDGET_USD`, `USAGE_PRICING_JSON`, `USER_PREFS_FILE`, `USER_ROLES_STORE_PATH`, `USAGE_LEDGER_FILE`, `AUDIT_LOG_STORE_PATH`, `OPS_LOG_FILE` (xem `.env.example`).

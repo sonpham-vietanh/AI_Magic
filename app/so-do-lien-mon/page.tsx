@@ -502,7 +502,7 @@ export default function KnowledgeGraphPage() {
                         href={`/cong-cu?nodeId=${encodeURIComponent(center.id)}&tool=khbd-5512`}
                         className="ag-btn"
                       >
-                        Mở trong Kho công cụ
+                        Mở trong Bộ công cụ sư phạm
                       </Link>
                     </div>
 

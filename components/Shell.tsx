@@ -83,7 +83,7 @@ const PAGE_TITLES: { prefix: string; title: string; subtitle: string }[] = [
   },
   {
     prefix: '/thu-vien',
-    title: 'Thư viện học liệu',
+    title: 'Học liệu đã lưu',
     subtitle: 'Học liệu đã lưu, tài nguyên tương tác và nhật ký hoạt động.',
   },
 ];
@@ -161,7 +161,30 @@ export function Shell({
   useEffect(() => {
     if (!navOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setNavOpen(false);
+      if (e.key === 'Escape') {
+        setNavOpen(false);
+        menuBtnRef.current?.focus();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      // Giữ phím Tab trong ngăn kéo (cùng nút Đóng menu), không lọt ra nội dung phía sau.
+      const rail = railRef.current;
+      if (!rail) return;
+      const sel = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      const list = [...(menuBtnRef.current ? [menuBtnRef.current] : []), ...Array.from(rail.querySelectorAll<HTMLElement>(sel))].filter(
+        (el) => el.offsetParent !== null || el === menuBtnRef.current,
+      );
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && (active === first || !active || !list.includes(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !active || !list.includes(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
